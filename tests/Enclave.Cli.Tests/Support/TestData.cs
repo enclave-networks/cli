@@ -1,0 +1,29 @@
+namespace Enclave.Cli.Tests.Support;
+
+/// <summary>
+/// Fixed identities shared by the tests and the fake API responses.
+/// </summary>
+internal static class TestData
+{
+    public const string Token = "test-token-7f3a9c";
+
+    public const string OrgName = "Acme";
+
+    public const string OtherOrgName = "Globex";
+
+    public static readonly Guid OrgId = new("6a0f3c2e-58d4-4b7a-9c61-2f8e0d4b1a37");
+
+    public static readonly Guid OtherOrgId = new("c3b9e7d1-0a4f-4e26-8d15-7b2c9f6e3a80");
+
+    public static readonly Guid PartnerId = new("9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48");
+
+    // Enclave.Sdk.Api builds the path from OrganisationGuid.ToString(), which writes the GUID as 32
+    // hex digits without hyphens (OrganisationClient constructor, Enclave.Sdk.Api 1.0.4, with
+    // Enclave.Sdk.Api.Data 304.48.0).
+
+    /// <summary>
+    /// The API path of the test organisation, with an optional suffix.
+    /// </summary>
+    public static string OrgPath(string suffix = "") =>
+        suffix.Length == 0 ? $"/org/{OrgId:N}" : $"/org/{OrgId:N}/{suffix}";
+}

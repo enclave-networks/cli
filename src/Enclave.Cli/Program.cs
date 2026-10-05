@@ -8,8 +8,12 @@ internal static class Program
 {
     public static Task<int> Main(string[] args) => CreateRootCommand().Parse(args).InvokeAsync();
 
-    internal static RootCommand CreateRootCommand()
+    internal static RootCommand CreateRootCommand() => CreateRootCommand(CliHost.FromProcess());
+
+    internal static RootCommand CreateRootCommand(CliHost host)
     {
+        ArgumentNullException.ThrowIfNull(host);
+
         var root = new RootCommand("Command-line tool for the Enclave Management APIs.");
 
         // The built-in --version prints the entry assembly's version, which is the host's version
