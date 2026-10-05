@@ -47,9 +47,8 @@ jobs:
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Windows and macOS. Native AOT cannot build for one OS on another, so each binary is built and
-  # tested on a runner of its own OS and CPU, and the smoke test runs every binary that ships. The
-  # runners have the Visual Studio C++ tools and Xcode that native AOT links with.
+  # Windows and macOS. Each binary is built and tested on a runner of its own OS and CPU, so the
+  # smoke test runs every binary that ships.
   build:
     name: build (${{ matrix.rid }})
     needs: version

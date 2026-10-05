@@ -1,15 +1,14 @@
 # Build image for the glibc Linux binaries (linux-x64, linux-arm64).
 #
-# A native binary needs a glibc at least as new as the one it was linked against. Building on
-# AlmaLinux 8, which is binary-compatible with RHEL 8 and has its glibc 2.28, makes the binaries
-# run on RHEL 8 and every newer distribution. RHEL 8 is in .NET 10's supported list, and .NET 10
-# itself needs glibc 2.27 or newer (https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
+# AlmaLinux 8 is binary-compatible with RHEL 8 and has its glibc, 2.28. Testing and smoke testing
+# here proves the binaries run on RHEL 8, which is in .NET 10's supported list
+# (https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md).
 FROM almalinux:8
 
-# Native AOT prerequisites on RHEL (https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites),
-# plus binutils to strip symbols, glibc-devel to link against glibc, libicu for the SDK, and the
-# tools the .NET install script runs.
-RUN dnf install -y clang zlib-devel binutils glibc-devel libicu curl tar gzip findutils \
+# The libraries .NET needs on RHEL (https://learn.microsoft.com/dotnet/core/install/linux-rhel#dependencies)
+# and the tools the .NET install script runs.
+RUN dnf install -y glibc libgcc ca-certificates openssl-libs libstdc++ libicu tzdata krb5-libs \
+      curl tar gzip findutils \
  && dnf clean all
 
 # The latest .NET 10 SDK, matching what setup-dotnet installs from global.json on the other runners.
