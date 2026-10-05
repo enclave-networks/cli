@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>enclave-cli</AssemblyName>
+    <RootNamespace>Enclave.Cli</RootNamespace>
+
+    <!--
+      Releases are compiled ahead of time to native code: a small download that starts quickly,
+      which matters because agents start the CLI once per command. For a minimal build of this CLI
+      (.NET 10, win-x64): 2.8 MB and 31 ms to print its version, against 70.7 MB and 109 ms for a
+      self-contained single-file build.
+
+      What is given up: no reflection-based code (JSON must use source-generated serializers), and
+      no building for one OS on another (https://learn.microsoft.com/dotnet/core/deploying/native-aot/cross-compile),
+      so CI builds each platform on its own OS.
+
+      Setting this in the project turns on the AOT and trimming analyzers in every build, so
+      incompatible code in this project fails the build as it is written (warnings are errors).
+      Problems inside package dependencies appear when the native compiler runs at publish, as one
+      IL2104 or IL3053 error per assembly.
+    -->
+    <PublishAot>true</PublishAot>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+
+    <!--
+      Without invariant mode, .NET on Linux needs libicu installed and fails to start when it is
+      missing (https://learn.microsoft.com/dotnet/core/runtime-config/globalization). Agents often run
+      the CLI in minimal containers that lack it. Invariant mode suits the CLI, whose output is
+      culture-independent.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Enclave.Sdk.Api" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Enclave.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,2 +1,2 @@
 # cli
-A single CLI for for all Enclave management APIs
+A single CLI for all Enclave management APIs

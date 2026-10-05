@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!--
+      The documentation file is generated because the IDE0005 unused-using check needs it to run
+      during build. CS1591 is off because nothing outside this repository consumes these assemblies.
+    -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <Company>Enclave Networks Limited</Company>
+    <Authors>Enclave Networks</Authors>
+    <Copyright>Copyright (c) Enclave Networks</Copyright>
+    <Product>enclave-cli</Product>
+    <RepositoryUrl>https://github.com/enclave-networks/cli</RepositoryUrl>
+  </PropertyGroup>
+
+  <!--
+    CI sets the version with -p:Version: YEAR.MONTH.DAY.RUN, the scheme other Enclave products use
+    (pull request builds add -pr.N). These defaults label local builds 0.0.0-dev, so a binary
+    built on a developer machine identifies itself as one.
+  -->
+  <PropertyGroup>
+    <VersionPrefix>0.0.0</VersionPrefix>
+    <VersionSuffix>dev</VersionSuffix>
+  </PropertyGroup>
+</Project>
