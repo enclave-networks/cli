@@ -109,13 +109,16 @@ jobs:
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
 
+      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
+      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
+      # an earlier attempt of this job uploaded.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: enclave-cli-${{ matrix.rid }}
           path: ${{ env.ARCHIVE }}
+          archive: false
+          overwrite: true
           if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+          retention-days: 2
 
   # Linux. Each binary is built, tested and smoke tested inside a container of the oldest
   # distribution it supports (.github/docker): RHEL 8 for glibc, Alpine 3.22 for musl. The smoke
@@ -185,13 +188,16 @@ jobs:
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
 
+      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
+      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
+      # an earlier attempt of this job uploaded.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: enclave-cli-${{ matrix.rid }}
           path: ${{ env.ARCHIVE }}
+          archive: false
+          overwrite: true
           if-no-files-found: error
-          retention-days: 14
-          compression-level: 0
+          retention-days: 2
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -203,19 +209,37 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
+      # download-artifact v8 unzips an artifact served as a zip, which would unpack the Windows
+      # archives; skip-decompress keeps every artifact as the file that was uploaded
+      # (https://github.com/actions/download-artifact/releases/tag/v8.0.0).
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: enclave-cli-*
           path: downloaded
           merge-multiple: true
+          skip-decompress: true
 
+      # Checks for the exact file each build job uploads, one per RID in the build matrices, so a
+      # missing or renamed file stops the release.
       - name: Collect release files
         run: |
           mkdir release
           find downloaded -type f -name "enclave-cli-$VERSION-*" -exec mv {} release/ \;
-          count=$(find release -type f | wc -l)
-          if [ "$count" -ne 8 ]; then
-            echo "::error::expected 8 archives, found $count"
+          expected=""
+          for rid in win-x64 win-arm64; do
+            expected="$expected enclave-cli-$VERSION-$rid.zip"
+          done
+          for rid in linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64; do
+            expected="$expected enclave-cli-$VERSION-$rid.tar.gz"
+          done
+          missing=0
+          for file in $expected; do
+            if [ ! -f "release/$file" ]; then
+              echo "::error::missing release file $file"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ] || [ "$(find release -type f | wc -l)" -ne 8 ]; then
             ls -laR downloaded release
             exit 1
           fi
