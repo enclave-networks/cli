@@ -47,6 +47,9 @@ jobs:
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+  # Windows and macOS. Native AOT cannot build for one OS on another, so each binary is built and
+  # tested on a runner of its own OS and CPU, and the smoke test runs every binary that ships. The
+  # runners have the Visual Studio C++ tools and Xcode that native AOT links with.
   build:
     name: build (${{ matrix.rid }})
     needs: version
@@ -54,17 +57,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Native AOT cannot build for one OS on another, and each binary is built and tested on a
-        # runner of its own OS and CPU, so the smoke test runs every binary that ships.
         include:
           - rid: win-x64
             os: windows-latest
           - rid: win-arm64
             os: windows-11-arm
-          - rid: linux-x64
-            os: ubuntu-latest
-          - rid: linux-arm64
-            os: ubuntu-24.04-arm
           - rid: osx-x64
             os: macos-15-intel
           - rid: osx-arm64
@@ -82,15 +79,6 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Native AOT links with the platform's own toolchain. On Linux that is clang and the zlib
-      # headers (https://learn.microsoft.com/dotnet/core/deploying/native-aot/#prerequisites).
-      # Windows and macOS runners already have Visual Studio C++ tools and Xcode.
-      - name: Install native toolchain
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang zlib1g-dev
-
       - name: Test
         run: dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION"
 
@@ -103,17 +91,8 @@ jobs:
           if [ "$RUNNER_OS" = "Windows" ]; then exe=publish/enclave-cli.exe; fi
           sh .github/scripts/smoke-test.sh "$exe" "$VERSION"
 
-      # A native Linux binary needs a glibc at least as new as the symbol versions it was linked
-      # against on this runner. Reporting the newest one shows the oldest Linux it runs on.
-      - name: Report minimum glibc
-        if: runner.os == 'Linux'
-        run: |
-          glibc=$(objdump -T publish/enclave-cli | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n 1)
-          echo "$RID needs $glibc or newer"
-          echo "$RID needs $glibc or newer" >> "$GITHUB_STEP_SUMMARY"
-
       # Artifact uploads do not keep file permissions, so the executable is packed into an archive
-      # first; tar keeps its executable bit for Linux and macOS.
+      # first; tar keeps its executable bit for macOS.
       - name: Package (zip)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -138,12 +117,15 @@ jobs:
           retention-days: 14
           compression-level: 0
 
-  # Alpine Linux uses the musl C library, and a binary for it has to be built with musl, so these
-  # jobs build, test and smoke test inside Microsoft's Alpine .NET SDK image. The steps call docker
-  # directly because the runner cannot run JavaScript actions (checkout, setup-dotnet) inside Alpine
-  # job containers on arm64: it fails with "JavaScript Actions in Alpine containers are only
-  # supported on x64 Linux runners" (https://github.com/orgs/community/discussions/53407).
-  build-musl:
+  # Linux. Each binary is built, tested and smoke tested inside a container of the oldest
+  # distribution it supports (.github/docker): RHEL 8 for glibc, Alpine 3.22 for musl. The smoke
+  # test running there proves the binary runs on that distribution.
+  #
+  # The steps call docker directly because the runner cannot run JavaScript actions (checkout,
+  # setup-dotnet) inside Alpine job containers on arm64: it fails with "JavaScript Actions in
+  # Alpine containers are only supported on x64 Linux runners"
+  # (https://github.com/orgs/community/discussions/53407).
+  build-linux:
     name: build (${{ matrix.rid }})
     needs: version
     timeout-minutes: 30
@@ -151,16 +133,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - rid: linux-x64
+            os: ubuntu-latest
+            image: rhel8
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+            image: rhel8
           - rid: linux-musl-x64
             os: ubuntu-latest
+            image: alpine
           - rid: linux-musl-arm64
             os: ubuntu-24.04-arm
+            image: alpine
     runs-on: ${{ matrix.os }}
     env:
       RID: ${{ matrix.rid }}
+      IMAGE: ${{ matrix.image }}
       VERSION: ${{ needs.version.outputs.version }}
-      # The oldest Alpine with a .NET 10 SDK image, so the binary runs on it and on newer releases.
-      SDK_IMAGE: mcr.microsoft.com/dotnet/sdk:10.0-alpine3.22
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -172,11 +161,7 @@ jobs:
       # rule (safe.directory, https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory)
       # whether or not the reader (Microsoft.Build.Tasks.Git) applies it.
       - name: Prepare build image
-        run: |
-          docker build -t enclave-cli-musl-build - <<EOF
-          FROM $SDK_IMAGE
-          RUN apk add --no-cache clang build-base zlib-dev
-          EOF
+        run: docker build -t enclave-cli-build -f ".github/docker/$IMAGE.Dockerfile" .github/docker
 
       - name: Test, publish and smoke test
         run: |
@@ -185,13 +170,14 @@ jobs:
             -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
             -e DOTNET_NOLOGO -e DOTNET_CLI_TELEMETRY_OPTOUT -e RID -e VERSION \
             -v "$PWD:/src" -w /src \
-            enclave-cli-musl-build \
+            enclave-cli-build \
             sh -euc '
               dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION"
               dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
               sh .github/scripts/smoke-test.sh publish/enclave-cli "$VERSION"
             '
 
+      # Artifact uploads do not keep file permissions; tar keeps the executable bit.
       - name: Package (tar.gz)
         run: |
           archive="enclave-cli-$VERSION-$RID.tar.gz"
@@ -209,7 +195,7 @@ jobs:
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [version, build, build-musl]
+    needs: [version, build, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

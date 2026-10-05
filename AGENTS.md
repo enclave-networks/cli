@@ -17,6 +17,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - One test: `dotnet test enclave-cli.slnx -c Release --filter "FullyQualifiedName~<TestName>"`
 - Publish one platform (native AOT): `dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r <rid> -o publish`
   - Only for the OS you are on. Windows needs the Visual Studio C++ tools, with `vswhere.exe` on PATH; Linux needs `clang` and `zlib1g-dev`; macOS needs Xcode.
+  - A Linux binary built locally needs the build machine's glibc or newer. Release Linux binaries come from CI's containers.
 - RIDs shipped: `win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64`
 - Local builds are versioned `0.0.0-dev`; only CI sets a release version.
 
@@ -82,7 +83,8 @@ Code comments also:
 - XML docs: a short `<summary>`, plus `<param>`/`<returns>` where needed. No `<remarks>` essays.
 
 ## CI (`.github/workflows/ci.yml`)
-- Pull request: version, then test + native publish + smoke test per RID on a runner of that OS and CPU (musl RIDs inside the Alpine .NET SDK image), then upload archives (kept 14 days). No release.
+- Pull request: version, then test + native publish + smoke test per RID on a runner of that OS and CPU, then upload archives (kept 14 days). No release.
+- Linux RIDs build inside containers of the oldest supported distribution (`.github/docker`): AlmaLinux 8 (RHEL 8, glibc 2.28) for glibc, Alpine 3.22 for musl. The smoke test there proves the binary runs on it. Keep these minimums in step with README's supported platforms table.
 - Push to main: the same, then the `release` job publishes GitHub release `v<version>` with eight archives and `SHA256SUMS`.
 - Version: `YEAR.MONTH.DAY.RUN` in UTC, no leading zeros (e.g. `2026.10.5.57`), the scheme other Enclave products use. Pull requests add `-pr.<number>`. Computed once, in the `version` job.
 - NEVER use `pull_request_target`. NEVER give a pull-request job a secret or write permission. Keep top-level `permissions: contents: read`; grant more per job.
