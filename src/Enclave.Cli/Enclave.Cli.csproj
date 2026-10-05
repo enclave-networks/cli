@@ -16,6 +16,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
+  <!--
     A build for a specific runtime (dotnet publish -r <rid>) produces the release form: one
     self-contained executable that needs no .NET install on the target machine.
   -->
