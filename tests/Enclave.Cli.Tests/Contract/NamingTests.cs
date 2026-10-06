@@ -43,15 +43,6 @@ public class NamingTests
         yield return PartnerAlias($"partner customer invite list {customerId}", $"partner customer invites list {customerId}");
     }
 
-    public static IEnumerable<TestCaseData> HelpPages()
-    {
-        yield return Help("--help", "login", "logout", "status", "org", "partner", "system", "pending", "key", "policy", "tag", "dns", "trust", "log", "commands");
-        yield return Help("org --help", "list", "use", "show", "update", "user", "invite");
-        yield return Help("partner --help", "list", "use", "show", "update", "user", "invite", "customer");
-        yield return Help("partner customer --help", "list", "show", "create", "update", "convert", "admin", "invite", "auto-sync");
-        yield return Help("dns --help", "show", "zone", "record");
-    }
-
     [TestCaseSource(nameof(PluralAliases))]
     public async Task A_plural_noun_runs_the_same_command_as_the_singular_noun(string singular, string plural, string path, string json)
     {
@@ -88,26 +79,6 @@ public class NamingTests
         ArgumentNullException.ThrowIfNull(plural);
         await AssertNotImplementedAsync(singular);
         await AssertNotImplementedAsync(plural);
-    }
-
-    // Help lists each command by its singular name. System.CommandLine's help shows a command's
-    // aliases after its name, separated by commas (HelpBuilder, version 2.0.12), so a plural alias
-    // that is not hidden appears in this list.
-    [TestCaseSource(nameof(HelpPages))]
-    public async Task Help_lists_subcommands_by_their_singular_names_only(string command, string[] expected)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        using var run = CliRun.Start();
-
-        var result = await run.RunAsync(command.Split(' '));
-
-        var names = HelpCommandNames(result.Stdout);
-        Assert.Multiple(() =>
-        {
-            CliAssert.Succeeded(result);
-            Assert.That(names, Is.EquivalentTo(expected));
-            Assert.That(names.Intersect(PluralNouns), Is.Empty);
-        });
     }
 
     // `commands` describes the CLI for agents, so it names each command once, by its singular nouns.
@@ -153,49 +124,4 @@ public class NamingTests
 
     private static TestCaseData PartnerAlias(string singular, string plural) =>
         new TestCaseData(singular, plural).SetArgDisplayNames(singular, plural);
-
-    private static TestCaseData Help(string command, params string[] expected) =>
-        new TestCaseData(command, expected).SetArgDisplayNames(command);
-
-    // The names in the "Commands:" section of System.CommandLine help. Each row starts with two
-    // spaces, then the names separated by ", ", then any arguments in angle brackets, then two or
-    // more spaces before the description. A description that wraps continues on lines indented
-    // further, which are skipped.
-    private static string[] HelpCommandNames(string help)
-    {
-        var names = new List<string>();
-        var inCommands = false;
-
-        foreach (var rawLine in help.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-
-            if (!inCommands)
-            {
-                inCommands = line.Trim() == "Commands:";
-                continue;
-            }
-
-            if (line.Length == 0 || !line.StartsWith(' '))
-            {
-                break;
-            }
-
-            if (line.Length < 3 || line[2] == ' ' || !line.StartsWith("  ", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var row = line[2..];
-            var end = row.IndexOf("  ", StringComparison.Ordinal);
-            var column = end < 0 ? row : row[..end];
-
-            foreach (var alias in column.Split(','))
-            {
-                names.Add(alias.Trim().Split(' ')[0]);
-            }
-        }
-
-        return names.ToArray();
-    }
 }

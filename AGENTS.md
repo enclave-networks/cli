@@ -86,6 +86,7 @@ Code comments also:
 ## CI (`.github/workflows/ci.yml`)
 - Pull request: version, then publish + smoke test per RID on a runner of that OS and CPU, then upload archives (kept 2 days). The tests (without the Pending category) run in one job per OS. No release.
 - Linux RIDs build inside containers of the oldest supported distribution (`.github/docker`): AlmaLinux 8 (RHEL 8, glibc 2.28) for glibc, Alpine 3.22 for musl. The smoke test there proves the binary runs on it. Keep these minimums in step with README's supported platforms table.
+- The build images use the .NET 10 SDK. CI caches the images (buildx, `type=gha`), so a changed Dockerfile is rebuilt on the next run.
 - Push to main: the same, then the `release` job publishes GitHub release `v<version>` with eight archives and `SHA256SUMS`.
 - Adding or removing a RID changes all of: the build matrices, the release job's expected file list, README's supported platforms table, and "RIDs shipped" above.
 - Version: `YEAR.MONTH.DAY.RUN` in UTC, no leading zeros (e.g. `2026.10.5.57`), the scheme other Enclave products use. Pull requests add `-pr.<number>`. Computed once, in the `version` job.

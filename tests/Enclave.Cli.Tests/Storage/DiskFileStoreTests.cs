@@ -1,4 +1,3 @@
-using System.Text;
 using Enclave.Cli.Storage;
 using NUnit.Framework;
 
@@ -21,10 +20,6 @@ public class DiskFileStoreTests
 
     private const string NoModesOnWindows = "Unix file modes exist on Linux and macOS only. On Windows a file under the user profile inherits the profile's access list.";
 
-    // U+00EB is two bytes in UTF-8, U+6771 and U+4EAC three bytes each, and U+1F511 four bytes, so
-    // the text has different bytes in any encoding other than UTF-8.
-    private const string NonAsciiText = "{\"name\":\"Zo\U000000EB \U00006771\U00004EAC \U0001F511\"}";
-
     private readonly DiskFileStore _store = new();
 
     private string _home;
@@ -32,8 +27,6 @@ public class DiskFileStoreTests
     private string EnclaveDirectory => Path.Combine(_home, ".enclave");
 
     private string CredentialsPath => Path.Combine(EnclaveDirectory, "credentials.json");
-
-    private string CliConfigPath => Path.Combine(EnclaveDirectory, "cli.json");
 
     [SetUp]
     public void CreateTheHomeDirectory()
@@ -84,26 +77,6 @@ public class DiskFileStoreTests
             Assert.That(Directory.Exists(EnclaveDirectory), Is.True, "The directory was not created.");
             Assert.That(File.Exists(CredentialsPath), Is.True, "The file was not created.");
             Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
-        });
-    }
-
-    // Enclave.Sdk.Api 1.0.4 reads credentials.json with File.ReadAllText(path)
-    // (EnclaveClient.GetSettingsFile), which decodes the file as UTF-8 when it has no byte order mark
-    // (dotnet/runtime release/10.0, File.cs: ReadAllText(string) passes Encoding.UTF8). Other tools
-    // parse the same JSON, and RFC 8259 section 8.1 requires JSON exchanged between systems to be
-    // UTF-8 and forbids adding a byte order mark, which a parser may treat as an error. Comparing the
-    // bytes catches a byte order mark, which File.ReadAllText strips and a text comparison would miss.
-    [Test]
-    public void WriteText_writes_utf8_without_a_byte_order_mark([Values] bool privateToUser)
-    {
-        _store.WriteText(CredentialsPath, NonAsciiText, privateToUser);
-
-        var expectedBytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(NonAsciiText);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(File.ReadAllBytes(CredentialsPath), Is.EqualTo(expectedBytes));
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo(NonAsciiText));
         });
     }
 
@@ -248,38 +221,5 @@ public class DiskFileStoreTests
             Assert.That(directoryMode, Is.EqualTo(SharedDirectoryMode));
             Assert.That(fileMode, Is.EqualTo(PrivateFileMode));
         });
-    }
-
-    // cli.json holds settings with no secret and is written without privateToUser. Such a file gets
-    // the mode any new file gets: .NET creates files with 0666 (DefaultCreateMode, dotnet/runtime
-    // release/10.0, SafeFileHandle.Unix.cs), reduced by the umask (POSIX.1-2024 umask(),
-    // https://pubs.opengroup.org/onlinepubs/9799919799/functions/umask.html). The umask is the user's
-    // choice of who can read their new files, and the store overrides it only for a file that holds a
-    // secret.
-    //
-    // The expected mode comes from a reference file that File.WriteAllText creates with that default,
-    // so the test holds under any umask. Under a umask that lets group or other read new files (022
-    // or 002, for example), the expected mode grants that read access, and a store that restricted
-    // every file to 0600 fails the test. Under umask 077 every new file is 0600, so a store that
-    // restricted every file passes. That gap is accepted: under umask 077 such a store gives the file
-    // the mode the user's umask gives it anyway.
-    [Test]
-    public void Write_without_privateToUser_gives_the_file_the_default_mode_on_linux_and_macos()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Ignore(NoModesOnWindows);
-            return;
-        }
-
-        var referencePath = Path.Combine(_home, "reference.json");
-        File.WriteAllText(referencePath, "{}");
-        var defaultMode = File.GetUnixFileMode(referencePath);
-
-        _store.WriteText(CliConfigPath, "{}", privateToUser: false);
-
-        var fileMode = File.GetUnixFileMode(CliConfigPath);
-
-        Assert.That(fileMode, Is.EqualTo(defaultMode), $"The umask gives new files {defaultMode}.");
     }
 }

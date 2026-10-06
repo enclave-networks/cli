@@ -166,7 +166,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       RID: ${{ matrix.rid }}
-      IMAGE: ${{ matrix.image }}
       VERSION: ${{ needs.version.outputs.version }}
       TEST: ${{ matrix.test }}
     steps:
@@ -179,8 +178,21 @@ jobs:
       # commit into --version, and building as its owner keeps that step clear of git's ownership
       # rule (safe.directory, https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory)
       # whether or not the reader (Microsoft.Build.Tasks.Git) applies it.
+      #
+      # The image's layers are kept in the GitHub Actions cache (type=gha), one scope per image and
+      # runner architecture, so a run rebuilds the image only when its Dockerfile has changed or the
+      # cache entry has expired.
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       - name: Prepare build image
-        run: docker build -t enclave-cli-build -f ".github/docker/$IMAGE.Dockerfile" .github/docker
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .github/docker
+          file: .github/docker/${{ matrix.image }}.Dockerfile
+          tags: enclave-cli-build
+          load: true
+          cache-from: type=gha,scope=${{ matrix.image }}-${{ runner.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ runner.arch }}
 
       - name: Test, publish and smoke test
         run: |
