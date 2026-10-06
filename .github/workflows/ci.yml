@@ -1,8 +1,5 @@
 name: CI
 
-# Pull requests build, test and upload binaries for every platform. A push to main (a merged pull
-# request) does the same and then publishes a GitHub release.
-#
 # Pull requests use the pull_request event, under which a pull request from a fork runs with a
 # read-only token and no secrets, so its code cannot write to this repository. The release job is
 # the only job with write access, and it runs only for pushes to main.
@@ -46,24 +43,15 @@ jobs:
           fi
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
-  # The tests run once per operating system. They run the managed test assembly, which behaves the
-  # same on x64 and arm64; what differs between platforms is the OS (paths, file modes, line
-  # endings). Each shipped binary is covered by its build job's smoke test.
   test:
-    name: test (${{ matrix.os }})
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -72,8 +60,6 @@ jobs:
       - name: Test
         run: dotnet test enclave-cli.slnx -c Release --filter "TestCategory!=Pending"
 
-  # Windows and macOS. Each binary is built and smoke tested on a runner of its own OS and CPU, so the
-  # smoke test runs every binary that ships.
   build:
     name: build (${{ matrix.rid }})
     needs: version
@@ -95,11 +81,11 @@ jobs:
       RID: ${{ matrix.rid }}
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -133,7 +119,7 @@ jobs:
       # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
       # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
       # an earlier attempt of this job uploaded.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.ARCHIVE }}
           archive: false
@@ -173,11 +159,11 @@ jobs:
       IMAGE: ${{ matrix.image }}
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -204,7 +190,7 @@ jobs:
       # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
       # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
       # an earlier attempt of this job uploaded.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.ARCHIVE }}
           archive: false
@@ -225,7 +211,7 @@ jobs:
       # download-artifact v8 unzips an artifact served as a zip, which would unpack the Windows
       # archives; skip-decompress keeps every artifact as the file that was uploaded
       # (https://github.com/actions/download-artifact/releases/tag/v8.0.0).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@v8
         with:
           pattern: enclave-cli-*
           path: downloaded

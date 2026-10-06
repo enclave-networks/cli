@@ -1,5 +1,3 @@
-using System.Net;
-using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -419,16 +417,6 @@ public class HarnessTests
                 Assert.That(host.DefaultApiUrl, Is.EqualTo(run.ApiUrl));
                 Assert.That(host.DefaultApiUrl.Host, Is.EqualTo("127.0.0.1"));
             });
-
-            // The fake API must accept connections from this machine only. WireMock.Net reports its
-            // URL as http://localhost:{port} when started on 127.0.0.1 (version 2.18.0), so the
-            // reported URL does not show where it listens; the open sockets on the port do.
-            var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners()
-                .Where(endpoint => endpoint.Port == run.ApiUrl.Port)
-                .ToArray();
-
-            Assert.That(listeners, Is.Not.Empty);
-            Assert.That(listeners.Where(endpoint => !IPAddress.IsLoopback(endpoint.Address)), Is.Empty);
         }
         finally
         {

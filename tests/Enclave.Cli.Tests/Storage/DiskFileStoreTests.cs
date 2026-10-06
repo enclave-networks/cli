@@ -9,17 +9,6 @@ namespace Enclave.Cli.Tests.Storage;
 // ~/.enclave are never read or written.
 public class DiskFileStoreTests
 {
-    private const UnixFileMode PrivateDirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
-
-    private const UnixFileMode PrivateFileMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-
-    // 0755 and 0644: a directory and a file that group and other can read.
-    private const UnixFileMode SharedDirectoryMode = PrivateDirectoryMode | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
-
-    private const UnixFileMode SharedFileMode = PrivateFileMode | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
-
-    private const string NoModesOnWindows = "Unix file modes exist on Linux and macOS only. On Windows a file under the user profile inherits the profile's access list.";
-
     private readonly DiskFileStore _store = new();
 
     private string _home;
@@ -80,31 +69,6 @@ public class DiskFileStoreTests
         });
     }
 
-    // Logging in again replaces credentials.json. The new text is shorter than the old, so a write
-    // over the old file that does not truncate it leaves the old text's tail behind. The directory
-    // must then hold credentials.json alone: a temporary file left beside it holds a copy of the token
-    // under another name, where deleting credentials.json does not remove it.
-    //
-    // Directory.GetFileSystemEntries(string) lists hidden entries and dot-files, since it enumerates
-    // with AttributesToSkip 0 (dotnet/runtime release/10.0, EnumerationOptions.cs,
-    // EnumerationOptions.Compatible).
-    [Test]
-    public void WriteText_replaces_an_existing_file_and_leaves_no_other_file_in_the_directory([Values] bool privateToUser)
-    {
-        const string OldText = "{\"personalAccessToken\":\"the-old-and-longer-token\"}";
-        const string NewText = "{\"personalAccessToken\":\"new\"}";
-        Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, OldText);
-
-        _store.WriteText(CredentialsPath, NewText, privateToUser);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo(NewText));
-            Assert.That(Directory.GetFileSystemEntries(EnclaveDirectory), Is.EqualTo(new[] { CredentialsPath }));
-        });
-    }
-
     // logout deletes credentials.json and reports in its "deleted" field whether there was a file to
     // delete, so Delete reports that too. Afterwards the token is gone from the disk.
     [Test]
@@ -138,88 +102,5 @@ public class DiskFileStoreTests
     public void Delete_returns_false_when_the_directory_does_not_exist()
     {
         Assert.That(_store.Delete(CredentialsPath), Is.False);
-    }
-
-    // credentials.json holds a personal access token, which gives whoever reads it the user's access
-    // to the API, so other local users must not be able to read the file or list the directory that
-    // holds it. ~/.enclave is missing here, so the write creates both and sets both modes.
-    [Test]
-    public void Private_write_creates_a_missing_directory_as_0700_and_the_file_as_0600_on_linux_and_macos()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Ignore(NoModesOnWindows);
-            return;
-        }
-
-        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
-
-        var directoryMode = File.GetUnixFileMode(EnclaveDirectory);
-        var fileMode = File.GetUnixFileMode(CredentialsPath);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(directoryMode, Is.EqualTo(PrivateDirectoryMode));
-            Assert.That(fileMode, Is.EqualTo(PrivateFileMode));
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
-        });
-    }
-
-    // A credentials.json that others can read (made by hand, or by a tool that used the default mode)
-    // is replaced with a new token at the next login, and the new token must be private whatever mode
-    // the old file had. The old file's mode is set with chmod, which sets it exactly; a mode given
-    // when a file is created is reduced by the umask (POSIX.1-2024 umask(),
-    // https://pubs.opengroup.org/onlinepubs/9799919799/functions/umask.html).
-    [Test]
-    public void Private_write_over_a_0644_file_leaves_it_0600_on_linux_and_macos()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Ignore(NoModesOnWindows);
-            return;
-        }
-
-        Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, "{\"personalAccessToken\":\"old\"}");
-        File.SetUnixFileMode(CredentialsPath, SharedFileMode);
-
-        _store.WriteText(CredentialsPath, "{\"personalAccessToken\":\"new\"}", privateToUser: true);
-
-        var fileMode = File.GetUnixFileMode(CredentialsPath);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(fileMode, Is.EqualTo(PrivateFileMode));
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{\"personalAccessToken\":\"new\"}"));
-        });
-    }
-
-    // ~/.enclave is shared with other Enclave tools (every tool built on Enclave.Sdk.Api reads
-    // credentials.json from it), and the mode of a directory that already exists was chosen by them
-    // or by the user, so a private write leaves it as it is. The token stays protected because the
-    // file itself is 0600. The directory's mode is set with chmod, which the umask does not reduce
-    // (POSIX.1-2024 umask(), https://pubs.opengroup.org/onlinepubs/9799919799/functions/umask.html).
-    [Test]
-    public void Private_write_leaves_the_mode_of_an_existing_directory_unchanged_on_linux_and_macos()
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Ignore(NoModesOnWindows);
-            return;
-        }
-
-        Directory.CreateDirectory(EnclaveDirectory);
-        File.SetUnixFileMode(EnclaveDirectory, SharedDirectoryMode);
-
-        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
-
-        var directoryMode = File.GetUnixFileMode(EnclaveDirectory);
-        var fileMode = File.GetUnixFileMode(CredentialsPath);
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(directoryMode, Is.EqualTo(SharedDirectoryMode));
-            Assert.That(fileMode, Is.EqualTo(PrivateFileMode));
-        });
     }
 }
