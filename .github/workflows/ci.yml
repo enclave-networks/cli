@@ -47,8 +47,12 @@ jobs:
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Windows and macOS. Each binary is built and tested on a runner of its own OS and CPU, so the
+  # Windows and macOS. Each binary is built and smoke tested on a runner of its own OS and CPU, so the
   # smoke test runs every binary that ships.
+  #
+  # The unit tests run on one job per operating system (test: true). They run the managed test
+  # assembly, which behaves the same on x64 and arm64; what differs between platforms is the OS
+  # (paths, file modes, line endings). The shipped binaries are covered by the smoke test.
   build:
     name: build (${{ matrix.rid }})
     needs: version
@@ -59,12 +63,16 @@ jobs:
         include:
           - rid: win-x64
             os: windows-latest
+            test: true
           - rid: win-arm64
             os: windows-11-arm
+            test: false
           - rid: osx-x64
             os: macos-15-intel
+            test: false
           - rid: osx-arm64
             os: macos-latest
+            test: true
     runs-on: ${{ matrix.os }}
     env:
       RID: ${{ matrix.rid }}
@@ -81,6 +89,7 @@ jobs:
       # Tests in the Pending category state behaviour the CLI does not meet
       # (tests/Enclave.Cli.Tests/Support/TestCategory.cs), so CI runs every other test.
       - name: Test
+        if: matrix.test
         run: dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION" --filter "TestCategory!=Pending"
 
       - name: Publish
@@ -121,9 +130,10 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-  # Linux. Each binary is built, tested and smoke tested inside a container of the oldest
-  # distribution it supports (.github/docker): RHEL 8 for glibc, Alpine 3.22 for musl. The smoke
-  # test running there proves the binary runs on that distribution.
+  # Linux. Each binary is built and smoke tested inside a container of the oldest distribution it
+  # supports (.github/docker): RHEL 8 for glibc, Alpine 3.22 for musl. The smoke test running there
+  # proves the binary runs on that distribution. The unit tests run in the linux-x64 job only, for
+  # the reason given on the build job.
   #
   # The steps call docker directly because the runner cannot run JavaScript actions (checkout,
   # setup-dotnet) inside Alpine job containers on arm64: it fails with "JavaScript Actions in
@@ -140,20 +150,25 @@ jobs:
           - rid: linux-x64
             os: ubuntu-latest
             image: rhel8
+            test: true
           - rid: linux-arm64
             os: ubuntu-24.04-arm
             image: rhel8
+            test: false
           - rid: linux-musl-x64
             os: ubuntu-latest
             image: alpine
+            test: false
           - rid: linux-musl-arm64
             os: ubuntu-24.04-arm
             image: alpine
+            test: false
     runs-on: ${{ matrix.os }}
     env:
       RID: ${{ matrix.rid }}
       IMAGE: ${{ matrix.image }}
       VERSION: ${{ needs.version.outputs.version }}
+      TEST: ${{ matrix.test }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -172,11 +187,13 @@ jobs:
           docker run --rm \
             --user "$(id -u):$(id -g)" \
             -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
-            -e DOTNET_NOLOGO -e DOTNET_CLI_TELEMETRY_OPTOUT -e RID -e VERSION \
+            -e DOTNET_NOLOGO -e DOTNET_CLI_TELEMETRY_OPTOUT -e RID -e VERSION -e TEST \
             -v "$PWD:/src" -w /src \
             enclave-cli-build \
             sh -euc '
-              dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION" --filter "TestCategory!=Pending"
+              if [ "$TEST" = "true" ]; then
+                dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION" --filter "TestCategory!=Pending"
+              fi
               dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
               sh .github/scripts/smoke-test.sh publish/enclave-cli "$VERSION"
             '
