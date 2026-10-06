@@ -7,9 +7,9 @@
 `enclave-cli <noun> <verb> [arguments] [options]`
 
 - A command is a noun and a verb: `system list`, `policy create`. A noun's own parts take a hyphenated verb in place of another level: `dns create-hostname`, `org remove-user`, `partner customer add-admin`. `partner customer` is the one second-level noun, since customers have a dozen verbs of their own.
-- Nouns are singular. Most commands act on one item (`policy delete <id>`), and singular reads correctly there. A plural name is accepted as a hidden alias (`systems list` runs `system list`), so a guess works; help and `commands` show the singular name only.
+- Nouns are singular. Most commands act on one item (`policy delete <policy>`), and singular reads correctly there. A plural name is accepted as a hidden alias (`systems list` runs `system list`), so a guess works; help and `commands` show the singular name only.
 - Nouns use the same verbs wherever the API supports them: `list`, `show`, `create`, `update`, `delete`, `enable`, `disable`. Other verbs take the API's name: `revoke`, `approve`, `decline`, `convert`, `invite`.
-- A flag is named after the API model field it sets (`--approval-mode` sets `ApprovalMode`), shortened where the field name is long: `--senders` sets `SenderTags`, `--receivers` sets `ReceiverTags`, `--trust` sets `SenderTrustRequirements`.
+- A flag is named for what it does, in plain words: `--auto-approve` sets `ApprovalMode`, `--uses` sets `UsesRemaining`, `--ephemeral` sets `Type`. Where an API field name already reads plainly, the flag keeps it (`--notes` sets `Notes`), shortened where it is long: `--senders` sets `SenderTags`, `--receivers` sets `ReceiverTags`, `--trust` sets `SenderTrustRequirements`.
 
 Where a command acts:
 
@@ -72,7 +72,7 @@ enclave-cli
 ├── key                                         enrolment keys
 │   ├── list
 │   ├── show <key>
-│   ├── create
+│   ├── create <description>
 │   ├── update <key>
 │   ├── enable <key...>
 │   ├── disable <key...>
@@ -80,7 +80,7 @@ enclave-cli
 ├── policy
 │   ├── list
 │   ├── show <policy>
-│   ├── create
+│   ├── create <description>
 │   ├── update <policy>
 │   ├── enable <policy...>
 │   ├── disable <policy...>
@@ -105,7 +105,7 @@ enclave-cli
 ├── trust                                       trust requirements
 │   ├── list
 │   ├── show <trust>
-│   ├── create
+│   ├── create <description>
 │   ├── update <trust>
 │   └── delete <trust...>
 ├── log                                         the organisation's activity log
@@ -114,7 +114,7 @@ enclave-cli
 
 - A customer is an organisation. `<customer>` is its name, or `--org-id <orgId>` gives its organisation ID, the only ID a customer has (portal `CustomersController.cs:69` reads the customer ID as an `OrganisationGuid`). Anything else a partner customer command needs is a named option (`--user`, `--user-id`, `--email`, `--invite`).
 - An ID is never a positional argument. `--id` gives the ID of the command's own item. Every other item has a pair of options: `--<item>` takes its name (an email address for a user) and `--<item>-id` takes its ID: `--org`/`--org-id`, `--user`/`--user-id`, `--key`/`--key-id`, `--zone`/`--zone-id`, `--trust`/`--trust-id`, and `--partner-id` (partners are given by ID only). The option decides how its value is read, and the CLI never inspects a value to guess its type: `--key 12` is a key described "12", `--key-id 12` is key 12, and `--user-id` takes only a GUID. Nothing in `42` or a GUID says what it identifies, so the option name does. Positional arguments are names, email addresses, hostnames, tag names, and system IDs, since systems have no names.
-- `<key>`, `<policy>`, `<trust>`, `<zone>` and `<hostname>` are names: a description, a zone's name, a full hostname. `--id 42` gives the ID instead, `--id 42,43,57` several, and `--id -` reads IDs from stdin.
+- `<key>`, `<policy>`, `<trust>`, `<zone>` and `<hostname>` are names: a description, a zone's name, a full hostname. `--id 42` gives the ID instead, and `--id 42,43,57` several.
 - `--pending` on `system list`, `show` and `update` acts on systems waiting for approval, which the API keeps apart from enrolled systems (`unapproved-systems`). `approve` and `decline` act on those systems only.
 - A hostname is written in full, `db.internal`, and its zone is the zone its name ends in. Zones are named, `internal`; IDs work too.
 
@@ -125,17 +125,18 @@ enclave-cli
 | `org update` | `--name`, `--website`, `--phone` |
 | `system list` | `--search <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--dns-name`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
 | `system update` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--enable-gateway-for <subnet>,...`, `--disable-gateway` |
-| `system enable`, `key enable`, `policy enable` | `--until <when>`, `--expiry-action disable\|delete` |
+| `system enable` | `--for <duration>` or `--until <time>`, `--then disable\|revoke` |
+| `key enable`, `policy enable` | `--for <duration>` or `--until <time>`, `--then disable\|delete` |
 | `system list --pending` | `--search <text>`, `--tag a,b`, `--key <name>`, `--key-id <id>`, `--waiting-for <duration>`, `--sort` |
 | `system update --pending` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b` |
 | `key list` | `--search <text>`, `--tag a,b`, `--approval automatic\|manual`, `--state enabled\|disabled\|no-uses`, `--include-disabled`, `--sort` |
-| `key create` | `--description <text>` (required), `--type general\|ephemeral`, `--approval-mode automatic\|manual`, `--uses-remaining <n>`, `--tags a,b`, `--allow-ip <range>` (repeatable), `--keep-disconnected <duration>`, `--until <when>`, `--expiry-action disable\|delete`, `--notes` |
-| `key update` | `--description`, `--notes`, `--approval-mode`, `--uses-remaining <n>`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-allow-ip <range>` (repeatable), `--keep-disconnected <duration>` |
+| `key create <description>` | `--ephemeral`, `--auto-approve`, `--uses <n>`, `--tags a,b`, `--allow-ip <range>` (repeatable), `--keep-disconnected <duration>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes` |
+| `key update` | `--description`, `--notes`, `--auto-approve`, `--require-approval`, `--uses <n>`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-allow-ip <range>` (repeatable), `--keep-disconnected <duration>` |
 | `policy list` | `--search <text>`, `--tag a,b`, `--state enabled\|disabled`, `--include-disabled`, `--sort` |
-| `policy create` | `--description <text>` (required), `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--allow-ip <range>` (repeatable), `--active-hours <hours>`, `--until <when>`, `--expiry-action disable\|delete`, `--notes`, `--disabled` |
+| `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--allow-ip <range>` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
 | `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--set-allow-ip <range>` (repeatable), `--set-active-hours <hours>` |
 | `trust list` | `--search <text>`, `--type user-auth\|public-ip`, `--sort` |
-| `trust create` | `--description <text>` (required), `--type user-auth\|public-ip` (required), `--notes`; for `user-auth`: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); for `public-ip`: `--allow-ip <range>`, `--block-ip <range>`, `--allow-country <code>`, `--block-country <code>` (each repeatable) |
+| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>`, `--block-ip <range>`, `--allow-country <code>`, `--block-country <code>` (each repeatable) |
 | `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...), which replace all its conditions |
 | `tag list` | `--search <text>`, `--sort` |
 | `tag set` | `--name <new>`, `--colour`, `--trust <name>,...`, `--trust-id <id>,...`, `--notes` |
@@ -144,17 +145,21 @@ enclave-cli
 | `dns list-hostnames` | `--zone <name>`, `--zone-id <id>`, `--search <text>` |
 | `dns create-hostname` | `--type`, `--tags a,b`, `--systems id,id`, `--notes` |
 | `dns update-hostname` | `--name`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-systems id,id`, `--notes` |
-| `log` | `--since <when>`, `--until <when>`, `--user <email>` (needs an `Enclave.Sdk.Api` change) |
+| `log` | `--limit <n>`, `--since <when>`, `--until <when>`, `--user <email>`, `--level information\|warning\|error`, `--search <text>` |
 
 - `--acl` takes a protocol (`any`, `tcp`, `udp`, `icmp`) and, for TCP and UDP, a port or range: `tcp:5432`, `udp:53`, `tcp:8000-8100`. A policy created with no `--acl` allows any protocol.
 - `--gateway GW001:10.0.0.0/16,10.1.0.0/16` makes a gateway policy: the senders reach those routes through system GW001. `--allow-ip` narrows the addresses they may reach through it. `--gateway` and `--receivers` together exit 2. Gateway priority and traffic direction take the API's defaults; flags for them are added once their values are confirmed from the API.
 - `--enable-gateway-for 10.0.0.0/16,10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one.
 - `--active-hours "mon-fri 08:00-18:00 Europe/London"` takes days, a start and end time, and an IANA time zone (UTC when left out). `--set-active-hours ""` removes the restriction.
 - `--keep-disconnected 30m` keeps systems enrolled with the key for that long after they disconnect.
-- `--until` and `--expiry-action` on `create` set the item to switch itself off or delete itself, as `enable --until` does.
+- `--for 8h` (a duration: `30m`, `8h`, `14d`) or `--until 18:00` (ISO 8601, or a clock time, meaning its next occurrence in local time) makes the change temporary. Afterwards the item is disabled; `--then revoke` (systems) or `--then delete` (keys, policies) removes it instead. `enable` and `create` both take them.
+- `key create` makes keys that need approval and have unlimited uses unless told otherwise (`--auto-approve`, `--uses`), the API's defaults.
+- `trust create` takes its type from its flags: `--authority` makes a sign-in requirement, `--allow-*` and `--block-*` a public IP requirement, and mixing the two exits 2.
 - `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes.
 - `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - Flags for partner and customer `create` and `update` are chosen from the partner API models when `Enclave.Sdk.Api` has partner clients.
+- `log` prints the newest 100 entries, newest first; `--limit` changes the number. `--since 24h` (a duration, or a time as for `--until`) prints every entry back to then, with no limit. The API returns entries newest first (portal `ActivityLogRepository.cs:43`), so the CLI stops reading at the first entry older than `--since`. `--until` leaves out entries newer than that time.
+- The logs API takes only a page and page size (portal `LogsRequestModel.cs`), so the CLI applies `--user`, `--level` and `--search` to the entries it reads. `--user` matches the entry's `userName`, `--level` takes one or more levels (`--level warning,error`), and `--search` matches text in the message. With these filters and no `--since`, `--limit` counts matching entries, and the CLI reads back until it has that many or reaches the start of the log.
 
 ## Options on every command
 
@@ -162,12 +167,10 @@ enclave-cli
 |---|---|---|
 | `--org <name>`, `--org-id <orgId>` | commands that act within an organisation | the organisation to use (see "Context") |
 | `--partner-id <partnerId>` | `partner` commands | the partner to use (see "Context") |
-| `-o json\|table\|id\|count\|secret` | every command; `table` and `count` on lists (`list`, `list-*`, `log`) only; `secret` on `key create` and `key show` only | output format; `json` is the default |
 | `--verbose` | every command | diagnostics on stderr |
-| `--limit <n>`, `--all` | lists (`list`, `list-*`, `log`) | how many results, default 100; `--all` fetches every page |
 | `--dry-run` | commands that change something through the API | prints the request and sends nothing |
 
-Option values that name an API enum (`--sort`, `--type`, `--approval-mode`, `--expiry-action`, `--state`, `--os`) take lower-case, hyphenated names (`recently-connected`, `general`, `automatic`, `disable`), matched ignoring case. JSON output keeps the API's own names. `commands` lists the allowed values.
+Option values that name an API enum (`--sort`, `--type`, `--approval`, `--then`, `--state`, `--os`, `--level`) take lower-case, hyphenated names (`recently-connected`, `general`, `automatic`, `revoke`), matched ignoring case. JSON output keeps the API's own names. `commands` lists the allowed values.
 
 The token comes from `ENCLAVE_TOKEN`, then `~/.enclave/credentials.json`. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs:105` issues them with `TimeSpan.MaxValue`).
 
@@ -192,29 +195,30 @@ Partner:
 
 ## Several IDs
 
-- A command that takes several items takes 1 to 200: system IDs or names as arguments, or IDs as `--id 42,43,57`. `-` in place of the arguments, or `--id -`, reads newline-separated IDs from stdin; blank lines and `\r` are ignored and duplicates removed.
+- A command that takes several items takes 1 to 200: system IDs or names as arguments, or IDs as `--id 42,43,57`. `-` in place of the arguments reads a list printed by an `enclave-cli` list command from stdin and acts on its items by ID; duplicates are removed.
+- The list's `kind` must match the command: `system approve` and `decline` take the output of `system list --pending`, the other `system` verbs take `system list`, `key` verbs take `key list`, and so on. Any other kind, or input that is not a list, exits 2. Keys, policies, zones, hostnames and trust requirements all have integer IDs, so the kind is what stops `key list | enclave-cli policy delete -` deleting the policies that share those numbers.
 - A command that accepts several IDs always makes the bulk call, also for one ID, so its output is always `{ "requested": n, "affected": m }`. The bulk calls return a count only, and bulk approve succeeds when some IDs were not approved (portal `UnapprovedSystemsController.cs:170-177`). `affected` lower than `requested` means some IDs were unknown or already in that state; the exit code is 0, so a re-run after a timeout is safe.
 - More than 200 IDs exits 2. The API's bulk limit is 200 (portal `Enclave.Utilities/HardLimits.cs:22`, `MaxBulkIds`).
-- `-` with no IDs prints `{ "requested": 0, "affected": 0 }`, makes no call and exits 0, so a pipeline fed by an empty list succeeds.
+- `-` given an empty list prints `{ "requested": 0, "affected": 0 }`, makes no call and exits 0, so a pipeline fed by an empty list succeeds.
 - `-` when stdin is a terminal exits 2. The CLI never waits for input.
-- `--until` takes one ID and prints the updated model; the API's timed enable has no bulk form. `dns delete-zone` takes one zone; the API has no bulk zone delete (portal `DnsController.cs:145`).
-- Single-ID commands (`show`, `update`, `--until`, `dns delete-zone`, and the partner and customer commands) print the model and exit 5 for an unknown ID.
+- `--for` and `--until` take one item and print the updated model; the API's timed enable has no bulk form. `dns delete-zone` takes one zone; the API has no bulk zone delete (portal `DnsController.cs:145`).
+- Single-ID commands (`show`, `update`, `--for` and `--until`, `dns delete-zone`, and the partner and customer commands) print the model and exit 5 for an unknown ID.
 
 Example, approving every system enrolled with key 12:
 
 ```
-enclave-cli system list --pending --key-id 12 --all -o id | enclave-cli system approve -
+enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 ```
 
 ## Filters
 
-`list` commands take `--search <text>` for free text, and one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type`, `--gateway` and `--key`. The CLI writes them into the API's search query, and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--state disabled` lists disabled items without `--include-disabled`.
+`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). They take `--search <text>` for free text, and one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type`, `--gateway` and `--key`. The CLI writes them into the API's search query, and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--state disabled` lists disabled items without `--include-disabled`.
 
-`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI reads every page and keeps the matches; `total` counts the matches.
+`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI keeps the matches from the items it reads; `total` counts the matches.
 
 ## Names and IDs
 
-Keys, policies, DNS zones, hostnames and trust requirements are given as arguments by name: the description of a key, policy or trust requirement, the name of a zone, or the full name of a hostname (`db.internal`). Names are looked up with one list call, and each must match exactly one item, ignoring case; no match, or several, exits 2 with the candidates. `--id` gives IDs instead and makes no lookup; IDs read from stdin are IDs, since they come from `-o id`. Options that point at another item come in pairs, one for its name and one for its ID (`--key`/`--key-id`). Systems take IDs only: hostnames are not unique. Tags are given by name only. `org remove-user` takes an email address in place of the account ID, looked up the same way. A partner customer is given by its name, looked up in the partner's customer list, or by `--org-id`. On `partner customer add-admin` and `remove-admin`, `--user` takes a partner user's email address and `--user-id` an account ID; the email lookup reads the partner's users, which needs the portal change in "Needs portal changes".
+Keys, policies, DNS zones, hostnames and trust requirements are given as arguments by name: the description of a key, policy or trust requirement, the name of a zone, or the full name of a hostname (`db.internal`). Names are looked up with one list call, and each must match exactly one item, ignoring case; no match, or several, exits 2 with the candidates. `--id` gives IDs instead and makes no lookup, and so does a list read from stdin, which carries each item's ID. Options that point at another item come in pairs, one for its name and one for its ID (`--key`/`--key-id`). Systems take IDs only: hostnames are not unique. Tags are given by name only. `org remove-user` takes an email address in place of the account ID, looked up the same way. A partner customer is given by its name, looked up in the partner's customer list, or by `--org-id`. On `partner customer add-admin` and `remove-admin`, `--user` takes a partner user's email address and `--user-id` an account ID; the email lookup reads the partner's users, which needs the portal change in "Needs portal changes".
 
 ## ID checks
 
@@ -250,12 +254,11 @@ Capturing the request needs an `Enclave.Sdk.Api` change (see below). Printing th
 
 ## Output
 
-- JSON by default, using the `Enclave.Sdk.Api` models unchanged.
-- Lists: `{ "items": [...], "total": <n>, "truncated": <bool> }`. `-o id` and `-o table` drop the envelope, so when their output is truncated the CLI writes one line to stderr: `{ "warning": { "code": "truncated", "shown": 100, "total": 342 } }`.
-- Enrolment key output includes the key's secret (`EnrolmentKeyModel.Key`). `-o id` leaves it out; `-o secret` prints the secret alone.
-- `-o count` prints a list's `total` alone.
+- JSON, using the `Enclave.Sdk.Api` models unchanged. There is one output format. Agents read JSON, and a format for people alone is not worth a flag on every command.
+- Lists: `{ "kind": "system", "items": [...], "total": <n> }`. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, and the `org` and `partner` lists), so a command reading the list from stdin can check it.
+- Enrolment key output includes the key's secret, `key` (`EnrolmentKeyModel.Key`).
 - `commands system list` describes one command, its options and their allowed values.
-- Common questions have a filter or an output format, so a script needs `jq` only for something unusual.
+- Common questions have a filter, so a script needs `jq` only to pull out a single field, such as a new key's secret.
 
 ## Errors and exit codes
 
@@ -273,7 +276,7 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 
 Parse errors (unknown option, missing argument) follow the same rules: JSON on stderr, nothing on stdout, exit 2, with any suggestion in `detail`. System.CommandLine's default writes plain text and help and exits 1, so the CLI replaces its parse-error action.
 
-`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:20`). The CLI maps `HttpRequestException` status codes to the same exit codes, so a plain 401 or a proxy's 502 still gets 3 or 7.
+`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:20`). The CLI maps `HttpRequestException` status codes to the same exit codes, so a plain 401 or a proxy's 502 still gets 3 or 6.
 
 ## Login, logout and status
 
@@ -289,12 +292,11 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 
 One `Enclave.Sdk.Api` call per command, with these exceptions:
 
-- `--all`, or `--limit` above 200, makes one call per page. The API returns at most 200 per page.
+- A list makes one call per page of 200, the most the API returns per page. `log` reads only the pages it needs.
 - Looking up an organisation by name, or with no organisation chosen, adds one call.
 - A key, policy, zone or trust requirement given by name adds one call.
 - `--add-tags` and `--remove-tags` read the item first, which adds one call.
 - `tag set` on a tag that does not exist makes a second call to create it.
-- `--not-seen-for` and `--waiting-for` read every page.
 
 ## Partner API
 
@@ -308,7 +310,7 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 - A customer is an organisation, and the partner API identifies it by its organisation ID (portal `CustomersController.cs:69` parses the route's customer ID as an `OrganisationGuid`). Partner staff work on a customer's systems, policies and the rest through the main API, where `org list` includes the customer's organisation with `PartnerAccess` set:
 
   ```
-  enclave-cli partner customer list -o id
+  enclave-cli partner customer list
   enclave-cli system list --org-id <orgId>
   ```
 
@@ -334,13 +336,13 @@ Each is added in enclave-networks/enclave.sdk.api first, with tests there, then 
 7. The `hostname` filter on DNS record list. The API accepts it (portal `DnsRecordsRequestModel.cs:18`).
 8. The `meta/search-keys` endpoints, so `commands` can describe `--search`. These also need Enclave.Sdk.Api.Data changes.
 9. Partner API clients (partner, users, invites, customers, customer admins, customer invites, auto-sync) and a partner API base URL.
-10. Filters on the activity log, for `log --since`, `--until` and `--user`. `GetLogsAsync` takes only a page and page size; whether the API filters logs needs checking.
 
 ## Needs portal changes
 
 - Add `ReadPartnerList`, `ReadPartnerInfo` and `WritePartnerSettings` to the personal access token client's allowed scopes, for the `partner` commands outside `partner customer`.
 - Organisation update, user removal and invites need organisation membership and no token scope (portal `OrganisationController.cs:49,91,132`), so a token limited to read scopes can still do them.
-- Search keys for when a system was last seen and when a pending system enrolled. With them, `--not-seen-for` and `--waiting-for` become one call each.
+- Search keys for when a system was last seen and when a pending system enrolled. With them, the API filters `--not-seen-for` and `--waiting-for`.
+- Filters on the activity log (time, user, level, text). With them, `log --user` and the other filters read only the matching entries.
 
 ## Changes to AGENTS.md
 
@@ -348,12 +350,15 @@ If this proposal is accepted, AGENTS.md changes to match:
 
 - Command shape: `<noun> <verb>`, hyphenated verbs for a noun's parts, singular nouns, plural accepted as a hidden alias. The noun list becomes `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
 - `--from-file` and `--template` are removed: every field has a flag.
+- Temporary changes: `--for <duration>` or `--until <time>` (ISO 8601 or a clock time), then `--then`.
+- `-o` is removed: output is always JSON.
+- `--all` and `--limit` are removed from lists, which read every page; `log` keeps `--limit`.
+- The list envelope gains `kind` and loses `truncated`. `-` reads a list printed by the CLI.
 - Token sources: `ENCLAVE_TOKEN`, then `credentials.json`. `--token` is removed.
 - Organisation and partner precedence, including `ENCLAVE_ORG`, `ENCLAVE_ORG_ID` and `ENCLAVE_PARTNER_ID`.
 - IDs only after `--id` or an `--<item>-id` option; `--<item>` options take names.
 - `--yes` and its exit code are removed: changes run when given, and `--dry-run` previews them.
 - Exit 6 for transient failures, and the fixed `code` set.
-- The truncation warning on stderr.
 - The bulk output shape, empty stdin, the 200-ID limit and the ID checks.
 - `commands [<noun> [<verb>]]` replaces `commands --json`.
 
@@ -374,31 +379,31 @@ enclave-cli org use Acme
 enclave-cli org use --id 3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17
 
 # 2. In CI, list the connected Linux build servers in one organisation without touching the shared default
-ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG=Acme enclave-cli system list --tag build --os linux --state connected --all -o id
-ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG_ID=3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17 enclave-cli system list --tag build --os linux --state connected --all -o id
+ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG=Acme enclave-cli system list --tag build --os linux --state connected
+ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG_ID=3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17 enclave-cli system list --tag build --os linux --state connected
 
 # 3. Approve every system waiting that enrolled with key 12
-enclave-cli system list --pending --key-id 12 --all -o id | enclave-cli system approve -
+enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 
 # 4. Show a reviewer what that approval would send, without sending it
-enclave-cli system list --pending --key-id 12 --all -o id | enclave-cli system approve - --dry-run
+enclave-cli system list --pending --key-id 12 | enclave-cli system approve - --dry-run
 
 # 5. Decline systems that have been waiting for approval for more than a week
-enclave-cli system list --pending --waiting-for 7d --all -o id | enclave-cli system decline -
+enclave-cli system list --pending --waiting-for 7d | enclave-cli system decline -
 
 # 6. Give contractors access for 8 hours through their policy
-enclave-cli policy enable contractors --until 8h --expiry-action disable
-enclave-cli policy enable --id 23 --until 8h --expiry-action disable
+enclave-cli policy enable contractors --for 8h
+enclave-cli policy enable --id 23 --for 8h
 
 # 7. Let a visitor's laptop in for a day, then revoke it automatically
-enclave-cli system enable LAPTOP7 --until 24h --expiry-action delete
+enclave-cli system enable LAPTOP7 --for 24h --then revoke
 
 # 8. Make a one-use key for a CI runner, usable only from the CI network, that removes its system 30 minutes after the runner disconnects, and keep its secret
-ENROLMENT_KEY=$(enclave-cli key create --description "ci runner 4711" --type ephemeral --approval-mode automatic --uses-remaining 1 --tags ci,runner --allow-ip 198.51.100.0/24 --keep-disconnected 30m -o secret)
+ENROLMENT_KEY=$(enclave-cli key create "ci runner 4711" --ephemeral --auto-approve --uses 1 --tags ci,runner --allow-ip 198.51.100.0/24 --keep-disconnected 30m | jq -r .key)
 
 # 9. Rotate an enrolment key: create the replacement, then disable the old key
-enclave-cli key create --description "build agents 2026-10" --approval-mode manual --tags build,linux && enclave-cli key disable "build agents 2026-04"
-enclave-cli key create --description "build agents 2026-10" --approval-mode manual --tags build,linux && enclave-cli key disable --id 12
+enclave-cli key create "build agents 2026-10" --tags build,linux && enclave-cli key disable "build agents 2026-04"
+enclave-cli key create "build agents 2026-10" --tags build,linux && enclave-cli key disable --id 12
 
 # 10. Add a tag to a system and keep the tags it has
 enclave-cli system update ABCDE --add-tags monitoring
@@ -408,25 +413,21 @@ enclave-cli policy update "web to db" --set-senders web,api --dry-run
 enclave-cli policy update "web to db" --set-senders web,api
 enclave-cli policy update --id 42 --set-senders web,api
 
-# 12. Retry a change when the API is briefly unavailable (exit 6), and stop on anything else
-for attempt in 1 2 3; do
-  enclave-cli system disable ABCDE && break
-  [ $? -eq 6 ] || exit 1
-  sleep 10
-done
+# 12. Let a contractor's laptop in until 17:30 on Friday, then switch it off again
+enclave-cli system enable LAPTOP9 --until 2026-10-09T17:30
 
 # 13. Delete every disabled enrolment key
-enclave-cli key list --state disabled --all -o id | enclave-cli key delete --id -
+enclave-cli key list --state disabled | enclave-cli key delete -
 
 # 14. Revoke systems that have not connected for 90 days
-enclave-cli system list --not-seen-for 90d --all -o id | enclave-cli system revoke -
+enclave-cli system list --not-seen-for 90d | enclave-cli system revoke -
 
 # 15. Point db.internal at the two database systems
 enclave-cli dns create-hostname db.internal --systems ABCDE,FGHIJ --notes "primary database pair"
 
 # 16. Remove every hostname for old-api, after checking which ones match
-enclave-cli dns list-hostnames --search old-api --all -o table
-enclave-cli dns list-hostnames --search old-api --all -o id | enclave-cli dns delete-hostname --id -
+enclave-cli dns list-hostnames --search old-api
+enclave-cli dns list-hostnames --search old-api | enclave-cli dns delete-hostname -
 
 # 17. See every option system list takes, and the values each accepts
 enclave-cli commands system list
@@ -439,21 +440,19 @@ enclave-cli policy disable --id 42 --org-id 3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17
 enclave-cli org remove-user sam@example.com
 enclave-cli org cancel-invite sam@example.com
 
-# 20. Count the systems in every customer organisation
-enclave-cli partner customer list --all -o id | while read -r customer; do
-  echo "$customer $(enclave-cli system list --org-id "$customer" -o count)"
-done
+# 20. See how many systems each customer has enrolled (each customer's enrolledSystems)
+enclave-cli partner customer list
 
 # 21. Let web servers reach the databases on PostgreSQL, checking the request first
-enclave-cli policy create --description "web to db" --senders web --receivers db --acl tcp:5432 --dry-run
-enclave-cli policy create --description "web to db" --senders web --receivers db --acl tcp:5432
+enclave-cli policy create "web to db" --senders web --receivers db --acl tcp:5432 --dry-run
+enclave-cli policy create "web to db" --senders web --receivers db --acl tcp:5432
 
 # 22. Give support SSH access to production until 18:00 UTC, then disable the policy
-enclave-cli policy create --description "support ssh" --senders support --receivers prod --acl tcp:22 --until 2026-10-06T18:00:00Z --expiry-action disable
+enclave-cli policy create "support ssh" --senders support --receivers prod --acl tcp:22 --until 18:00
 
 # 23. Open DNS and HTTPS from the office laptops to the build farm, only for staff signed in to Entra ID
-enclave-cli policy create --description "office to build farm" --senders office,laptop --receivers build --acl udp:53 --acl tcp:443 --trust "entra staff"
-enclave-cli policy create --description "office to build farm" --senders office,laptop --receivers build --acl udp:53 --acl tcp:443 --trust-id 3
+enclave-cli policy create "office to build farm" --senders office,laptop --receivers build --acl udp:53 --acl tcp:443 --trust "entra staff"
+enclave-cli policy create "office to build farm" --senders office,laptop --receivers build --acl udp:53 --acl tcp:443 --trust-id 3
 
 # 24. Replace a policy's rules: build servers may now reach the artifact store on 443 and 8000-8100 only
 enclave-cli policy update "build to artifacts" --set-acl tcp:443 --set-acl tcp:8000-8100
@@ -461,13 +460,13 @@ enclave-cli policy update --id 57 --set-acl tcp:443 --set-acl tcp:8000-8100
 
 # 25. Make GW001 a gateway for the office LAN, then route staff traffic for it through GW001
 enclave-cli system update GW001 --enable-gateway-for 10.0.0.0/16
-enclave-cli policy create --description "staff to office LAN" --senders staff --gateway GW001:10.0.0.0/16 --allow-ip 10.0.0.0/16
+enclave-cli policy create "staff to office LAN" --senders staff --gateway GW001:10.0.0.0/16 --allow-ip 10.0.0.0/16
 
 # 26. Require staff to be signed in to Entra ID and in the engineering group
-enclave-cli trust create --description "entra staff" --type user-auth --authority azure --tenant 9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31 --claim groups=4e2d8c1a-0b7f-4c39-9a65-1f3e7d2b6c84
+enclave-cli trust create "entra staff" --authority azure --tenant 9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31 --claim groups=4e2d8c1a-0b7f-4c39-9a65-1f3e7d2b6c84
 
 # 27. Refuse connections from outside the UK and from one known bad range
-enclave-cli trust create --description "uk only" --type public-ip --allow-country GB --block-ip 203.0.113.0/24
+enclave-cli trust create "uk only" --allow-country GB --block-ip 203.0.113.0/24
 
 # 28. Every system tagged prod must also meet the "uk only" requirement
 enclave-cli tag set prod --trust "uk only"
@@ -477,18 +476,18 @@ enclave-cli tag set prod --trust-id 5
 enclave-cli dns create-zone internal --auto-dns-tags web
 
 # 30. Allow the cleaning crew's tablets in only during office hours
-enclave-cli policy create --description "facilities tablets" --senders tablets --receivers printers --acl tcp:9100 --active-hours "mon-fri 08:00-18:00 Europe/London"
+enclave-cli policy create "facilities tablets" --senders tablets --receivers printers --acl tcp:9100 --active-hours "mon-fri 08:00-18:00 Europe/London"
 
 # 31. Disable a policy by its description
 enclave-cli policy disable "web to db"
 enclave-cli policy disable --id 42
 
 # 32. Stop a key enrolling new systems without approval
-enclave-cli key update "build agents" --approval-mode manual
-enclave-cli key update --id 12 --approval-mode manual
+enclave-cli key update "build agents" --require-approval
+enclave-cli key update --id 12 --require-approval
 
 # 33. Show the last day's activity
-enclave-cli log --since 24h -o table
+enclave-cli log --since 24h
 
 # 34. Disable a policy by its ID
 enclave-cli policy disable --id 42
@@ -500,16 +499,16 @@ enclave-cli policy disable --id 42,43,57
 enclave-cli status
 
 # 37. Find every gateway and the subnets it serves
-enclave-cli system list --gateway -o table
+enclave-cli system list --gateway
 
-# 38. Show the ten systems that connected most recently
-enclave-cli system list --sort recently-connected --limit 10 -o table
+# 38. List systems, most recently connected first
+enclave-cli system list --sort recently-connected
 
 # 39. Find the system that answers to db.internal
 enclave-cli system list --dns-name db.internal
 
-# 40. Count the Windows systems that are offline
-enclave-cli system list --os windows --state disconnected -o count
+# 40. Find the Windows systems that are offline, and how many (total)
+enclave-cli system list --os windows --state disconnected
 
 # 41. Tag a system before approving it, then approve it
 enclave-cli system update XYZ12 --pending --set-tags kiosk,lobby && enclave-cli system approve XYZ12
@@ -524,35 +523,35 @@ enclave-cli system update GW001 --disable-gateway
 enclave-cli system disable ABCDE FGHIJ KLMNO
 
 # 45. Disable every system listed in a file, one ID per line
-enclave-cli system disable - < quarantine.txt
+enclave-cli system disable $(cat quarantine.txt)
 
-# 46. Print the secret of an existing enrolment key
-enclave-cli key show "build agents" -o secret
-enclave-cli key show --id 12 -o secret
+# 46. Show an existing enrolment key with its secret
+enclave-cli key show "build agents"
+enclave-cli key show --id 12
 
 # 47. List the keys that approve automatically and are tagged ci
-enclave-cli key list --approval automatic --tag ci -o table
+enclave-cli key list --approval automatic --tag ci
 
 # 48. Give a key five more uses and restrict it to the office network
-enclave-cli key update "build agents" --uses-remaining 5 --set-allow-ip 203.0.113.0/24
-enclave-cli key update --id 12 --uses-remaining 5 --set-allow-ip 203.0.113.0/24
+enclave-cli key update "build agents" --uses 5 --set-allow-ip 203.0.113.0/24
+enclave-cli key update --id 12 --uses 5 --set-allow-ip 203.0.113.0/24
 
 # 49. Let a key enrol for two weeks, then delete it
-enclave-cli key enable "contractor laptops" --until 14d --expiry-action delete
-enclave-cli key enable --id 31 --until 14d --expiry-action delete
+enclave-cli key enable "contractor laptops" --for 14d --then delete
+enclave-cli key enable --id 31 --for 14d --then delete
 
 # 50. List the disabled policies
-enclave-cli policy list --state disabled -o table
+enclave-cli policy list --state disabled
 
 # 51. Remove a policy's office-hours restriction
 enclave-cli policy update "facilities tablets" --set-active-hours ""
 enclave-cli policy update --id 61 --set-active-hours ""
 
 # 52. Allow ping and a UDP port range between the monitoring and app servers
-enclave-cli policy create --description "monitoring" --senders monitoring --receivers app --acl icmp --acl udp:8125-8126
+enclave-cli policy create "monitoring" --senders monitoring --receivers app --acl icmp --acl udp:8125-8126
 
 # 53. Route the office LAN through two gateways, so either can carry it
-enclave-cli policy create --description "office LAN" --senders staff --gateway GW001:10.0.0.0/16 --gateway GW002:10.0.0.0/16
+enclave-cli policy create "office LAN" --senders staff --gateway GW001:10.0.0.0/16 --gateway GW002:10.0.0.0/16
 
 # 54. See what deleting a policy would send, then delete it
 enclave-cli policy delete "old vpn" --dry-run
@@ -564,17 +563,17 @@ enclave-cli policy delete --id 17
 enclave-cli tag set web --name frontend --colour "#2f80ed"
 
 # 56. Require users to be signed in to the Enclave portal
-enclave-cli trust create --description "portal login" --type user-auth --authority portal
+enclave-cli trust create "portal login" --authority portal
 
 # 57. Require a sign-in through a generic OIDC provider, from the example.com domain
-enclave-cli trust create --description "sso" --type user-auth --authority oidc --authority-uri https://sso.example.com --claim hd=example.com
+enclave-cli trust create "sso" --authority oidc --authority-uri https://sso.example.com --claim hd=example.com
 
 # 58. Allow Ireland as well as the UK
 enclave-cli trust update "uk only" --set-allow-country GB,IE
 enclave-cli trust update --id 5 --set-allow-country GB,IE
 
 # 59. List the IP-based trust requirements
-enclave-cli trust list --type public-ip -o table
+enclave-cli trust list --type public-ip
 
 # 60. Name systems tagged web or api in the internal zone automatically
 enclave-cli dns update-zone internal --set-auto-dns-tags web,api
@@ -585,8 +584,8 @@ enclave-cli dns update-hostname db.internal --set-systems ABCDE,FGHIJ,KLMNO
 enclave-cli dns update-hostname --id 7 --set-systems ABCDE,FGHIJ,KLMNO
 
 # 62. List every hostname in the internal zone
-enclave-cli dns list-hostnames --zone internal -o table
-enclave-cli dns list-hostnames --zone-id 4 -o table
+enclave-cli dns list-hostnames --zone internal
+enclave-cli dns list-hostnames --zone-id 4
 
 # 63. Rename the organisation and set its contact details
 enclave-cli org update --name "Acme Ltd" --website https://acme.example --phone "+44 20 7946 0000"
@@ -603,4 +602,22 @@ enclave-cli partner customer invite "Globex Ltd" --email sam@globex.example
 
 # 67. Sign out on a shared machine
 enclave-cli logout
+
+# 68. Show the latest activity
+enclave-cli log
+
+# 69. Show the last 1000 entries
+enclave-cli log --limit 1000
+
+# 70. See what one person changed this week
+enclave-cli log --since 7d --user sam@example.com
+
+# 71. Check the last hour for warnings and errors, from a scheduled job
+enclave-cli log --since 1h --level warning,error
+
+# 72. Find everything that happened to one system this month
+enclave-cli log --since 30d --search LAPTOP7
+
+# 73. See what happened during an incident window
+enclave-cli log --since 2026-10-05T09:00 --until 2026-10-05T12:00
 ```
