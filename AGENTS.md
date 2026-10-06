@@ -37,7 +37,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - Shared helpers live in `Support/`: `CliAssert` (outcomes), `JsonRead` and `JsonAssert` (JSON), `ApiJson` (API response bodies), `TestData`, `Args`. Add a helper there when a second test file needs it; NEVER copy one into a test class.
 - Assert the request the fake received (method, path, query, body) as well as the CLI's output. A test MUST fail if the CLI sends the wrong request, or none.
 - NEVER call the live API. NEVER read the real `~/.enclave/` or user profile in tests; inject paths and environment.
-- CI runs the tests once per OS: Windows x64, Linux x64 (AlmaLinux 8) and macOS arm64. The other platforms run the smoke test only. NEVER depend on OS-specific behaviour (path separators, line endings, case sensitivity) without handling it.
+- CI runs the tests once per OS in the `test` job: Windows, Linux and macOS. The build jobs run the smoke test only. NEVER depend on OS-specific behaviour (path separators, line endings, case sensitivity) without handling it.
 - Test names: sentences joined with underscores that state the required behaviour, e.g. `Systems_list_prints_json_by_default`.
 - Test names and comments state required behaviour. NEVER describe the code's current state: no "fails today", "the bug", "until fixed", "still", "currently".
 
@@ -78,15 +78,15 @@ Applies to code comments, AGENTS.md, README and every other document in this rep
 - No status or timeline wording: "today", "currently", "until fixed".
 
 Code comments also:
-- Give the reason for the code; the code itself shows what it does.
+- Comments say WHY: the reason for the code, a constraint, a trade-off, or the external behaviour it relies on. NEVER write a comment that says WHAT the code below does; the code shows that. Delete such a comment when you find one.
 - A trade-off states what was given up and why that is acceptable.
-- NEVER delete existing comments unless asked; correct a wrong one in place.
-- XML docs: a short `<summary>`, plus `<param>`/`<returns>` where needed. No `<remarks>` essays.
+- NEVER delete a comment that gives a reason unless asked; correct a wrong one in place.
+- XML docs only where a caller needs something the signature cannot show (for example, returns null when the file is missing): a short `<summary>`. No `<remarks>` essays.
 
 ## CI (`.github/workflows/ci.yml`)
-- Pull request: version, then publish + smoke test per RID on a runner of that OS and CPU, then upload archives (kept 2 days). The tests (without the Pending category) run in one job per OS. No release.
-- Linux RIDs build inside containers of the oldest supported distribution (`.github/docker`): AlmaLinux 8 (RHEL 8, glibc 2.28) for glibc, Alpine 3.22 for musl. The smoke test there proves the binary runs on it. Keep these minimums in step with README's supported platforms table.
-- The build images use the .NET 10 SDK. CI caches the images (buildx, `type=gha`), so a changed Dockerfile is rebuilt on the next run.
+- Pull request: the `test` job runs the tests (without the Pending category) once per OS: Windows, Linux, macOS. The `build` jobs publish and smoke test each RID on a runner of that OS and CPU, then upload archives (kept 2 days); they run no tests. No release.
+- Linux binaries build on the runner and are smoke tested in a stock container of the oldest supported distribution: `almalinux:8` (RHEL 8, glibc 2.28) for glibc, `alpine:3.22` for musl. Keep these minimums in step with README's supported platforms table.
+- Use only GitHub's own actions (`actions/*`).
 - Push to main: the same, then the `release` job publishes GitHub release `v<version>` with eight archives and `SHA256SUMS`.
 - Adding or removing a RID changes all of: the build matrices, the release job's expected file list, README's supported platforms table, and "RIDs shipped" above.
 - Version: `YEAR.MONTH.DAY.RUN` in UTC, no leading zeros (e.g. `2026.10.5.57`), the scheme other Enclave products use. Pull requests add `-pr.<number>`. Computed once, in the `version` job.

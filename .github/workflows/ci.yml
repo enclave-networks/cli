@@ -47,36 +47,17 @@ jobs:
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  # Windows and macOS. Each binary is built and smoke tested on a runner of its own OS and CPU, so the
-  # smoke test runs every binary that ships.
-  #
-  # The unit tests run on one job per operating system (test: true). They run the managed test
-  # assembly, which behaves the same on x64 and arm64; what differs between platforms is the OS
-  # (paths, file modes, line endings). The shipped binaries are covered by the smoke test.
-  build:
-    name: build (${{ matrix.rid }})
-    needs: version
+  # The tests run once per operating system. They run the managed test assembly, which behaves the
+  # same on x64 and arm64; what differs between platforms is the OS (paths, file modes, line
+  # endings). Each shipped binary is covered by its build job's smoke test.
+  test:
+    name: test (${{ matrix.os }})
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - rid: win-x64
-            os: windows-latest
-            test: true
-          - rid: win-arm64
-            os: windows-11-arm
-            test: false
-          - rid: osx-x64
-            os: macos-15-intel
-            test: false
-          - rid: osx-arm64
-            os: macos-latest
-            test: true
+        os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    env:
-      RID: ${{ matrix.rid }}
-      VERSION: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,8 +70,38 @@ jobs:
       # Tests in the Pending category state behaviour the CLI does not meet
       # (tests/Enclave.Cli.Tests/Support/TestCategory.cs), so CI runs every other test.
       - name: Test
-        if: matrix.test
-        run: dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION" --filter "TestCategory!=Pending"
+        run: dotnet test enclave-cli.slnx -c Release --filter "TestCategory!=Pending"
+
+  # Windows and macOS. Each binary is built and smoke tested on a runner of its own OS and CPU, so the
+  # smoke test runs every binary that ships.
+  build:
+    name: build (${{ matrix.rid }})
+    needs: version
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: win-arm64
+            os: windows-11-arm
+          - rid: osx-x64
+            os: macos-15-intel
+          - rid: osx-arm64
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      RID: ${{ matrix.rid }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
 
       - name: Publish
         run: dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
@@ -130,15 +141,12 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-  # Linux. Each binary is built and smoke tested inside a container of the oldest distribution it
-  # supports (.github/docker): RHEL 8 for glibc, Alpine 3.22 for musl. The smoke test running there
-  # proves the binary runs on that distribution. The unit tests run in the linux-x64 job only, for
-  # the reason given on the build job.
-  #
-  # The steps call docker directly because the runner cannot run JavaScript actions (checkout,
-  # setup-dotnet) inside Alpine job containers on arm64: it fails with "JavaScript Actions in
-  # Alpine containers are only supported on x64 Linux runners"
-  # (https://github.com/orgs/community/discussions/53407).
+  # Linux. Each binary is built on a runner of its CPU, like the Windows and macOS ones, and smoke
+  # tested inside a stock container of the oldest distribution it supports: AlmaLinux 8 (RHEL 8,
+  # glibc 2.28) for glibc, Alpine 3.22 for musl. A self-contained single-file binary takes its glibc
+  # requirement from Microsoft's runtime (glibc 2.27 or later for .NET 10,
+  # https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md), so the runner's
+  # newer glibc does not raise it; running the binary on the oldest distribution proves that.
   build-linux:
     name: build (${{ matrix.rid }})
     needs: version
@@ -149,66 +157,41 @@ jobs:
         include:
           - rid: linux-x64
             os: ubuntu-latest
-            image: rhel8
-            test: true
+            image: almalinux:8
           - rid: linux-arm64
             os: ubuntu-24.04-arm
-            image: rhel8
-            test: false
+            image: almalinux:8
           - rid: linux-musl-x64
             os: ubuntu-latest
-            image: alpine
-            test: false
+            image: alpine:3.22
           - rid: linux-musl-arm64
             os: ubuntu-24.04-arm
-            image: alpine
-            test: false
+            image: alpine:3.22
     runs-on: ${{ matrix.os }}
     env:
       RID: ${{ matrix.rid }}
+      IMAGE: ${{ matrix.image }}
       VERSION: ${{ needs.version.outputs.version }}
-      TEST: ${{ matrix.test }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      # The toolchain is installed as root into a local image, then the build runs as the runner's
-      # user, which owns the checked-out repository. The build reads the repository to stamp the
-      # commit into --version, and building as its owner keeps that step clear of git's ownership
-      # rule (safe.directory, https://git-scm.com/docs/git-config#Documentation/git-config.txt-safedirectory)
-      # whether or not the reader (Microsoft.Build.Tasks.Git) applies it.
-      #
-      # The image's layers are kept in the GitHub Actions cache (type=gha), one scope per image and
-      # runner architecture, so a run rebuilds the image only when its Dockerfile has changed or the
-      # cache entry has expired.
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - name: Prepare build image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          context: .github/docker
-          file: .github/docker/${{ matrix.image }}.Dockerfile
-          tags: enclave-cli-build
-          load: true
-          cache-from: type=gha,scope=${{ matrix.image }}-${{ runner.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-${{ runner.arch }}
+          global-json-file: global.json
 
-      - name: Test, publish and smoke test
+      - name: Publish
+        run: dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
+
+      # .NET needs libstdc++ (https://learn.microsoft.com/dotnet/core/install/linux-alpine#dependencies),
+      # which the stock Alpine image lacks and a machine running .NET apps has.
+      - name: Smoke test
         run: |
-          docker run --rm \
-            --user "$(id -u):$(id -g)" \
-            -e HOME=/tmp -e DOTNET_CLI_HOME=/tmp \
-            -e DOTNET_NOLOGO -e DOTNET_CLI_TELEMETRY_OPTOUT -e RID -e VERSION -e TEST \
-            -v "$PWD:/src" -w /src \
-            enclave-cli-build \
-            sh -euc '
-              if [ "$TEST" = "true" ]; then
-                dotnet test enclave-cli.slnx -c Release -p:Version="$VERSION" --filter "TestCategory!=Pending"
-              fi
-              dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
-              sh .github/scripts/smoke-test.sh publish/enclave-cli "$VERSION"
-            '
+          docker run --rm -e VERSION -v "$PWD:/src:ro" -w /src "$IMAGE" sh -euc '
+            if command -v apk >/dev/null; then apk add --no-cache libstdc++ >/dev/null; fi
+            sh .github/scripts/smoke-test.sh publish/enclave-cli "$VERSION"
+          '
 
       # Artifact uploads do not keep file permissions; tar keeps the executable bit.
       - name: Package (tar.gz)
@@ -231,7 +214,7 @@ jobs:
 
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [version, build, build-linux]
+    needs: [version, test, build, build-linux]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
