@@ -162,7 +162,7 @@ enclave-cli
 - `--active-hours "mon-fri 08:00-18:00 Europe/London"` takes days, a start and end time, and an IANA time zone (UTC when left out). `--set-active-hours ""` removes the restriction.
 - `--keep-disconnected 30m` keeps systems enrolled with an ephemeral key for that long after they disconnect. Without `--ephemeral` it exits 2; the API accepts it only on ephemeral keys (portal `EnrolmentKeyCreateValidator.cs:24`).
 - `--for 8h` (a duration: `30m`, `8h`, `14d`) or `--until <time>` makes the change temporary. Afterwards the item is disabled; `--then revoke` (systems) or `--then delete` (keys, policies) removes it instead. `enable` and `create` both take them.
-- `--until` takes a clock time, `18:00`, meaning its next occurrence, or a date and time, `2026-10-09T17:30`. Either is in the machine's local time zone unless it ends in `Z` or an offset: `18:00Z`, `2026-10-09T17:30+01:00`. `--since` on `log` reads times the same way. Output times are UTC.
+- `--until` takes an RFC 3339 time with its zone (`2026-10-09T17:30:00Z`, `2026-10-09T17:30:00-04:00`), or a time without a zone, which is read in the machine's time zone: a date and time, `2026-10-09T17:30`, or a clock time, `18:00`, meaning its next occurrence. The CLI takes the time zone from the system, and the user never sets it. Formats do not follow the system locale, so a command means the same on every machine. `--since` on `log` reads times the same way. Output times are UTC.
 - `key create` sends every setting of the key, with the portal's values (portal-spa `createKeyDetailsSaga.ts:21-29`, `Purpose/Create.tsx:54-59`):
 
   | Key | Approval | Uses | Keeps disconnected systems |
