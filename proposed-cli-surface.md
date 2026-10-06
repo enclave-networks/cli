@@ -39,7 +39,7 @@ enclave-cli
 │   └── customer
 │       ├── list
 │       ├── show <customer>
-│       ├── create
+│       ├── create <name>
 │       ├── update <customer>
 │       ├── convert <customer>                  converts the customer to paid
 │       ├── list-admins <customer>
@@ -135,6 +135,9 @@ enclave-cli
 | `dns list-hostnames` | `--zone <name>`, `--zone-id <id>`, `--filter <text>` |
 | `dns create-hostname` | `--tags a,b`, `--systems id,id`, `--notes` |
 | `dns update-hostname` | `--name`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-systems id,id`, `--notes` |
+| `partner customer create <name>` | `--owner <email>`, `--domain <domain>`, `--contact <name>`, `--systems <n>`, `--gateways <n>`, `--industry-discount`, `--hard-limit`, `--auto-sync` |
+| `partner customer update` | `--name`, `--contact <name>`, `--systems <n>`, `--gateways <n>`, `--industry-discount` or `--no-industry-discount`, `--hard-limit` or `--no-hard-limit` |
+| `partner customer convert` | `--billing-months 1\|12\|24\|36` (required) |
 | `log` | `--limit <n>`, `--since <when>`, `--until <when>`, `--user <email>`, `--level information\|warning\|error`, `--filter <text>` |
 
 - `--acl` takes a protocol (`any`, `tcp`, `udp`, `icmp`) and, for TCP and UDP, a port or range: `tcp:5432`, `udp:53`, `tcp:8000-8100`. `policy create` requires at least one `--acl`, and `--acl any` allows every protocol, so the command always states what traffic the policy allows. The API accepts a policy with no ACLs, and the agent then allows no traffic through it (fabric `StateTracker.cs:909-921`; the API reports such a policy as `InactiveNoAcls`, portal `PolicyModelExtensions.cs:25-29`).
@@ -176,7 +179,22 @@ enclave-cli
 - `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes.
 - `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs:356-370, 432-437`).
-- Flags for partner and customer `create` and `update` are chosen from the partner API models when `Enclave.Sdk.Api` has partner clients.
+- `partner customer create` sends every field of the API's `CustomerCreateModel`, with the partner portal's values when a flag is left out (portal `Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345`, `Shared/AdminTable.razor:171`):
+
+  | Flag | API field | Without the flag |
+  |---|---|---|
+  | `<name>` | `Name` | required |
+  | `--owner <email>` | `OwnerEmail`, the user who will own the customer's organisation | not sent |
+  | `--domain <domain>` | `Domain` | not sent |
+  | `--contact <name>` | `ContactName` | not sent |
+  | `--systems <n>` | `InitialSystemsCount`, at least 2 | 50 |
+  | `--gateways <n>` | `InitialGatewaysCount` | 0 |
+  | `--industry-discount` | `IndustryDiscount`, a request for the discount | off |
+  | `--hard-limit` | `HardLimit` | off |
+  | `--auto-sync` | `AdminAutoSyncIsEnabled` | off |
+
+- `partner customer update` sets `LicensedAgentsCount` with `--systems` (at least 2) and `LicensedGatewaysCount` with `--gateways` (portal `CustomerPatchModelValidator.cs:14-16`). Auto-sync changes through `enable-auto-sync` and `disable-auto-sync`, which have their own API routes.
+- `partner customer convert` requires `--billing-months`, one of the periods the API accepts (portal `ConvertCustomerModelValidator.cs:13-17`), so the command states the billing period it commits to; the API's default is 1.
 - `log` prints the newest 100 entries, newest first; `--limit` changes the number. `--since 24h` (a duration, or a time as for `--until`) prints every entry back to then, with no limit. The API returns entries newest first (portal `ActivityLogRepository.cs:43`), so the CLI stops reading at the first entry older than `--since`. `--until` leaves out entries newer than that time.
 - The logs API takes only a page and page size (portal `LogsRequestModel.cs`), so the CLI applies `--user`, `--level` and `--filter` to the entries it reads. `--user` matches the entry's `userName`, `--level` takes one or more levels (`--level warning,error`), and `--filter` matches text in the message. With these filters and no `--since`, `--limit` counts matching entries, and the CLI reads back until it has that many or reaches the start of the log.
 
@@ -288,7 +306,7 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | Exit | `code` | Meaning |
 |---|---|---|
 | 0 | | success |
-| 1 | `api_error` | any other API error |
+| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run, which is every `partner` command until `Enclave.Sdk.Api` has partner clients. It makes no call |
 | 2 | `invalid_argument`, `no_org`, `no_partner` | bad arguments, bad ID, no organisation or partner chosen |
 | 3 | `token_missing`, `token_invalid` | no token, or HTTP 401 |
 | 4 | `forbidden` | HTTP 403: the token lacks the scope |
@@ -677,4 +695,11 @@ enclave-cli trust create "uk and ie" --allow-country "GB=UK offices" --allow-cou
 # 84. Block a country; the allowed countries, the blocked range and their labels are left as they are
 enclave-cli trust update "uk and ie" --set-block-country "US=No US access"
 enclave-cli trust update --id 9 --set-block-country "US=No US access"
+
+# 85. As a partner, add a customer for about 20 systems and a gateway, owned by their IT lead, with your staff kept as admins
+enclave-cli partner customer create "Initech" --owner it@initech.example --domain initech.example --systems 20 --gateways 1 --auto-sync
+
+# 86. Move a customer from trial to paid, billed yearly
+enclave-cli partner customer convert "Initech" --billing-months 12
+enclave-cli partner customer convert --org-id 8d2e4f6a-1b3c-4d5e-9f70-a1b2c3d4e5f6 --billing-months 12
 ```
