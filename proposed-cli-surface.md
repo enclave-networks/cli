@@ -35,17 +35,7 @@ enclave-cli
 │   ├── invite <email>
 │   └── cancel-invite <email>
 ├── partner                                     every partner command needs Enclave.Sdk.Api partner clients
-│   ├── list                                    needs a portal change
 │   ├── use --id <partnerId>
-│   ├── show                                    needs a portal change
-│   ├── update                                  needs a portal change
-│   ├── list-users                              needs a portal change
-│   ├── update-user --id <accountId>            needs a portal change
-│   ├── remove-user --id <accountId>            needs a portal change
-│   ├── list-invites                            needs a portal change
-│   ├── invite <email>                          needs a portal change
-│   ├── update-invite --id <inviteId>           needs a portal change
-│   ├── cancel-invite --id <inviteId>           needs a portal change
 │   └── customer
 │       ├── list
 │       ├── show <customer>
@@ -53,11 +43,11 @@ enclave-cli
 │       ├── update <customer>
 │       ├── convert <customer>                  converts the customer to paid
 │       ├── list-admins <customer>
-│       ├── add-admin <customer> --user <email> | --user-id <accountId>
+│       ├── add-admin <customer> --user-id <accountId>
 │       ├── remove-admin <customer> --user <email> | --user-id <accountId>
 │       ├── list-invites <customer>
 │       ├── invite <customer> --email <email>
-│       ├── cancel-invite <customer> --invite <inviteId>
+│       ├── cancel-invite <customer> --email <email>
 │       ├── enable-auto-sync <customer>
 │       └── disable-auto-sync <customer>
 ├── system                                      --pending: systems waiting for approval
@@ -112,7 +102,7 @@ enclave-cli
 └── commands [<noun> [<verb>]]                  every command, option, value and error code, as JSON
 ```
 
-- A customer is an organisation. `<customer>` is its name, or `--org-id <orgId>` gives its organisation ID, the only ID a customer has (portal `CustomersController.cs:69` reads the customer ID as an `OrganisationGuid`). Anything else a partner customer command needs is a named option (`--user`, `--user-id`, `--email`, `--invite`).
+- A customer is an organisation. `<customer>` is its name, or `--org-id <orgId>` gives its organisation ID, the only ID a customer has (portal `CustomersController.cs:69` reads the customer ID as an `OrganisationGuid`). Anything else a partner customer command needs is a named option (`--user`, `--user-id`, `--email`).
 - An ID is never a positional argument. `--id` gives the ID of the command's own item. Every other item has a pair of options: `--<item>` takes its name (an email address for a user) and `--<item>-id` takes its ID: `--org`/`--org-id`, `--user`/`--user-id`, `--key`/`--key-id`, `--zone`/`--zone-id`, `--trust`/`--trust-id`, and `--partner-id` (partners are given by ID only). The option decides how its value is read, and the CLI never inspects a value to guess its type: `--key 12` is a key described "12", `--key-id 12` is key 12, and `--user-id` takes only a GUID. Nothing in `42` or a GUID says what it identifies, so the option name does. Positional arguments are names, email addresses, hostnames, tag names, and system IDs, since systems have no names.
 - `<key>`, `<policy>`, `<trust>`, `<zone>` and `<hostname>` are names: a description, a zone's name, a full hostname. `--id 42` gives the ID instead, and `--id 42,43,57` several.
 - `--pending` on `system list`, `show` and `update` acts on systems waiting for approval, which the API keeps apart from enrolled systems (`unapproved-systems`). `approve` and `decline` act on those systems only.
@@ -123,7 +113,7 @@ enclave-cli
 | Command | Options |
 |---|---|
 | `org update` | `--name`, `--website`, `--phone` |
-| `system list` | `--filter <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--dns-name`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
+| `system list` | `--filter <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
 | `system update` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--enable-gateway-for <subnet>,...`, `--disable-gateway` |
 | `system enable` | `--for <duration>` or `--until <time>`, `--then disable\|revoke` |
 | `key enable`, `policy enable` | `--for <duration>` or `--until <time>`, `--then disable\|delete` |
@@ -136,7 +126,7 @@ enclave-cli
 | `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--allow-ip <range>` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
 | `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--set-allow-ip <range>` (repeatable), `--set-active-hours <hours>` |
 | `trust list` | `--filter <text>`, `--type user-auth\|public-ip`, `--sort` |
-| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>`, `--block-ip <range>`, `--allow-country <code>`, `--block-country <code>` (each repeatable) |
+| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>`, `--block-ip <range>` (each repeatable), `--allow-country <code>,...`, `--block-country <code>,...` |
 | `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...), which replace all its conditions |
 | `tag list` | `--filter <text>`, `--sort` |
 | `tag set` | `--name <new>`, `--colour`, `--trust <name>,...`, `--trust-id <id>,...`, `--notes` |
@@ -237,7 +227,7 @@ enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 
 ## Names and IDs
 
-Keys, policies, DNS zones, hostnames and trust requirements are given as arguments by name: the description of a key, policy or trust requirement, the name of a zone, or the full name of a hostname (`db.internal`). Names are looked up with one list call, and each must match exactly one item, ignoring case; no match, or several, exits 2 with the candidates. `--id` gives IDs instead and makes no lookup, and so does a list read from stdin, which carries each item's ID. Options that point at another item come in pairs, one for its name and one for its ID (`--key`/`--key-id`). Systems take IDs only: hostnames are not unique. Tags are given by name only. `org remove-user` takes an email address in place of the account ID, looked up the same way. A partner customer is given by its name, looked up in the partner's customer list, or by `--org-id`. On `partner customer add-admin` and `remove-admin`, `--user` takes a partner user's email address and `--user-id` an account ID; the email lookup reads the partner's users, which needs the portal change in "Needs portal changes".
+Keys, policies, DNS zones, hostnames and trust requirements are given as arguments by name: the description of a key, policy or trust requirement, the name of a zone, or the full name of a hostname (`db.internal`). Names are looked up with one list call, and each must match exactly one item, ignoring case; no match, or several, exits 2 with the candidates. `--id` gives IDs instead and makes no lookup, and so does a list read from stdin, which carries each item's ID. Options that point at another item come in pairs, one for its name and one for its ID (`--key`/`--key-id`). Systems take IDs only: hostnames are not unique. Tags are given by name only. `org remove-user` takes an email address in place of the account ID, looked up the same way. A partner customer is given by its name, looked up in the partner's customer list, or by `--org-id`. `partner customer remove-admin` takes the admin's email address (`--user`), looked up in the customer's admins, or `--user-id`. `partner customer cancel-invite` takes the invited email address, looked up in the customer's invites. `partner customer add-admin` takes `--user-id` only: the account is a partner user, and listing partner users needs a scope personal access tokens cannot carry (see "Partner API"). The partner portal shows the account ID.
 
 ## ID checks
 
@@ -253,7 +243,7 @@ Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1
 
 ## Changes run when given
 
-No command asks for confirmation; `--dry-run` shows the request before it is sent. The trade-off is that a mistaken `revoke` or `delete` runs, so an agent's token should carry only the scopes it needs (`RequestedScopes` when the token is created). Approving a waiting system needs only the `CanWriteSystems` policy, the same as editing its description (portal `UnapprovedSystemsController.cs:128,158`), so a token that can edit systems can also admit them.
+No command asks for confirmation; `--dry-run` shows the request before it is sent. The trade-off is that a mistaken `revoke` or `delete` runs, so an agent's token should carry only the scopes it needs (`RequestedScopes` when the token is created). Approving a waiting system needs only the `CanWriteSystems` policy, the same as editing its description (portal `UnapprovedSystemsController.cs:128,158`), so a token that can edit systems can also admit them. Organisation update, user removal and invites need organisation membership and no token scope (portal `OrganisationController.cs:49,91,132`), so a token limited to read scopes can still do them.
 
 ## Dry run
 
@@ -316,19 +306,19 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 - A list makes one call per page of 200, the most the API returns per page (portal `PaginationDefaults.cs:11`), until the response's `metadata.nextPage` is null. `log` reads only the pages it needs.
 - A bulk command makes one call per 200 IDs.
 - Looking up an organisation by name, or with no organisation chosen, adds one call.
-- A key, policy, zone or trust requirement given by name adds one call.
+- A key, policy, zone or trust requirement given by name adds one call, and so does a customer given by name, or an admin or invite given by email.
 - `--add-tags` and `--remove-tags` read the item first, which adds one call.
 - `tag set` on a tag that does not exist makes a second call to create it.
 
 ## Partner API
 
-The partner API is a separate service (portal `src/Enclave.Partner.Api`) with every route under `/partner/{partnerId}/`. It covers the partner (properties, users, invites) and its customers (properties, admins, invites, auto-sync).
+The partner API is a separate service (portal `src/Enclave.Partner.Api`) with every route under `/partner/{partnerId}/`. It covers the partner (properties, users, invites) and its customers (properties, admins, invites, auto-sync). The CLI uses the customer routes only, the ones a personal access token can reach.
 
 - It runs on its own host: `PartnerApiUrl`, `http://partner-api.local:8083` in development (portal `Enclave.Partner.Portal.Server/appsettings.Development.json:5`) and set at deployment in production. `Enclave.Sdk.Api` needs partner clients and a partner base URL; `credentials.json` holds one `baseUrl`.
 - Personal access tokens can carry the partner scopes `ReadCustomers` and `WriteCustomers`, and no other partner scope (portal `Enclave.Accounts/Config/EnclaveIdentityClientConfig.cs:195-216`). The partner API requires the scope claim on the token (portal `Enclave.Api.Scaffolding/Authorisation/AuthorizationExtensions.cs:38`). With a personal access token:
-  - `partner customer` commands work.
-  - `partner list`, `show`, `update`, `user` and `invite` need `ReadPartnerList`, `ReadPartnerInfo` or `WritePartnerSettings` (portal `Enclave.Partner.Api/WebStartup.cs:115-121`), which need adding to the personal access token client.
-  - The partner ID cannot be looked up, so `partner use` and `--partner-id` take an ID.
+  - The customer routes work: reading needs `ReadCustomers`, and changes and the invite list need `WriteCustomers` (portal `CustomersController.cs`).
+  - The partner's own properties, users and invites need `ReadPartnerList`, `ReadPartnerInfo` or `WritePartnerSettings` (portal `Enclave.Partner.Api/WebStartup.cs:115-121`), which a personal access token cannot carry, so the CLI has no commands for them.
+  - The partner ID cannot be looked up, so `partner use` and `--partner-id` take an ID. The partner portal shows it.
 - A customer is an organisation, and the partner API identifies it by its organisation ID (portal `CustomersController.cs:69` parses the route's customer ID as an `OrganisationGuid`). Partner staff work on a customer's systems, policies and the rest through the main API, where `org list` includes the customer's organisation with `PartnerAccess` set:
 
   ```
@@ -336,7 +326,7 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
   enclave-cli system list --org-id <orgId>
   ```
 
-- `org cancel-invite` takes an email address, which is what `Enclave.Sdk.Api` accepts (`CancelInviteAync(email)`). The partner and customer `cancel-invite` take an invite ID, which is what the partner API's routes take. Making them match needs an API change.
+- `org cancel-invite` and `partner customer cancel-invite` both take an email address. The main API cancels an invite by email (`CancelInviteAync(email)`); the partner API cancels by invite ID, so the CLI looks the email up in the customer's invites (`CustomerAdminInviteModel` carries both).
 
 ## Left out
 
@@ -344,10 +334,11 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 - Account settings (password, 2FA) and accepting organisation or partner invites: these are browser sign-in flows.
 - Payment, and the partner API's Gradient billing endpoints.
 - The partner API's `countries` and `referlink` (data for the partner portal's screens) and `customer oldest-version`.
+- The partner's own properties, users and invites, and listing partners: personal access tokens cannot carry the scopes they need (see "Partner API").
 
 ## Needs `Enclave.Sdk.Api` changes
 
-Each is added in enclave-networks/enclave.sdk.api first, with tests there, then used here.
+Each is added in enclave-networks/enclave.sdk.api first, with tests there, then used here. The API itself does not change: everything here uses routes and fields the API has. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
 
 1. Escape IDs in URL paths.
 2. An HTTP handler option on `EnclaveClientOptions`, for `--dry-run`.
@@ -356,16 +347,9 @@ Each is added in enclave-networks/enclave.sdk.api first, with tests there, then 
 5. `CreateOrganisationClient(OrganisationGuid)`. `CreateOrganisationClient` takes an `AccountOrganisationModel` and uses only its `OrgId` (`OrganisationClient.cs:25`), so building one from a saved ID means filling the role and partner-access fields with placeholders.
 6. Status checks on calls that pass a failure through as success when the response is not problem+json: `RemoveUserAsync`, `InviteUserAsync`, `CancelInviteAync` (`OrganisationClient.cs:91-133`) and the single create, enable and disable calls.
 7. The `hostname` filter on DNS record list. The API accepts it (portal `DnsRecordsRequestModel.cs:18`).
-8. The `meta/search-keys` endpoints, so `commands` can describe the keys `--filter` accepts. These also need Enclave.Sdk.Api.Data changes.
-9. Partner API clients (partner, users, invites, customers, customer admins, customer invites, auto-sync) and a partner API base URL.
-10. `GatewayPriorityType` in `Enclave.Sdk.Api.Data` 304.48.0, the version `Enclave.Sdk.Api` 1.0.4 uses, has `Prioritised` where the API has `Ordered`. The package compiles its own copy of the enum (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the SDK's (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `Enclave.Sdk.Api` writes and reads enums by name (`Constants.cs:17`, `JsonStringEnumConverter`), so it would send `Prioritised`, which the API does not accept, and reading a policy set to `Ordered` would fail. The copy is replaced with the SDK's values.
-
-## Needs portal changes
-
-- Add `ReadPartnerList`, `ReadPartnerInfo` and `WritePartnerSettings` to the personal access token client's allowed scopes, for the `partner` commands outside `partner customer`.
-- Organisation update, user removal and invites need organisation membership and no token scope (portal `OrganisationController.cs:49,91,132`), so a token limited to read scopes can still do them.
-- Search keys for when a system was last seen and when a pending system enrolled. With them, the API filters `--not-seen-for` and `--waiting-for`.
-- Filters on the activity log (time, user, level, text). With them, `log --user` and the other filters read only the matching entries.
+8. The `meta/search-keys` endpoints, so `commands` can describe the keys `--filter` accepts.
+9. Partner API clients for the customer routes (customers, customer admins, customer invites, auto-sync), and a partner API base URL.
+10. `GatewayPriorityType` in `Enclave.Sdk.Api.Data` 304.48.0, the version `Enclave.Sdk.Api` 1.0.4 uses, has `Prioritised` where the API has `Ordered`. The package compiles its own copy of the enum (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the SDK's (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `Enclave.Sdk.Api` writes and reads enums by name (`Constants.cs:17`, `JsonStringEnumConverter`), so it would send `Prioritised`, which the API does not accept, and reading a policy set to `Ordered` would fail. `Enclave.Sdk.Api` maps the value itself, writing and reading `Ordered`.
 
 ## Changes to AGENTS.md
 
@@ -373,7 +357,7 @@ If this proposal is accepted, AGENTS.md changes to match:
 
 - Command shape: `<noun> <verb>`, hyphenated verbs for a noun's parts, singular nouns, plural accepted as a hidden alias. The noun list becomes `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
 - `--from-file` and `--template` are removed: every field has a flag.
-- Temporary changes: `--for <duration>` or `--until <time>` (ISO 8601 or a clock time), then `--then`.
+- Temporary changes: `--for <duration>` or `--until <time>` (RFC 3339, or local time without a zone), then `--then`.
 - `-o` is removed: output is always JSON.
 - `--all` and `--limit` are removed from lists, which read every page; `log` keeps `--limit`.
 - The list envelope gains `kind` and loses `truncated`. `-` reads a list printed by the CLI.
@@ -392,7 +376,7 @@ If this proposal is accepted, AGENTS.md changes to match:
 2. `list` and `show` for every top-level noun.
 3. Changes, with `--dry-run`: `system`, `key`, `policy`, `tag`.
 4. `dns`, `trust`, `org update`, `org list-users`, `org remove-user`, the invite commands, and the commands that wait on `Enclave.Sdk.Api` changes.
-5. `partner customer`, once `Enclave.Sdk.Api` has partner clients; the rest of `partner` once the portal change is made.
+5. `partner customer`, once `Enclave.Sdk.Api` has partner clients.
 
 ## Examples
 
@@ -420,7 +404,7 @@ enclave-cli policy enable contractors --for 8h
 enclave-cli policy enable --id 23 --for 8h
 
 # 7. Let a visitor's laptop in for a day, then revoke it automatically
-enclave-cli system enable LAPTOP7 --for 24h --then revoke
+enclave-cli system enable K7P2Q --for 24h --then revoke
 
 # 8. Make a key for CI runners, usable only from the CI network, that removes each runner's system 10 minutes after it disconnects, and keep its secret
 ENROLMENT_KEY=$(enclave-cli key create "ci runners" --ephemeral --tags ci,runner --allow-ip 198.51.100.0/24 --keep-disconnected 10m | jq -r .key)
@@ -438,7 +422,7 @@ enclave-cli policy update "web to db" --set-senders web,api
 enclave-cli policy update --id 42 --set-senders web,api
 
 # 12. Let a contractor's laptop in until 17:30 on Friday, then switch it off again
-enclave-cli system enable LAPTOP9 --until 2026-10-09T17:30
+enclave-cli system enable M4R8T --until 2026-10-09T17:30
 
 # 13. Delete every disabled enrolment key
 enclave-cli key list --state disabled | enclave-cli key delete -
@@ -513,8 +497,8 @@ enclave-cli key update --id 12 --require-approval
 # 33. Show the last day's activity
 enclave-cli log --since 24h
 
-# 34. Disable a policy by its ID
-enclave-cli policy disable --id 42
+# 34. Remove a customer admin who has left the partner
+enclave-cli partner customer remove-admin "Globex Ltd" --user alex@example.com
 
 # 35. Disable several policies by ID in one call
 enclave-cli policy disable --id 42,43,57
@@ -528,8 +512,8 @@ enclave-cli system list --gateway
 # 38. List systems, most recently connected first
 enclave-cli system list --sort recently-connected
 
-# 39. Find the system that answers to db.internal
-enclave-cli system list --dns-name db.internal
+# 39. Find systems running an agent older than 2024.8.0, using the API's search syntax
+enclave-cli system list --filter "version:<2024.8.0"
 
 # 40. Find the Windows systems that are offline, and how many (total)
 enclave-cli system list --os windows --state disconnected
@@ -556,7 +540,7 @@ enclave-cli key show --id 12
 # 47. List the keys that approve automatically and are tagged ci
 enclave-cli key list --approval automatic --tag ci
 
-# 48. Give a key five more uses and restrict it to the office network
+# 48. Let a key enrol five more systems, from the office network only
 enclave-cli key update "build agents" --uses 5 --set-allow-ip 203.0.113.0/24
 enclave-cli key update --id 12 --uses 5 --set-allow-ip 203.0.113.0/24
 
@@ -594,9 +578,9 @@ enclave-cli trust create "portal login" --authority portal
 # 57. Require a sign-in through a generic OIDC provider, from the example.com domain
 enclave-cli trust create "sso" --authority oidc --authority-uri https://sso.example.com --claim hd=example.com
 
-# 58. Allow Ireland as well as the UK
-enclave-cli trust update "uk only" --set-allow-country GB,IE
-enclave-cli trust update --id 5 --set-allow-country GB,IE
+# 58. Allow Ireland as well as the UK, keeping the blocked range (the --set- flags replace every condition)
+enclave-cli trust update "uk only" --set-allow-country GB,IE --set-block-ip 203.0.113.0/24
+enclave-cli trust update --id 5 --set-allow-country GB,IE --set-block-ip 203.0.113.0/24
 
 # 59. List the IP-based trust requirements
 enclave-cli trust list --type public-ip
@@ -620,7 +604,7 @@ enclave-cli org update --name "Acme Ltd" --website https://acme.example --phone 
 enclave-cli org invite alex@example.com && enclave-cli org list-invites
 
 # 65. As a partner, make one of your staff an admin of a customer and turn on auto-sync for that customer
-enclave-cli partner customer add-admin "Globex Ltd" --user alex@example.com && enclave-cli partner customer enable-auto-sync "Globex Ltd"
+enclave-cli partner customer add-admin "Globex Ltd" --user-id 5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25 && enclave-cli partner customer enable-auto-sync "Globex Ltd"
 enclave-cli partner customer add-admin --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --user-id 5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25 && enclave-cli partner customer enable-auto-sync --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b
 
 # 66. Invite someone at the customer to be its admin
@@ -642,7 +626,7 @@ enclave-cli log --since 7d --user sam@example.com
 enclave-cli log --since 1h --level warning,error
 
 # 72. Find everything that happened to one system this month
-enclave-cli log --since 30d --filter LAPTOP7
+enclave-cli log --since 30d --filter K7P2Q
 
 # 73. See what happened during an incident window
 enclave-cli log --since 2026-10-05T09:00 --until 2026-10-05T12:00
