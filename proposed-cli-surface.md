@@ -114,20 +114,20 @@ enclave-cli
 |---|---|
 | `org update` | `--name`, `--website`, `--phone` |
 | `system list` | `--filter <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
-| `system update` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--enable-gateway-for <subnet>,...`, `--disable-gateway` |
+| `system update` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--enable-gateway-for <subnet>[=<label>]` (repeatable), `--disable-gateway` |
 | `system enable` | `--for <duration>` or `--until <time>`, `--then disable\|revoke` |
 | `key enable`, `policy enable` | `--for <duration>` or `--until <time>`, `--then disable\|delete` |
 | `system list --pending` | `--filter <text>`, `--tag a,b`, `--key <name>`, `--key-id <id>`, `--waiting-for <duration>`, `--sort` |
 | `system update --pending` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b` |
 | `key list` | `--filter <text>`, `--tag a,b`, `--approval automatic\|manual`, `--state enabled\|disabled\|no-uses`, `--include-disabled`, `--sort` |
-| `key create <description>` | `--ephemeral`, `--auto-approve`, `--uses <n>`, `--tags a,b`, `--allow-ip <range>` (repeatable), `--keep-disconnected <duration>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes` |
-| `key update` | `--description`, `--notes`, `--auto-approve`, `--require-approval`, `--uses <n>`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-allow-ip <range>` (repeatable), `--keep-disconnected <duration>` |
+| `key create <description>` | `--ephemeral`, `--auto-approve`, `--uses <n>`, `--tags a,b`, `--allow-ip <range>[=<label>]` (repeatable), `--keep-disconnected <duration>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes` |
+| `key update` | `--description`, `--notes`, `--auto-approve`, `--require-approval`, `--uses <n>`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--set-allow-ip <range>[=<label>]` (repeatable), `--keep-disconnected <duration>` |
 | `policy list` | `--filter <text>`, `--tag a,b`, `--state enabled\|disabled`, `--include-disabled`, `--sort` |
-| `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--allow-ip <range>` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
-| `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--set-allow-ip <range>` (repeatable), `--set-active-hours <hours>` |
+| `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>][=<label>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--subnet-filter <range>[=<label>]` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
+| `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>][=<label>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--set-subnet-filter <range>[=<label>]` (repeatable), `--set-active-hours <hours>` |
 | `trust list` | `--filter <text>`, `--type user-auth\|public-ip`, `--sort` |
-| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>`, `--block-ip <range>` (each repeatable), `--allow-country <code>,...`, `--block-country <code>,...` |
-| `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...), which replace all its conditions |
+| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>[=<label>]`, `--block-ip <range>[=<label>]`, `--allow-country <code>[=<label>]`, `--block-country <code>[=<label>]` (each repeatable) |
+| `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...). Each replaces only the conditions of its own kind: `--set-allow-country` replaces the allowed countries and leaves the IP ranges and blocked countries as they are |
 | `tag list` | `--filter <text>`, `--sort` |
 | `tag set` | `--name <new>`, `--colour`, `--trust <name>,...`, `--trust-id <id>,...`, `--notes` |
 | `dns create-zone` | `--auto-dns-tags a,b`, `--notes` |
@@ -138,7 +138,7 @@ enclave-cli
 | `log` | `--limit <n>`, `--since <when>`, `--until <when>`, `--user <email>`, `--level information\|warning\|error`, `--filter <text>` |
 
 - `--acl` takes a protocol (`any`, `tcp`, `udp`, `icmp`) and, for TCP and UDP, a port or range: `tcp:5432`, `udp:53`, `tcp:8000-8100`. `policy create` requires at least one `--acl`, and `--acl any` allows every protocol, so the command always states what traffic the policy allows. The API accepts a policy with no ACLs, and the agent then allows no traffic through it (fabric `StateTracker.cs:909-921`; the API reports such a policy as `InactiveNoAcls`, portal `PolicyModelExtensions.cs:25-29`).
-- `--gateway GW001:10.0.0.0/16,10.1.0.0/16` makes a gateway policy: the senders reach those routes through system GW001. `--allow-ip` narrows the addresses they may reach through it. `--gateway` and `--receivers` together exit 2. The CLI sends the traffic direction `exit`, the only one the API accepts (portal `PolicyCreateModelValidator.cs:56` rejects `entry`).
+- `--gateway GW001:10.0.0.0/16,10.1.0.0/16` makes a gateway policy: the senders reach those routes through system GW001. `--subnet-filter` narrows the addresses they may reach through it; it is the portal's "Subnet filter" (portal-spa `policies.json:69`) and the API's `gatewayAllowedIpRanges`. It applies to gateway policies only: without `--gateway` it exits 2, since the API accepts allowed ranges on gateway policies only (portal `PolicyCreateModelValidator.cs:47`). The API sets no limit on how many there are. `--gateway` and `--receivers` together exit 2. The CLI sends the traffic direction `exit`, the only one the API accepts (portal `PolicyCreateModelValidator.cs:56` rejects `entry`).
 - `--mode` decides which of several gateways carries a system's traffic. The values are the API's `GatewayPriority` values (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`, which the API uses; portal-spa `types/api.ts:3242`):
 
   | Value | Gateway used |
@@ -148,7 +148,9 @@ enclave-cli
   | `geographic` | the one closest to the system |
 
   Without the flag the CLI sends `balanced`. `--mode` applies to gateway policies only: on `policy create` without `--gateway` it exits 2.
-- `--enable-gateway-for 10.0.0.0/16,10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one.
+- `--enable-gateway-for 10.0.0.0/16 --enable-gateway-for 10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one.
+- `--subnet-filter`, `--allow-ip`, `--block-ip`, `--allow-country`, `--block-country`, `--acl` and `--enable-gateway-for` take an optional label after `=`, which the API stores with each entry: `--subnet-filter "104.47.0.0/17=Exchange Online"`. The label is sent as the entry's `description` (`gatewayAllowedIpRanges`, `ipConstraints`, `acls`, trust requirement `conditions`) or `name` (`gatewayRoutes`). The CLI splits at the first `=`, which no range, country code, ACL or subnet contains, so a label can itself contain `=`. These flags are repeated, never comma lists, since a label can contain a comma.
+- A flag that replaces a list keeps the label of every entry that stays: `--set-subnet-filter 104.47.0.0/17` on a policy that already has that range labelled "Exchange Online" keeps the label. A label given with the flag replaces it, and an empty one, `104.47.0.0/17=`, removes it. New entries without a label have none. Labels set in the portal survive an update from the CLI.
 - `--active-hours "mon-fri 08:00-18:00 Europe/London"` takes days, a start and end time, and an IANA time zone (UTC when left out). `--set-active-hours ""` removes the restriction.
 - `--keep-disconnected 30m` keeps systems enrolled with an ephemeral key for that long after they disconnect. Without `--ephemeral` it exits 2; the API accepts it only on ephemeral keys (portal `EnrolmentKeyCreateValidator.cs:24`).
 - `--for 8h` (a duration: `30m`, `8h`, `14d`) or `--until <time>` makes the change temporary. Afterwards the item is disabled; `--then revoke` (systems) or `--then delete` (keys, policies) removes it instead. `enable` and `create` both take them.
@@ -163,6 +165,14 @@ enclave-cli
   As in the portal, an ephemeral key always approves automatically and has unlimited uses, so `--ephemeral` with `--auto-approve` or `--uses` exits 2.
 - `dns create-hostname` sends the record type `ENCLAVE`, the only type the API has (portal `DnsRecordTypeFormatConverter.cs:12`).
 - `trust create` takes its type from its flags: `--authority` makes a sign-in requirement, `--allow-*` and `--block-*` a public IP requirement, and mixing the two exits 2.
+- A public IP requirement is a list of conditions, each an IP range or a country, allowed or blocked (`{type, value, isBlocked, description}`, portal `TrustRequirementSettingsPublicIpValidator.cs:27`). The CLI sends `isBlocked` on every condition; the check skips an IP condition without it (services `Enclave.Discover/TrustValidators/PublicIpValidator.cs:163-167`). A system's public address must pass both checks (same file, 31-144):
+
+  | Check | Passes when |
+  |---|---|
+  | ranges | no `--allow-ip` is given and no `--block-ip` range contains the address, or an `--allow-ip` range contains it. Where an allowed and a blocked range both contain it, the smaller range wins |
+  | countries | the address's country is not blocked, and is allowed when any `--allow-country` is given |
+
+  The ranges are checked first, and a failed range check is not overridden by an allowed country.
 - `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes.
 - `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs:356-370, 432-437`).
@@ -307,7 +317,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 - A bulk command makes one call per 200 IDs.
 - Looking up an organisation by name, or with no organisation chosen, adds one call.
 - A key, policy, zone or trust requirement given by name adds one call, and so does a customer given by name, or an admin or invite given by email.
-- `--add-tags` and `--remove-tags` read the item first, which adds one call.
+- `--add-tags` and `--remove-tags` read the item first, which adds one call. So do `--set-subnet-filter`, `--set-allow-ip`, `--set-acl`, `--enable-gateway-for` and the `trust update` `--set-` flags, to keep existing labels and, on trust requirements, the conditions of other kinds.
 - `tag set` on a tag that does not exist makes a second call to create it.
 
 ## Partner API
@@ -368,6 +378,7 @@ If this proposal is accepted, AGENTS.md changes to match:
 - Exit 6 for transient failures, and the fixed `code` set.
 - The bulk output shape, empty stdin, bulk calls of 200 IDs, and the ID checks.
 - A create sends every setting, with the values the CLI documents.
+- Ranges, ACLs and gateway subnets take an optional `=label`, and an update keeps the labels of entries that stay.
 - `commands [<noun> [<verb>]]` replaces `commands --json`.
 
 ## Build order
@@ -467,8 +478,8 @@ enclave-cli policy update "build to artifacts" --set-acl tcp:443 --set-acl tcp:8
 enclave-cli policy update --id 57 --set-acl tcp:443 --set-acl tcp:8000-8100
 
 # 25. Make GW001 a gateway for the office LAN, then route staff traffic for it through GW001
-enclave-cli system update GW001 --enable-gateway-for 10.0.0.0/16
-enclave-cli policy create "staff to office LAN" --senders staff --gateway GW001:10.0.0.0/16 --allow-ip 10.0.0.0/16 --acl any
+enclave-cli system update GW001 --enable-gateway-for "10.0.0.0/16=Office LAN"
+enclave-cli policy create "staff to office LAN" --senders staff --gateway GW001:10.0.0.0/16 --subnet-filter 10.0.0.0/16 --acl any
 
 # 26. Require staff to be signed in to Entra ID and in the engineering group
 enclave-cli trust create "entra staff" --authority azure --tenant 9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31 --claim groups=4e2d8c1a-0b7f-4c39-9a65-1f3e7d2b6c84
@@ -578,9 +589,9 @@ enclave-cli trust create "portal login" --authority portal
 # 57. Require a sign-in through a generic OIDC provider, from the example.com domain
 enclave-cli trust create "sso" --authority oidc --authority-uri https://sso.example.com --claim hd=example.com
 
-# 58. Allow Ireland as well as the UK, keeping the blocked range (the --set- flags replace every condition)
-enclave-cli trust update "uk only" --set-allow-country GB,IE --set-block-ip 203.0.113.0/24
-enclave-cli trust update --id 5 --set-allow-country GB,IE --set-block-ip 203.0.113.0/24
+# 58. Allow Ireland as well as the UK; the blocked range is left as it is
+enclave-cli trust update "uk only" --set-allow-country GB --set-allow-country IE
+enclave-cli trust update --id 5 --set-allow-country GB --set-allow-country IE
 
 # 59. List the IP-based trust requirements
 enclave-cli trust list --type public-ip
@@ -630,4 +641,40 @@ enclave-cli log --since 30d --filter K7P2Q
 
 # 73. See what happened during an incident window
 enclave-cli log --since 2026-10-05T09:00 --until 2026-10-05T12:00
+
+# 74. Label each rule so the portal shows what it is for; a label can contain spaces and commas
+enclave-cli policy create "reports to db" --senders reports --receivers db --acl "tcp:5432=PostgreSQL" --acl "icmp=Ping, for monitoring"
+
+# 75. Make GW001 a gateway for two subnets, each with a name
+enclave-cli system update GW001 --enable-gateway-for "10.0.0.0/16=Office LAN" --enable-gateway-for "10.1.0.0/16=Warehouse, ground floor"
+
+# 76. Restrict a key to two labelled networks
+enclave-cli key update "build agents" --set-allow-ip "203.0.113.0/24=London office" --set-allow-ip "198.51.100.0/24=CI runners"
+enclave-cli key update --id 12 --set-allow-ip "203.0.113.0/24=London office" --set-allow-ip "198.51.100.0/24=CI runners"
+
+# 77. Add a range to a gateway policy; 10.0.0.0/16 is given without a label, so it keeps the label it has
+enclave-cli policy update "staff to office LAN" --set-subnet-filter 10.0.0.0/16 --set-subnet-filter "10.2.0.0/16=New lab"
+enclave-cli policy update --id 64 --set-subnet-filter 10.0.0.0/16 --set-subnet-filter "10.2.0.0/16=New lab"
+
+# 78. Relabel one range and remove the label from another, keeping both ranges
+enclave-cli policy update "staff to office LAN" --set-subnet-filter "10.0.0.0/16=Head office" --set-subnet-filter "10.2.0.0/16="
+
+# 79. A label containing "=": the CLI splits at the first one, so the label is "VLAN=20 (finance)"
+enclave-cli policy update "staff to office LAN" --set-subnet-filter "10.0.0.0/16=VLAN=20 (finance)" --set-subnet-filter 10.2.0.0/16
+
+# 80. See the ranges and labels an update would send, kept labels included, without sending it
+enclave-cli policy update "staff to office LAN" --set-subnet-filter 10.0.0.0/16 --set-subnet-filter 10.3.0.0/16 --dry-run
+
+# 81. Replace a policy's rules and keep the labels on rules that stay; tcp:443 keeps its label, tcp:8443 has none
+enclave-cli policy update "build to artifacts" --set-acl tcp:443 --set-acl tcp:8443
+
+# 82. Allow the office range but not the guest Wi-Fi address inside it; the smaller range wins
+enclave-cli trust create "office only" --allow-ip "203.0.113.0/24=Office" --block-ip "203.0.113.66/32=Guest Wi-Fi NAT"
+
+# 83. Allow the UK and Ireland, each labelled, and block one range within them
+enclave-cli trust create "uk and ie" --allow-country "GB=UK offices" --allow-country "IE=Dublin office" --block-ip "198.51.100.0/24=Shared hosting"
+
+# 84. Block a country; the allowed countries, the blocked range and their labels are left as they are
+enclave-cli trust update "uk and ie" --set-block-country "US=No US access"
+enclave-cli trust update --id 9 --set-block-country "US=No US access"
 ```
