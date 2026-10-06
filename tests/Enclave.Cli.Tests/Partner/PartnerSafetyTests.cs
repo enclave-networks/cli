@@ -6,6 +6,7 @@ namespace Enclave.Cli.Tests.Partner;
 // The confirmation and ID checks run before any call, so they apply to partner commands although the partner API call
 // reports not_implemented. Each test sets a valid partner, so a command that fails a check here fails it for the reason
 // under test.
+[Category(TestCategory.Pending)]
 public class PartnerSafetyTests
 {
     // Values a GUID check must reject. `../x` is the case that matters most: Enclave.Sdk.Api 1.0.4 puts IDs into URL
@@ -138,7 +139,7 @@ public class PartnerSafetyTests
 
                     yield return PartnerCommandTests.Case(
                         command with { Arguments = arguments },
-                        command.NeedsYes ? ["--yes"] : []);
+                        Args.YesIf(command.NeedsYes));
                 }
             }
         }

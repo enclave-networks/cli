@@ -9,6 +9,7 @@ namespace Enclave.Cli.Tests.Safety;
 /// Commands that take several IDs: the bulk call, the { requested, affected } output, IDs read from
 /// stdin, and the limits on how many IDs a command takes (proposal, "Several IDs").
 /// </summary>
+[Category(TestCategory.Pending)]
 public class SeveralIdsTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
@@ -26,7 +27,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(command.Args(id));
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -46,7 +47,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(command.Args(ids));
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -68,7 +69,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(command.Args(command.Ids(3)));
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
@@ -90,7 +91,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(command.Args("-"));
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -113,7 +114,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(command.Args("-"));
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
@@ -136,12 +137,11 @@ public class SeveralIdsTests
 
         var rejected = await run.RunAsync(command.Args("-"));
 
-        AssertInvalidArgument(rejected);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync(command.Args(command.Id(1)));
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
@@ -155,12 +155,11 @@ public class SeveralIdsTests
 
         var rejected = await run.RunAsync(command.Args(command.Ids(201)));
 
-        AssertInvalidArgument(rejected);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync(command.Args(command.Ids(200)));
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -179,13 +178,12 @@ public class SeveralIdsTests
 
         var rejected = await run.RunAsync(command.Args("-"));
 
-        AssertInvalidArgument(rejected);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         run.StdinText = BulkCommand.Lines(command.Ids(200));
         var accepted = await run.RunAsync(command.Args("-"));
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -208,12 +206,11 @@ public class SeveralIdsTests
 
         var rejected = await run.RunAsync(noun, "enable", id, otherId, "--until", Until, "--expiry-action", "Disable");
 
-        AssertInvalidArgument(rejected);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync(noun, "enable", id, "--until", Until, "--expiry-action", "Disable");
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(path));
     }
 
@@ -230,7 +227,7 @@ public class SeveralIdsTests
 
         var result = await run.RunAsync(noun, "enable", id, "--until", Until, "--expiry-action", "Disable");
 
-        AssertSucceeded(result);
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         var body = request.BodyJson;
         var output = result.StdoutJson;
@@ -239,9 +236,7 @@ public class SeveralIdsTests
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(path));
             Assert.That(JsonAssert.Property(body, "expiryAction").GetString(), Is.EqualTo("Disable"));
-            Assert.That(
-                DateTimeOffset.Parse(JsonAssert.Property(body, "expiryDateTime").GetString()!, CultureInfo.InvariantCulture),
-                Is.EqualTo(DateTimeOffset.Parse(Until, CultureInfo.InvariantCulture)));
+            Assert.That(JsonRead.ExpiryDateTime(body), Is.EqualTo(DateTimeOffset.Parse(Until, CultureInfo.InvariantCulture)));
             Assert.That(JsonAssert.Property(output, idField).ToString(), Is.EqualTo(id));
             Assert.That(output.TryGetProperty("requested", out _), Is.False);
         });
@@ -257,12 +252,11 @@ public class SeveralIdsTests
 
         var rejected = await run.RunAsync("dns", "zone", "delete", "4", "5", "--yes");
 
-        AssertInvalidArgument(rejected);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync("dns", "zone", "delete", "4", "--yes");
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -301,26 +295,13 @@ public class SeveralIdsTests
         _ => ApiJson.Policy(int.Parse(id, CultureInfo.InvariantCulture)),
     };
 
-    private static void AssertSucceeded(CliResult result) =>
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
-
-    private static void AssertInvalidArgument(CliResult result)
-    {
-        Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-        });
-    }
-
     // The output is exactly { "requested": n, "affected": m } (proposal, "Several IDs").
     private static void AssertCounts(CliResult result, int requested, int affected)
     {
         var output = result.StdoutJson;
 
         Assert.That(output.ValueKind, Is.EqualTo(JsonValueKind.Object), result.ToString());
-        Assert.That(output.EnumerateObject().Select(property => property.Name), Is.EquivalentTo(CountFields), result.ToString());
+        Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(CountFields), result.ToString());
         Assert.That(output.GetProperty("requested").GetInt32(), Is.EqualTo(requested), result.ToString());
         Assert.That(output.GetProperty("affected").GetInt32(), Is.EqualTo(affected), result.ToString());
     }

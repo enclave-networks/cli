@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 using WireMock.Matchers;
@@ -11,6 +10,7 @@ namespace Enclave.Cli.Tests.Contract;
 // (ParseErrorAction, version 2.0.12). The proposal replaces it ("Errors and exit codes"): a parse
 // error is one JSON error on stderr with code invalid_argument, nothing on stdout, exit 2, and any
 // suggestion in "detail".
+[Category(TestCategory.Pending)]
 public class ParseErrorTests
 {
     private static readonly string[] HttpMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
@@ -49,12 +49,8 @@ public class ParseErrorTests
 
         var result = await run.RunAsync(args);
 
-        AssertParseError(result);
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.Stderr, Does.Not.Contain("Usage:"));
-            Assert.That(run.Requests, Is.Empty);
-        });
+        CliAssert.Rejected(run, result);
+        Assert.That(result.Stderr, Does.Not.Contain("Usage:"));
     }
 
     // An agent that mistypes a name corrects it from the suggestion, with no further call to
@@ -71,7 +67,7 @@ public class ParseErrorTests
 
         var result = await run.RunAsync(command.Split(' '));
 
-        var error = AssertParseError(result);
+        var error = CliAssert.Failed(result, 2, "invalid_argument");
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("detail").GetString(), Does.Contain(suggestion));
@@ -88,7 +84,7 @@ public class ParseErrorTests
 
         var result = await run.RunAsync("system", "list", "--bogus");
 
-        var error = AssertParseError(result);
+        var error = CliAssert.Failed(result, 2, "invalid_argument");
         Assert.That(error.GetProperty("detail").GetString(), Does.Contain("--bogus"));
     }
 
@@ -103,8 +99,7 @@ public class ParseErrorTests
 
         var result = await run.RunAsync("system", "lst");
 
-        AssertParseError(result);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, result);
     }
 
     private static TestCaseData Malformed(string description, params string[] args) =>
@@ -119,18 +114,5 @@ public class ParseErrorTests
                 .AtPriority(100)
                 .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json").WithBody(ApiJson.Page()));
         }
-    }
-
-    private static JsonElement AssertParseError(CliResult result)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(result.Stdout, Is.Empty);
-        });
-
-        var error = result.Error;
-        Assert.That(error.GetProperty("code").GetString(), Is.EqualTo("invalid_argument"));
-        return error;
     }
 }

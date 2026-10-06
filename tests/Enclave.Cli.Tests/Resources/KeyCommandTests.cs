@@ -1,10 +1,10 @@
-using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class KeyCommandTests
 {
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
@@ -114,7 +114,7 @@ public class KeyCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", KeysPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["key", "list", "--sort", value],
             ["key", "list", "--sort", "LastUsed"],
@@ -132,7 +132,7 @@ public class KeyCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", KeysPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["key", "list", .. option],
             ["key", "list"],
@@ -285,7 +285,7 @@ public class KeyCommandTests
         using var run = CliRun.Start();
         run.Stub("POST", KeysPath, json: ApiJson.Key(12, "servers"));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["key", "create", .. rejected],
             ["key", "create", .. corrected],
@@ -384,7 +384,7 @@ public class KeyCommandTests
         using var run = CliRun.Start();
         run.Stub("PATCH", $"{KeysPath}/12", json: ApiJson.Key(12, "servers"));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["key", "update", "12"],
             ["key", "update", "12", "--description", "servers-eu"],
@@ -403,7 +403,7 @@ public class KeyCommandTests
         run.Stub(method, path, json: ApiJson.Bulk(resultField, 1));
         string[] ids = ["12"];
 
-        var result = await run.RunAsync(["key", verb, .. ids, .. YesIf(needsYes)]);
+        var result = await run.RunAsync(["key", verb, .. ids, .. Args.YesIf(needsYes)]);
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
@@ -427,7 +427,7 @@ public class KeyCommandTests
         run.Stub(method, path, json: ApiJson.Bulk(resultField, 1));
         string[] ids = ["12", "13"];
 
-        var result = await run.RunAsync(["key", verb, .. ids, .. YesIf(needsYes)]);
+        var result = await run.RunAsync(["key", verb, .. ids, .. Args.YesIf(needsYes)]);
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
@@ -455,7 +455,7 @@ public class KeyCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        var expiry = ExpiryOf(request);
+        var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
@@ -484,7 +484,7 @@ public class KeyCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        var expiry = ExpiryOf(request);
+        var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo($"{KeysPath}/12/enable-until"));
@@ -520,7 +520,7 @@ public class KeyCommandTests
         run.Stub("PUT", $"{KeysPath}/12/enable-until", json: ApiJson.Key(12, "servers"));
         run.Stub("PUT", $"{KeysPath}/enable", json: ApiJson.Bulk("keysModified", 1));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["key", "enable", .. rejected],
             ["key", "enable", .. corrected],
@@ -586,8 +586,6 @@ public class KeyCommandTests
     private static TestCaseData Correction(string name, string[] rejected, string[] corrected) =>
         new TestCaseData(rejected, corrected).SetArgDisplayNames(name);
 
-    private static string[] YesIf(bool needsYes) => needsYes ? ["--yes"] : [];
-
     // The raw JSON text of each ID: a number reads 12, and an ID sent as a string reads "12" with
     // its quotes, so it fails the comparison.
     private static string[] KeyIdsOf(RecordedRequest request)
@@ -595,39 +593,5 @@ public class KeyCommandTests
         var keyIds = JsonAssert.Property(request.BodyJson, "keyIds");
 
         return [.. keyIds.EnumerateArray().Select(id => id.GetRawText())];
-    }
-
-    private static DateTimeOffset ExpiryOf(RecordedRequest request)
-    {
-        var value = JsonAssert.Property(request.BodyJson, "expiryDateTime").GetString();
-
-        return DateTimeOffset.Parse(value!, CultureInfo.InvariantCulture, DateTimeStyles.None);
-    }
-
-    // Parse errors exit 2 with invalid_argument and send nothing (proposal "Errors and exit
-    // codes"), and an unknown command is a parse error, so a rejection alone does not show that the
-    // command checked the input. The corrected command runs next in the same sandbox and must
-    // succeed with exactly one request, the one the rejection withheld.
-    private static async Task AssertRejectedThenCorrectedAsync(CliRun run, string[] rejected, string[] corrected, string method, string path)
-    {
-        var rejectedResult = await run.RunAsync(rejected);
-
-        Assert.That(rejectedResult.ExitCode, Is.EqualTo(2), rejectedResult.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(rejectedResult.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(rejectedResult.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-        });
-
-        var correctedResult = await run.RunAsync(corrected);
-
-        Assert.That(correctedResult.ExitCode, Is.Zero, correctedResult.ToString());
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
     }
 }

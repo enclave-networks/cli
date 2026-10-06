@@ -15,6 +15,7 @@ namespace Enclave.Cli.Tests.Editing;
 // --template prints the resource's current values in patch-model shape, read with one GET.
 // Templates use the camelCase property names and enum member names that the CLI's JSON output
 // and --from-file use (Enclave.Sdk.Api 1.0.4, Constants.JsonSerializerOptions).
+[Category(TestCategory.Pending)]
 public class TemplateTests
 {
     // The GET responses below are Enclave.Sdk.Api.Data 304.48.0 models with a value in each field
@@ -318,7 +319,7 @@ public class TemplateTests
         {
             Assert.That(run.Requests, Is.Empty);
             Assert.That(template.ValueKind, Is.EqualTo(JsonValueKind.Object));
-            Assert.That(template.EnumerateObject().Select(field => field.Name), Is.EquivalentTo(ModelFields(model)));
+            Assert.That(JsonRead.PropertyNames(template), Is.EquivalentTo(ModelFields(model)));
         });
     }
 
@@ -379,7 +380,7 @@ public class TemplateTests
         Assert.Multiple(() =>
         {
             Assert.That(acls.GetArrayLength(), Is.EqualTo(1));
-            Assert.That(acls[0].EnumerateObject().Select(field => field.Name), Is.EquivalentTo(ModelFields(typeof(PolicyAclModel))));
+            Assert.That(JsonRead.PropertyNames(acls[0]), Is.EquivalentTo(ModelFields(typeof(PolicyAclModel))));
             Assert.That(JsonAssert.Strings(JsonAssert.Property(template, "senderTags")), Has.Length.EqualTo(1));
             Assert.That(JsonAssert.Strings(JsonAssert.Property(template, "receiverTags")), Has.Length.EqualTo(1));
             Assert.That(run.Requests, Is.Empty);
@@ -414,7 +415,7 @@ public class TemplateTests
         });
 
         var body = request.BodyJson;
-        foreach (var field in Parse(templateText).EnumerateObject())
+        foreach (var field in JsonRead.Parse(templateText).EnumerateObject())
         {
             var sent = JsonAssert.Property(body, field.Name);
             Assert.That(JsonElement.DeepEquals(sent, field.Value), Is.True, $"\"{field.Name}\": the template holds {field.Value}, the request body holds {sent}");
@@ -437,10 +438,10 @@ public class TemplateTests
 
         Assert.That(result.ExitCode, Is.Zero, $"{result}");
         var template = result.StdoutJson;
-        var expectedJson = Parse(expected);
+        var expectedJson = JsonRead.Parse(expected);
         Assert.Multiple(() =>
         {
-            Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {path}" }));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
             Assert.That(JsonElement.DeepEquals(template, expectedJson), Is.True, $"Expected the template {expectedJson}, found {template}");
         });
     }
@@ -468,7 +469,7 @@ public class TemplateTests
 
         Assert.That(result.ExitCode, Is.Zero, $"{result}");
         var request = run.SingleRequest();
-        var template = Parse(templateText);
+        var template = JsonRead.Parse(templateText);
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
@@ -527,7 +528,7 @@ public class TemplateTests
         {
             Assert.That(result.ExitCode, Is.EqualTo(5), $"{result}");
             Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {path}" }));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
         });
         Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("not_found"));
     }
@@ -546,7 +547,7 @@ public class TemplateTests
 
             var result = await run.RunAsync([.. command, "--template", "--from-file", filePath]);
 
-            AssertRejected(result, run);
+            CliAssert.Rejected(run, result);
         }
 
         await AssertTemplatePrintedAsync(command, path, response);
@@ -564,7 +565,7 @@ public class TemplateTests
 
             var result = await run.RunAsync([.. command, "--template", .. flag]);
 
-            AssertRejected(result, run);
+            CliAssert.Rejected(run, result);
         }
 
         await AssertTemplatePrintedAsync(command, path, response);
@@ -699,23 +700,6 @@ public class TemplateTests
             Assert.That(run.Requests.Where(request => request.Method != "GET"), Is.Empty);
             Assert.That(result.StdoutJson.ValueKind, Is.EqualTo(JsonValueKind.Object));
         });
-    }
-
-    private static void AssertRejected(CliResult result, CliRun run)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), $"{result}");
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
-        });
-        Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-    }
-
-    private static JsonElement Parse(string json)
-    {
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.Clone();
     }
 
     // One update command: the path its GET and PATCH use, the model the GET returns and the

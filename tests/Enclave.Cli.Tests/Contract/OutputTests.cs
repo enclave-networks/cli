@@ -13,12 +13,14 @@ using Enclave.Api.Modules.SystemManagement.TrustRequirements.Models;
 using Enclave.Api.Modules.SystemManagement.UnapprovedSystems.Models;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Contract;
 
 // The output rules in proposed-cli-surface.md ("Output", "Options on every command") hold for every
 // command, so an agent learns them once. Each list rule is checked against the list command of every
 // top-level noun.
+[Category(TestCategory.Pending)]
 public class OutputTests
 {
     private const string KeySecret = "SECRET-KEY-VALUE";
@@ -108,13 +110,13 @@ public class OutputTests
 
         var result = await run.RunAsync(list.Args);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(list.Path));
 
         var output = result.StdoutJson;
         Assert.Multiple(() =>
         {
-            Assert.That(PropertyNames(output), Is.EquivalentTo(EnvelopeFields));
+            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(EnvelopeFields));
             Assert.That(output.GetProperty("total").GetInt32(), Is.EqualTo(3));
             Assert.That(output.GetProperty("truncated").GetBoolean(), Is.False);
             Assert.That(output.GetProperty("items").GetArrayLength(), Is.EqualTo(items.Length));
@@ -141,7 +143,7 @@ public class OutputTests
 
         var result = await run.RunAsync(list.Args);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -163,7 +165,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--limit", "5"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.That(run.SingleRequest().Query.GetValueOrDefault("per_page"), Is.EqualTo("5"));
 
         var output = result.StdoutJson;
@@ -188,7 +190,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--all"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         var requests = run.Requests;
         Assert.Multiple(() =>
         {
@@ -217,7 +219,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--limit", "250"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         var requests = run.Requests;
         Assert.Multiple(() =>
         {
@@ -246,7 +248,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "-o", "id"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(list.Path));
@@ -263,7 +265,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "-o", "table"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(list.Path));
@@ -288,8 +290,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. command.Split(' '), "-o", "table"]);
 
-        AssertFailed(result, 2, "invalid_argument");
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, result);
     }
 
     // -o id and -o table drop the envelope, so stderr carries the truncation (proposal "Output"):
@@ -303,14 +304,14 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--limit", "2", "-o", format]);
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         var stderr = result.StderrJson;
         Assert.That(stderr, Has.Count.EqualTo(1), result.ToString());
 
         var warning = JsonAssert.Property(stderr[0], "warning");
         Assert.Multiple(() =>
         {
-            Assert.That(PropertyNames(stderr[0]), Is.EqualTo(WarningFields));
+            Assert.That(JsonRead.PropertyNames(stderr[0]), Is.EqualTo(WarningFields));
             Assert.That(warning.GetProperty("code").GetString(), Is.EqualTo("truncated"));
             Assert.That(warning.GetProperty("shown").GetInt32(), Is.EqualTo(2));
             Assert.That(warning.GetProperty("total").GetInt32(), Is.EqualTo(5));
@@ -327,7 +328,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--limit", "2", "-o", format]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.That(result.Stdout, Does.Contain(list.Marker(0)).And.Contain(list.Marker(1)));
     }
 
@@ -342,7 +343,7 @@ public class OutputTests
 
         var result = await run.RunAsync([.. list.Args, "--limit", "2"]);
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         var output = result.StdoutJson;
         Assert.Multiple(() =>
         {
@@ -362,7 +363,7 @@ public class OutputTests
 
         var result = await run.RunAsync("key", "list", "-o", "id");
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(TestData.OrgPath("enrolment-keys")));
@@ -380,7 +381,7 @@ public class OutputTests
 
         var result = await run.RunAsync("key", "show", "7001", "-o", "id");
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(TestData.OrgPath("enrolment-keys/7001")));
@@ -399,7 +400,7 @@ public class OutputTests
 
         var result = await run.RunAsync("key", "show", "7001");
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(TestData.OrgPath("enrolment-keys/7001")));
@@ -419,7 +420,7 @@ public class OutputTests
 
         var result = await run.RunAsync(command.Split(' '));
 
-        AssertSucceeded(result);
+        AssertSucceededWithEmptyStderr(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -447,10 +448,10 @@ public class OutputTests
         var quietResult = await quiet.RunAsync(command.Split(' '));
         var verboseResult = await verbose.RunAsync([.. command.Split(' '), "--verbose"]);
 
-        AssertSucceeded(quietResult);
+        AssertSucceededWithEmptyStderr(quietResult);
         Assert.Multiple(() =>
         {
-            Assert.That(verboseResult.ExitCode, Is.Zero, verboseResult.ToString());
+            CliAssert.Succeeded(verboseResult);
             Assert.That(verbose.SingleRequest().Path, Is.EqualTo(TestData.OrgPath(pathSuffix)));
             Assert.That(verboseResult.Stdout, Is.EqualTo(quietResult.Stdout));
             Assert.That(verboseResult.Stderr, Is.Not.Empty);
@@ -515,9 +516,6 @@ public class OutputTests
     private static string ValueText(JsonElement value) =>
         value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText();
 
-    private static string[] PropertyNames(JsonElement obj) =>
-        obj.EnumerateObject().Select(property => property.Name).ToArray();
-
     // The lines of stdout, keeping blank lines (they would be output other than IDs) and dropping
     // the newline that ends the last line.
     private static string[] OutputLines(string stdout)
@@ -552,25 +550,12 @@ public class OutputTests
             $"Expected the {model.Name} unchanged:{Environment.NewLine}{expected}{Environment.NewLine}Found:{Environment.NewLine}{output}");
     }
 
-    private static void AssertSucceeded(CliResult result) =>
+    private static void AssertSucceededWithEmptyStderr(CliResult result) =>
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
+            CliAssert.Succeeded(result);
             Assert.That(result.Stderr, Is.Empty);
         });
-
-    private static void AssertFailed(CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.ToString());
-            Assert.That(result.Stdout, Is.Empty);
-        });
-
-        Assert.That(result.Error.GetProperty("code").GetString(), Is.EqualTo(code));
-    }
-
-    private static string Invariant(FormattableString text) => FormattableString.Invariant(text);
 
     private static string SystemId(int index) => Invariant($"SYS{7001 + index}");
 

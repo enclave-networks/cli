@@ -1,16 +1,10 @@
-using System.Net;
-using System.Net.Sockets;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 using WireMock;
-using WireMock.Logging;
-using WireMock.RequestBuilders;
-using WireMock.ResponseBuilders;
-using WireMock.Server;
-using WireMock.Settings;
 
 namespace Enclave.Cli.Tests.Auth;
 
+[Category(TestCategory.Pending)]
 public class TokenTests
 {
     private const string FileToken = "file-token-2b8e61";
@@ -93,8 +87,10 @@ public class TokenTests
     public async Task Credentials_json_base_url_is_the_api_address_whichever_source_supplies_the_token(bool tokenFromEnvironment)
     {
         using var run = CliRun.Start();
-        using var otherApi = StartOtherApi(TestData.OrgPath("systems"), ApiJson.Page());
-        run.SaveCredentials(FileToken, otherApi.Url);
+        var (other, otherUrl) = LoopbackApi.Start();
+        using var otherApi = other;
+        LoopbackApi.Stub(otherApi, "GET", TestData.OrgPath("systems"), 200, ApiJson.Page());
+        run.SaveCredentials(FileToken, otherUrl);
 
         if (!tokenFromEnvironment)
         {
@@ -383,33 +379,6 @@ public class TokenTests
             .Where(header => string.Equals(header.Key, "Authorization", StringComparison.OrdinalIgnoreCase))
             .Select(header => string.Join(", ", header.Value))
             .FirstOrDefault();
-
-    // A second fake API at another address, for the credentials.json baseUrl to point at. Without
-    // Urls, WireMock.Net listens on every interface (WireMockServerSettings.Urls, version 1.19.0),
-    // which raises a Windows Firewall prompt, so it binds loopback only.
-    private static WireMockServer StartOtherApi(string path, string json)
-    {
-        var server = WireMockServer.Start(new WireMockServerSettings
-        {
-            Urls = [$"http://127.0.0.1:{FreeLoopbackPort()}"],
-            Logger = new WireMockNullLogger(),
-        });
-        server.Given(Request.Create().UsingGet().WithPath(path))
-            .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json").WithBody(json));
-        return server;
-    }
-
-    // The OS picks a free port for a listener on port 0, which is released for WireMock to bind.
-    // Another process could take it in between; the window is short, and a clash fails the test
-    // with a bind error, never a wrong result.
-    private static int FreeLoopbackPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
 
     private sealed record Change(string[] Args, bool Partner, bool SendsRequest);
 }

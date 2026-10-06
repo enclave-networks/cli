@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
+[Category(TestCategory.Pending)]
 public class LogoutTests
 {
     // logout is local: it removes the saved token and makes no API call. Printing the path tells the

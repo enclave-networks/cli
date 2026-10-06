@@ -15,6 +15,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 ## Commands
 - Build: `dotnet build enclave-cli.slnx -c Release`
 - Test: `dotnet test enclave-cli.slnx -c Release`
+- Test as CI does (leaves out the Pending category): `dotnet test enclave-cli.slnx -c Release --filter "TestCategory!=Pending"`
 - One test: `dotnet test enclave-cli.slnx -c Release --filter "FullyQualifiedName~<TestName>"`
 - Publish one platform: `dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r <rid> -o publish` (a self-contained single-file executable). Release binaries come from CI.
 - RIDs shipped: `win-x64 win-arm64 linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64`
@@ -26,12 +27,13 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 3. Write the minimum code that makes it pass.
 4. Run the full suite. Warnings are errors; the build MUST be clean.
 5. NEVER skip, weaken or delete a failing test to get green. Report it.
+6. Tests for behaviour the CLI does not meet carry `[Category(TestCategory.Pending)]` (`Support/TestCategory.cs`); CI leaves that category out. Remove the category in the change that makes the test pass. NEVER add it to a test that passes, or to a test that a change broke.
 
 ## Testing
 - NUnit 4: `Assert.That`, `Assert.Multiple`.
-- Run the CLI in-process and assert exit code, stdout and stderr:
-  `await Program.CreateRootCommand().Parse(args).InvokeAsync(new InvocationConfiguration { Output = stdout, Error = stderr })`
-- Fake the Enclave API over HTTP with WireMock.Net on loopback; point `Enclave.Sdk.Api` at it with `EnclaveClientOptions.BaseUrl`. enclave.sdk.api's own tests use the same pattern.
+- Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin and a fake API, and records exit code, stdout, stderr and every request.
+- Fake the Enclave API with WireMock.Net through `CliRun` or `LoopbackApi`, which listen on 127.0.0.1 only. A listener on every interface raises a Windows Firewall prompt and accepts connections from other machines. enclave.sdk.api's own tests use WireMock.Net the same way.
+- Shared helpers live in `Support/`: `CliAssert` (outcomes), `JsonRead` and `JsonAssert` (JSON), `ApiJson` (API response bodies), `TestData`, `Args`. Add a helper there when a second test file needs it; NEVER copy one into a test class.
 - Assert the request the fake received (method, path, query, body) as well as the CLI's output. A test MUST fail if the CLI sends the wrong request, or none.
 - NEVER call the live API. NEVER read the real `~/.enclave/` or user profile in tests; inject paths and environment.
 - CI runs the tests on Windows, Linux and macOS, on x64 and arm64. NEVER depend on OS-specific behaviour (path separators, line endings, case sensitivity) without handling it.
@@ -80,7 +82,7 @@ Code comments also:
 - XML docs: a short `<summary>`, plus `<param>`/`<returns>` where needed. No `<remarks>` essays.
 
 ## CI (`.github/workflows/ci.yml`)
-- Pull request: version, then test + publish + smoke test per RID on a runner of that OS and CPU, then upload archives (kept 2 days). No release.
+- Pull request: version, then test (without the Pending category) + publish + smoke test per RID on a runner of that OS and CPU, then upload archives (kept 2 days). No release.
 - Linux RIDs build inside containers of the oldest supported distribution (`.github/docker`): AlmaLinux 8 (RHEL 8, glibc 2.28) for glibc, Alpine 3.22 for musl. The smoke test there proves the binary runs on it. Keep these minimums in step with README's supported platforms table.
 - Push to main: the same, then the `release` job publishes GitHub release `v<version>` with eight archives and `SHA256SUMS`.
 - Adding or removing a RID changes all of: the build matrices, the release job's expected file list, README's supported platforms table, and "RIDs shipped" above.

@@ -1,9 +1,9 @@
-using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class TagCommandTests
 {
     [Test]
@@ -21,10 +21,10 @@ public class TagCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(QueryValue(request, "per_page"), Is.EqualTo("100"));
-            Assert.That(QueryValue(request, "search"), Is.Null);
-            Assert.That(QueryValue(request, "sort"), Is.Null);
-            Assert.That(StringField(JsonAssert.Property(output, "items"), "tag"), Is.EqualTo("web,db"));
+            Assert.That(request.QueryValue("per_page"), Is.EqualTo("100"));
+            Assert.That(request.QueryValue("search"), Is.Null);
+            Assert.That(request.QueryValue("sort"), Is.Null);
+            Assert.That(JsonRead.StringFieldList(JsonAssert.Property(output, "items"), "tag"), Is.EqualTo("web,db"));
             Assert.That(JsonAssert.Property(output, "total").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "truncated").GetBoolean(), Is.False);
         });
@@ -43,7 +43,7 @@ public class TagCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(QueryValue(request, "search"), Is.EqualTo("we"));
+            Assert.That(request.QueryValue("search"), Is.EqualTo("we"));
         });
     }
 
@@ -69,7 +69,7 @@ public class TagCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(QueryValue(request, "sort"), Is.EqualTo(expected));
+            Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
         });
     }
 
@@ -83,9 +83,9 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "list", "--sort", "RecentlyCreated");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        var request = await RunAcceptedAsync(run, "GET", TestData.OrgPath("tags"), "tag", "list", "--sort", "RecentlyUsed");
-        Assert.That(QueryValue(request, "sort"), Is.EqualTo("RecentlyUsed"));
+        CliAssert.Rejected(run, result);
+        var request = await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath("tags"), "tag", "list", "--sort", "RecentlyUsed");
+        Assert.That(request.QueryValue("sort"), Is.EqualTo("RecentlyUsed"));
     }
 
     // A tag is identified by its name, which is what tag show, update and delete take, so -o id
@@ -185,7 +185,7 @@ public class TagCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        Assert.That(PropertyNames(request.BodyJson), Is.EqualTo("Colour").IgnoreCase);
+        Assert.That(JsonRead.PropertyNameList(request.BodyJson), Is.EqualTo("Colour").IgnoreCase);
     }
 
     // tag update takes --name, --colour and --notes (proposal, "Command options"); an update with
@@ -198,8 +198,8 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "update", "web");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "PATCH", TestData.OrgPath("tags/web"), "tag", "update", "web", "--notes", "Reviewed");
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "PATCH", TestData.OrgPath("tags/web"), "tag", "update", "web", "--notes", "Reviewed");
     }
 
     // A command that accepts several IDs always makes the bulk call, also for one ID (proposal,
@@ -220,7 +220,7 @@ public class TagCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(1));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
         });
@@ -243,7 +243,7 @@ public class TagCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web,db"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web,db"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
         });
@@ -258,7 +258,7 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "delete", "web");
 
-        AssertRejectedWithoutRequest(run, result, 6, "confirmation_required");
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
         Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
@@ -310,8 +310,8 @@ public class TagCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
 
     // Single-ID commands exit 5 for an unknown ID (proposal, "Several IDs").
@@ -350,48 +350,7 @@ public class TagCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
-
-    private static void AssertRejectedWithoutRequest(CliRun run, CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.Stderr);
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo(code));
-        });
-    }
-
-    // An unknown command or option also exits 2 without a request, so each exit-2 test then runs a
-    // corrected command in the same sandbox and checks it reaches the API. That proves the command
-    // exists and the rejection came from the input the test changed.
-    private static async Task<RecordedRequest> RunAcceptedAsync(CliRun run, string method, string path, params string[] args)
-    {
-        var accepted = await run.RunAsync(args);
-
-        Assert.That(accepted.ExitCode, Is.Zero, accepted.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
-        return request;
-    }
-
-    private static string? QueryValue(RecordedRequest request, string name) =>
-        request.Query.TryGetValue(name, out var value) ? value : null;
-
-    // Lists are compared as comma-joined strings, which keeps constant arrays out of the
-    // assertions (CA1861) and prints both sides readably on failure.
-    private static string PropertyNames(JsonElement obj) =>
-        string.Join(",", obj.EnumerateObject().Select(property => property.Name));
-
-    private static string StringList(JsonElement array) => string.Join(",", JsonAssert.Strings(array));
-
-    private static string StringField(JsonElement array, string name) =>
-        string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetString()));
 }

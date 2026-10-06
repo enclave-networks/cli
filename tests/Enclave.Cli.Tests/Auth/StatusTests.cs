@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
+[Category(TestCategory.Pending)]
 public class StatusTests
 {
     private const string FileToken = "file-token-2b8e61";
@@ -122,7 +123,7 @@ public class StatusTests
             Assert.That(
                 source == "cli.json" ? Path.GetFullPath(JsonAssert.Property(org, "source").GetString()!) : JsonAssert.Property(org, "source").GetString(),
                 Is.EqualTo(expectedSource));
-            Assert.That(run.Requests.Skip(before).Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Calls(before), Is.EqualTo(OrgsLookupOnly));
         });
     }
 

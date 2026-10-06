@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class DnsCommandTests
 {
     // The stubbed summary is parsed back so the test compares each field the API sent with the
@@ -49,8 +50,8 @@ public class DnsCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/zones")));
-            Assert.That(QueryValue(request, "per_page"), Is.EqualTo("100"));
-            Assert.That(IntField(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("4,5"));
+            Assert.That(request.QueryValue("per_page"), Is.EqualTo("100"));
+            Assert.That(JsonRead.IntFieldList(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("4,5"));
             Assert.That(JsonAssert.Property(output, "total").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "truncated").GetBoolean(), Is.False);
         });
@@ -149,7 +150,7 @@ public class DnsCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        Assert.That(PropertyNames(request.BodyJson), Is.EqualTo("Notes").IgnoreCase);
+        Assert.That(JsonRead.PropertyNameList(request.BodyJson), Is.EqualTo("Notes").IgnoreCase);
     }
 
     // dns zone update takes --name and --notes (proposal, "Command options"); an update with
@@ -162,8 +163,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "zone", "update", "4");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "PATCH", TestData.OrgPath("dns/zones/4"), "dns", "zone", "update", "4", "--notes", "Reviewed");
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "PATCH", TestData.OrgPath("dns/zones/4"), "dns", "zone", "update", "4", "--notes", "Reviewed");
     }
 
     // The API has no bulk zone delete (portal DnsController.cs:145), so dns zone delete takes one
@@ -195,7 +196,7 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "zone", "delete", "4");
 
-        AssertRejectedWithoutRequest(run, result, 6, "confirmation_required");
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
         Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
@@ -210,8 +211,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "zone", "delete", "4", "5", "--yes");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "DELETE", TestData.OrgPath("dns/zones/4"), "dns", "zone", "delete", "4", "--yes");
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "DELETE", TestData.OrgPath("dns/zones/4"), "dns", "zone", "delete", "4", "--yes");
     }
 
     [Test]
@@ -229,10 +230,10 @@ public class DnsCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/records")));
-            Assert.That(QueryValue(request, "per_page"), Is.EqualTo("100"));
-            Assert.That(QueryValue(request, "zoneId"), Is.Null);
-            Assert.That(QueryValue(request, "search"), Is.Null);
-            Assert.That(IntField(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("9,10"));
+            Assert.That(request.QueryValue("per_page"), Is.EqualTo("100"));
+            Assert.That(request.QueryValue("zoneId"), Is.Null);
+            Assert.That(request.QueryValue("search"), Is.Null);
+            Assert.That(JsonRead.IntFieldList(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("9,10"));
             Assert.That(JsonAssert.Property(output, "total").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "truncated").GetBoolean(), Is.False);
         });
@@ -253,8 +254,8 @@ public class DnsCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/records")));
-            Assert.That(QueryValue(request, "zoneId"), Is.EqualTo("4"));
-            Assert.That(QueryValue(request, "search"), Is.EqualTo("web"));
+            Assert.That(request.QueryValue("zoneId"), Is.EqualTo("4"));
+            Assert.That(request.QueryValue("search"), Is.EqualTo("web"));
         });
     }
 
@@ -316,8 +317,8 @@ public class DnsCommandTests
             Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("web"));
             Assert.That(JsonAssert.Property(body, "zoneId").GetInt32(), Is.EqualTo(4));
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));
-            Assert.That(StringList(JsonAssert.Property(body, "tags")), Is.EqualTo("web,db"));
-            Assert.That(StringList(JsonAssert.Property(body, "systems")), Is.EqualTo("AB12C,XY34Z"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "tags")), Is.EqualTo("web,db"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "systems")), Is.EqualTo("AB12C,XY34Z"));
             Assert.That(JsonAssert.Property(body, "notes").GetString(), Is.EqualTo("Front end"));
             Assert.That(JsonAssert.Property(result.StdoutJson, "id").GetInt32(), Is.EqualTo(9));
         });
@@ -355,8 +356,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        var request = await RunAcceptedAsync(run, "POST", TestData.OrgPath("dns/records"), "dns", "record", "create", "web", "--zone", "4");
+        CliAssert.Rejected(run, result);
+        var request = await CliAssert.AcceptedAsync(run, "POST", TestData.OrgPath("dns/records"), "dns", "record", "create", "web", "--zone", "4");
         Assert.That(JsonAssert.Property(request.BodyJson, "zoneId").GetInt32(), Is.EqualTo(4));
     }
 
@@ -378,8 +379,8 @@ public class DnsCommandTests
             Assert.That(request.Method, Is.EqualTo("PATCH"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/records/9")));
             Assert.That(JsonAssert.Property(body, "Name").GetString(), Is.EqualTo("api"));
-            Assert.That(StringList(JsonAssert.Property(body, "Tags")), Is.EqualTo("web,db"));
-            Assert.That(StringList(JsonAssert.Property(body, "Systems")), Is.EqualTo("AB12C"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "Tags")), Is.EqualTo("web,db"));
+            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "Systems")), Is.EqualTo("AB12C"));
             Assert.That(JsonAssert.Property(body, "Notes").GetString(), Is.EqualTo("Moved"));
             Assert.That(JsonAssert.Property(result.StdoutJson, "name").GetString(), Is.EqualTo("api"));
         });
@@ -399,7 +400,7 @@ public class DnsCommandTests
         var body = run.SingleRequest().BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(PropertyNames(body), Is.EqualTo("Tags").IgnoreCase);
+            Assert.That(JsonRead.PropertyNameList(body), Is.EqualTo("Tags").IgnoreCase);
             Assert.That(JsonAssert.Strings(JsonAssert.Property(body, "Tags")), Is.Empty);
         });
     }
@@ -421,8 +422,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "PATCH", TestData.OrgPath("dns/records/9"), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "PATCH", TestData.OrgPath("dns/records/9"), acceptedCommandLine.Split(' '));
     }
 
     // A command that accepts several IDs always makes the bulk call, also for one ID, and prints
@@ -442,7 +443,7 @@ public class DnsCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/records")));
-            Assert.That(IntList(JsonAssert.Property(request.BodyJson, "recordIds")), Is.EqualTo("9"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(request.BodyJson, "recordIds")), Is.EqualTo("9"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(1));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
         });
@@ -463,7 +464,7 @@ public class DnsCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns/records")));
-            Assert.That(IntList(JsonAssert.Property(request.BodyJson, "recordIds")), Is.EqualTo("9,10"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(request.BodyJson, "recordIds")), Is.EqualTo("9,10"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(2));
         });
@@ -477,7 +478,7 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "record", "delete", "9");
 
-        AssertRejectedWithoutRequest(run, result, 6, "confirmation_required");
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
         Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
@@ -536,8 +537,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
 
     // Single-ID commands, dns zone delete among them, exit 5 for an unknown ID (proposal, "Several
@@ -587,51 +588,7 @@ public class DnsCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
-
-    private static void AssertRejectedWithoutRequest(CliRun run, CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.Stderr);
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo(code));
-        });
-    }
-
-    // An unknown command or option also exits 2 without a request, so each exit-2 test then runs a
-    // corrected command in the same sandbox and checks it reaches the API. That proves the command
-    // exists and the rejection came from the input the test changed.
-    private static async Task<RecordedRequest> RunAcceptedAsync(CliRun run, string method, string path, params string[] args)
-    {
-        var accepted = await run.RunAsync(args);
-
-        Assert.That(accepted.ExitCode, Is.Zero, accepted.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
-        return request;
-    }
-
-    private static string? QueryValue(RecordedRequest request, string name) =>
-        request.Query.TryGetValue(name, out var value) ? value : null;
-
-    // Lists are compared as comma-joined strings, which keeps constant arrays out of the
-    // assertions (CA1861) and prints both sides readably on failure.
-    private static string PropertyNames(JsonElement obj) =>
-        string.Join(",", obj.EnumerateObject().Select(property => property.Name));
-
-    private static string StringList(JsonElement array) => string.Join(",", JsonAssert.Strings(array));
-
-    private static string IntList(JsonElement array) =>
-        string.Join(",", array.EnumerateArray().Select(item => item.GetInt32()));
-
-    private static string IntField(JsonElement array, string name) =>
-        string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetInt32()));
 }

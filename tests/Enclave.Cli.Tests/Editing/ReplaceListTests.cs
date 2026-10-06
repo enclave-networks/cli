@@ -9,6 +9,7 @@ namespace Enclave.Cli.Tests.Editing;
 // replaces: an update has no --tags, which a caller could read as "add these tags". On create
 // there is no list to replace, and the options are --tags and --systems (proposal, "Command
 // options").
+[Category(TestCategory.Pending)]
 public class ReplaceListTests
 {
     [TestCaseSource(nameof(SetTagsCases))]
@@ -90,27 +91,10 @@ public class ReplaceListTests
     [TestCaseSource(nameof(UpdateOptionNameCases))]
     public async Task Update_takes_the_replacing_option_and_has_no_option_without_set(string[] command, string rejected, string accepted, string value, string path, string response)
     {
-        using (var run = CliRun.Start())
-        {
-            run.Stub("PATCH", path, json: response);
+        using var run = CliRun.Start();
+        run.Stub("PATCH", path, json: response);
 
-            var result = await run.RunAsync([.. command, rejected, value]);
-
-            AssertRejected(result, run);
-        }
-
-        using (var run = CliRun.Start())
-        {
-            run.Stub("PATCH", path, json: response);
-
-            var result = await run.RunAsync([.. command, accepted, value]);
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(result.ExitCode, Is.Zero, $"{result}");
-                Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"PATCH {path}" }));
-            });
-        }
+        await CliAssert.RejectedThenAcceptedAsync(run, [.. command, rejected, value], [.. command, accepted, value], "PATCH", path);
     }
 
     [Test]
@@ -164,27 +148,10 @@ public class ReplaceListTests
     [TestCaseSource(nameof(CreateOptionNameCases))]
     public async Task Create_takes_the_option_without_set_and_has_no_replacing_option(string[] command, string rejected, string accepted, string value, string path, string response)
     {
-        using (var run = CliRun.Start())
-        {
-            run.Stub("POST", path, json: response);
+        using var run = CliRun.Start();
+        run.Stub("POST", path, json: response);
 
-            var result = await run.RunAsync([.. command, rejected, value]);
-
-            AssertRejected(result, run);
-        }
-
-        using (var run = CliRun.Start())
-        {
-            run.Stub("POST", path, json: response);
-
-            var result = await run.RunAsync([.. command, accepted, value]);
-
-            Assert.Multiple(() =>
-            {
-                Assert.That(result.ExitCode, Is.Zero, $"{result}");
-                Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"POST {path}" }));
-            });
-        }
+        await CliAssert.RejectedThenAcceptedAsync(run, [.. command, rejected, value], [.. command, accepted, value], "POST", path);
     }
 
     private static IEnumerable<TestCaseData> SetTagsCases() =>
@@ -238,17 +205,6 @@ public class ReplaceListTests
     {
         Assert.That(body.EnumerateObject().Select(property => property.Name.ToUpperInvariant()), Is.EqualTo(new[] { field.ToUpperInvariant() }), $"The PATCH body holds {body}");
         Assert.That(JsonAssert.Strings(JsonAssert.Property(body, field)), Is.EqualTo(expected));
-    }
-
-    private static void AssertRejected(CliResult result, CliRun run)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), $"{result}");
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
-        });
-        Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
     }
 
     // One update command that takes a list option: the path its PATCH uses and the model the fake

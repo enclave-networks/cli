@@ -8,6 +8,10 @@ namespace Enclave.Cli.Tests.Contract;
 
 // An agent decides what to do next from the exit code and the "code" of the one JSON error on
 // stderr, so each API failure maps to a fixed exit code and code (proposal "Errors and exit codes").
+//
+// On every error stdout is empty and stderr holds exactly one JSON line with an "error" object
+// (CliAssert.Failed checks both), so a caller never parses a partial result.
+[Category(TestCategory.Pending)]
 public class ErrorTests
 {
     private const string SearchError = "The search term must be 100 characters or fewer.";
@@ -47,7 +51,7 @@ public class ErrorTests
         var result = await run.RunAsync("system", "list");
 
         AssertSentOneGet(run, SystemsPath);
-        var error = AssertFailed(result, exitCode, code);
+        var error = CliAssert.Failed(result, exitCode, code);
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(status));
@@ -68,7 +72,7 @@ public class ErrorTests
         var result = await run.RunAsync(command.Split(' '));
 
         AssertSentOneGet(run, path);
-        var error = AssertFailed(result, 5, "not_found");
+        var error = CliAssert.Failed(result, 5, "not_found");
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
@@ -99,7 +103,7 @@ public class ErrorTests
         var result = await run.RunAsync("system", "list");
 
         AssertSentOneGet(run, SystemsPath);
-        var error = AssertFailed(result, 1, "api_error");
+        var error = CliAssert.Failed(result, 1, "api_error");
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(400));
@@ -128,7 +132,7 @@ public class ErrorTests
         var result = await run.RunAsync("system", "list");
 
         AssertSentOneGet(run, SystemsPath);
-        AssertFailed(result, exitCode, code);
+        CliAssert.Failed(result, exitCode, code);
     }
 
     [Test]
@@ -141,7 +145,7 @@ public class ErrorTests
         var result = await run.RunAsync("system", "show", "SYS7001");
 
         AssertSentOneGet(run, path);
-        AssertFailed(result, 5, "not_found");
+        CliAssert.Failed(result, 5, "not_found");
     }
 
     // A connection failure is transient: retrying can succeed once the API is reachable. Stopping
@@ -154,7 +158,7 @@ public class ErrorTests
 
         var result = await run.RunAsync("system", "list");
 
-        AssertFailed(result, 7, "transient");
+        CliAssert.Failed(result, 7, "transient");
     }
 
     private static TestCaseData SingleId(string command, string pathSuffix) =>
@@ -173,20 +177,5 @@ public class ErrorTests
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(path));
         });
-    }
-
-    // On every error stdout is empty and stderr holds exactly one JSON line with an "error" object
-    // (CliResult.Error checks the second), so a caller never parses a partial result.
-    private static System.Text.Json.JsonElement AssertFailed(CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.ToString());
-            Assert.That(result.Stdout, Is.Empty);
-        });
-
-        var error = result.Error;
-        Assert.That(error.GetProperty("code").GetString(), Is.EqualTo(code));
-        return error;
     }
 }

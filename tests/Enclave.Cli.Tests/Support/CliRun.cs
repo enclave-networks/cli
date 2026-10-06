@@ -1,17 +1,11 @@
 using System.CommandLine;
-using System.Net;
-using System.Net.Sockets;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using NUnit.Framework;
 using WireMock;
-using WireMock.Logging;
 using WireMock.Matchers;
-using WireMock.RequestBuilders;
-using WireMock.ResponseBuilders;
 using WireMock.Server;
-using WireMock.Settings;
 
 namespace Enclave.Cli.Tests.Support;
 
@@ -22,12 +16,6 @@ namespace Enclave.Cli.Tests.Support;
 /// </summary>
 internal sealed class CliRun : IDisposable
 {
-    // WireMock.Net serves a request from the matching mapping with the lowest priority number, so a
-    // stub that also matches the query wins over one that matches the path alone.
-    private const int SpecificPriority = 1;
-
-    private const int GeneralPriority = 10;
-
     private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 
     private readonly string _root;
@@ -91,24 +79,7 @@ internal sealed class CliRun : IDisposable
 
     public static CliRun Start()
     {
-        var apiUrl = $"http://127.0.0.1:{FreeLoopbackPort()}";
-
-        var api = WireMockServer.Start(new WireMockServerSettings
-        {
-            // Without Urls, WireMock.Net listens on every interface, which makes Windows Firewall
-            // prompt to allow the test host and accepts connections from other machines. The tests
-            // need loopback only.
-            Urls = [apiUrl],
-
-            // The SDK sends bulk revoke, decline and delete requests as DELETE with a JSON body
-            // (Enclave.Sdk.Api 1.0.4, SystemsClient.RevokeSystemsAsync), so every method's body
-            // is read and recorded.
-            AllowBodyForAllHttpMethods = true,
-
-            // One request at a time keeps the request log in the order the CLI sent them.
-            HandleRequestsSynchronously = true,
-            Logger = new WireMockNullLogger(),
-        });
+        var (api, apiUrl) = LoopbackApi.Start();
 
         var root = Path.Combine(Path.GetTempPath(), "enclave-cli-tests", Guid.NewGuid().ToString("N"));
 
@@ -145,8 +116,7 @@ internal sealed class CliRun : IDisposable
     /// and JSON body.
     /// </summary>
     public void Stub(string method, string path, int status = 200, string? json = null) =>
-        Api.Given(Matching(method, path)).AtPriority(GeneralPriority)
-            .RespondWith(Respond(status, json, "application/json"));
+        LoopbackApi.Stub(Api, method, path, status, json);
 
     /// <summary>
     /// Answers requests with this method, URL path and query parameter value. These stubs take
@@ -154,8 +124,8 @@ internal sealed class CliRun : IDisposable
     /// list separately.
     /// </summary>
     public void StubWithQuery(string method, string path, string parameter, string value, int status = 200, string? json = null) =>
-        Api.Given(Matching(method, path).WithParam(parameter, new ExactMatcher(value))).AtPriority(SpecificPriority)
-            .RespondWith(Respond(status, json, "application/json"));
+        Api.Given(LoopbackApi.Matching(method, path).WithParam(parameter, new ExactMatcher(value))).AtPriority(LoopbackApi.SpecificPriority)
+            .RespondWith(LoopbackApi.Respond(status, json, "application/json"));
 
     /// <summary>
     /// Answers requests with this method and URL path with an RFC 9457 problem details body, the
@@ -171,9 +141,16 @@ internal sealed class CliRun : IDisposable
             ["detail"] = detail,
         };
 
-        Api.Given(Matching(method, path)).AtPriority(GeneralPriority)
-            .RespondWith(Respond(status, problem.ToJsonString(), "application/problem+json"));
+        Api.Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
+            .RespondWith(LoopbackApi.Respond(status, problem.ToJsonString(), "application/problem+json"));
     }
+
+    /// <summary>
+    /// The requests the fake API received after the first <paramref name="skip"/>, each as
+    /// "METHOD path", in the order it received them.
+    /// </summary>
+    public string[] Calls(int skip = 0) =>
+        Requests.Skip(skip).Select(request => $"{request.Method} {request.Path}").ToArray();
 
     /// <summary>
     /// Asserts the fake API received exactly one request, and returns it.
@@ -235,29 +212,6 @@ internal sealed class CliRun : IDisposable
         {
             // As above, for a read-only file or a directory the CLI restricted.
         }
-    }
-
-    // Binding port 0 makes the OS choose a free port. The listener is stopped before WireMock.Net
-    // binds the port, so another process could take it in between; on loopback with ports from the
-    // ephemeral range that is unlikely, and a clash fails the test at Start.
-    private static int FreeLoopbackPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-
-        return ((IPEndPoint)listener.LocalEndpoint).Port;
-    }
-
-    private static IRequestBuilder Matching(string method, string path) =>
-        Request.Create().UsingMethod(method).WithPath(new ExactMatcher(path));
-
-    private static IResponseBuilder Respond(int status, string? json, string contentType)
-    {
-        var response = Response.Create().WithStatusCode(status);
-
-        return json is null
-            ? response
-            : response.WithHeader("Content-Type", contentType).WithBody(json);
     }
 
     private static RecordedRequest Record(IRequestMessage request)

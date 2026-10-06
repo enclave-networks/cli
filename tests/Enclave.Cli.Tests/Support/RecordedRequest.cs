@@ -42,6 +42,11 @@ internal sealed record RecordedRequest(
         }
     }
 
+    /// <summary>
+    /// The value of a query parameter, or null when the request does not carry it.
+    /// </summary>
+    public string? QueryValue(string name) => Query.TryGetValue(name, out var value) ? value : null;
+
     // Records print every public property in ToString, and BodyJson fails the test when the body is
     // not JSON. NUnit calls ToString to describe a value in a failure message, so printing only the
     // captured fields keeps that message from raising a second failure.

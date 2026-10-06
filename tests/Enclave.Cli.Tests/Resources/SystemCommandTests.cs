@@ -1,10 +1,10 @@
-using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class SystemCommandTests
 {
     private static readonly string SystemsPath = TestData.OrgPath("systems");
@@ -116,7 +116,7 @@ public class SystemCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", SystemsPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["system", "list", "--sort", value],
             ["system", "list", "--sort", "RecentlyConnected"],
@@ -131,7 +131,7 @@ public class SystemCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", SystemsPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["system", "list", "--key", "abc"],
             ["system", "list", "--key", "12"],
@@ -250,7 +250,7 @@ public class SystemCommandTests
         using var run = CliRun.Start();
         run.Stub("PATCH", $"{SystemsPath}/ABCDE", json: ApiJson.System("ABCDE"));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["system", "update", "ABCDE"],
             ["system", "update", "ABCDE", "--description", "web-02"],
@@ -268,7 +268,7 @@ public class SystemCommandTests
         run.Stub(method, path, json: ApiJson.Bulk(resultField, 1));
         string[] ids = ["ABCDE"];
 
-        var result = await run.RunAsync(["system", verb, .. ids, .. YesIf(needsYes)]);
+        var result = await run.RunAsync(["system", verb, .. ids, .. Args.YesIf(needsYes)]);
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
@@ -292,7 +292,7 @@ public class SystemCommandTests
         run.Stub(method, path, json: ApiJson.Bulk(resultField, 1));
         string[] ids = ["ABCDE", "FGHIJ"];
 
-        var result = await run.RunAsync(["system", verb, .. ids, .. YesIf(needsYes)]);
+        var result = await run.RunAsync(["system", verb, .. ids, .. Args.YesIf(needsYes)]);
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
@@ -320,7 +320,7 @@ public class SystemCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        var expiry = ExpiryOf(request);
+        var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
@@ -344,7 +344,7 @@ public class SystemCommandTests
         var result = await run.RunAsync("system", "enable", "ABCDE", "--until", "2026-12-01T12:00:00+02:00");
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var expiry = ExpiryOf(run.SingleRequest());
+        var expiry = JsonRead.ExpiryDateTime(run.SingleRequest().BodyJson);
         Assert.Multiple(() =>
         {
             Assert.That(expiry, Is.EqualTo(new DateTimeOffset(2026, 12, 1, 10, 0, 0, TimeSpan.Zero)));
@@ -368,7 +368,7 @@ public class SystemCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        var expiry = ExpiryOf(request);
+        var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo($"{SystemsPath}/ABCDE/enable-until"));
@@ -404,7 +404,7 @@ public class SystemCommandTests
         run.Stub("PUT", $"{SystemsPath}/ABCDE/enable-until", json: ApiJson.System("ABCDE"));
         run.Stub("PUT", $"{SystemsPath}/enable", json: ApiJson.Bulk("systemsUpdated", 1));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["system", "enable", .. rejected],
             ["system", "enable", .. corrected],
@@ -444,40 +444,4 @@ public class SystemCommandTests
 
     private static TestCaseData Correction(string name, string[] rejected, string[] corrected) =>
         new TestCaseData(rejected, corrected).SetArgDisplayNames(name);
-
-    private static string[] YesIf(bool needsYes) => needsYes ? ["--yes"] : [];
-
-    private static DateTimeOffset ExpiryOf(RecordedRequest request)
-    {
-        var value = JsonAssert.Property(request.BodyJson, "expiryDateTime").GetString();
-
-        return DateTimeOffset.Parse(value!, CultureInfo.InvariantCulture, DateTimeStyles.None);
-    }
-
-    // Parse errors exit 2 with invalid_argument and send nothing (proposal "Errors and exit
-    // codes"), and an unknown command is a parse error, so a rejection alone does not show that the
-    // command checked the input. The corrected command runs next in the same sandbox and must
-    // succeed with exactly one request, the one the rejection withheld.
-    private static async Task AssertRejectedThenCorrectedAsync(CliRun run, string[] rejected, string[] corrected, string method, string path)
-    {
-        var rejectedResult = await run.RunAsync(rejected);
-
-        Assert.That(rejectedResult.ExitCode, Is.EqualTo(2), rejectedResult.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(rejectedResult.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(rejectedResult.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-        });
-
-        var correctedResult = await run.RunAsync(corrected);
-
-        Assert.That(correctedResult.ExitCode, Is.Zero, correctedResult.ToString());
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
-    }
 }

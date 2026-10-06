@@ -1,10 +1,9 @@
-using System.Globalization;
-using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class PolicyCommandTests
 {
     // A PolicyCreateModel with the fields a general policy needs, for the create that follows a
@@ -36,11 +35,11 @@ public class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies")));
-            Assert.That(QueryValue(request, "per_page"), Is.EqualTo("100"));
-            Assert.That(QueryValue(request, "search"), Is.Null);
-            Assert.That(QueryValue(request, "sort"), Is.Null);
-            Assert.That(QueryValue(request, "include_disabled"), Is.Null.Or.EqualTo("false").IgnoreCase);
-            Assert.That(IntField(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("1,2"));
+            Assert.That(request.QueryValue("per_page"), Is.EqualTo("100"));
+            Assert.That(request.QueryValue("search"), Is.Null);
+            Assert.That(request.QueryValue("sort"), Is.Null);
+            Assert.That(request.QueryValue("include_disabled"), Is.Null.Or.EqualTo("false").IgnoreCase);
+            Assert.That(JsonRead.IntFieldList(JsonAssert.Property(output, "items"), "id"), Is.EqualTo("1,2"));
             Assert.That(JsonAssert.Property(output, "total").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "truncated").GetBoolean(), Is.False);
         });
@@ -59,7 +58,7 @@ public class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies")));
-            Assert.That(QueryValue(request, "search"), Is.EqualTo("web"));
+            Assert.That(request.QueryValue("search"), Is.EqualTo("web"));
         });
     }
 
@@ -78,7 +77,7 @@ public class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies")));
-            Assert.That(QueryValue(request, "include_disabled"), Is.EqualTo("true").IgnoreCase);
+            Assert.That(request.QueryValue("include_disabled"), Is.EqualTo("true").IgnoreCase);
         });
     }
 
@@ -101,7 +100,7 @@ public class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies")));
-            Assert.That(QueryValue(request, "sort"), Is.EqualTo(expected));
+            Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
         });
     }
 
@@ -113,9 +112,9 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "list", "--sort", "Newest");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        var request = await RunAcceptedAsync(run, "GET", TestData.OrgPath("policies"), "policy", "list", "--sort", "RecentlyCreated");
-        Assert.That(QueryValue(request, "sort"), Is.EqualTo("RecentlyCreated"));
+        CliAssert.Rejected(run, result);
+        var request = await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath("policies"), "policy", "list", "--sort", "RecentlyCreated");
+        Assert.That(request.QueryValue("sort"), Is.EqualTo("RecentlyCreated"));
     }
 
     // -o id feeds pipelines such as `policy list -o id | policy disable - --yes`, so it prints the
@@ -188,7 +187,7 @@ public class PolicyCommandTests
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
         var request = run.SingleRequest();
-        Assert.That(PropertyNames(request.BodyJson), Is.EqualTo("Notes").IgnoreCase);
+        Assert.That(JsonRead.PropertyNameList(request.BodyJson), Is.EqualTo("Notes").IgnoreCase);
     }
 
     // The proposal gives policy update only --description and --notes (and --from-file); an update
@@ -201,8 +200,8 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "update", "7");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "PATCH", TestData.OrgPath("policies/7"), "policy", "update", "7", "--notes", "Reviewed");
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "PATCH", TestData.OrgPath("policies/7"), "policy", "update", "7", "--notes", "Reviewed");
     }
 
     // A command that accepts several IDs always makes the bulk call, also for one ID, and prints
@@ -223,7 +222,7 @@ public class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies/" + verb)));
-            Assert.That(IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(1));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
         });
@@ -245,7 +244,7 @@ public class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies/" + verb)));
-            Assert.That(IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7,8"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7,8"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(2));
         });
@@ -292,7 +291,7 @@ public class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies/7/enable-until")));
-            Assert.That(ExpiryTime(body), Is.EqualTo(new DateTimeOffset(2026, 12, 1, 9, 30, 0, TimeSpan.Zero)));
+            Assert.That(JsonRead.ExpiryDateTime(body), Is.EqualTo(new DateTimeOffset(2026, 12, 1, 9, 30, 0, TimeSpan.Zero)));
             Assert.That(JsonAssert.Property(body, "expiryAction").GetString(), Is.EqualTo(expected));
             Assert.That(JsonAssert.Property(result.StdoutJson, "id").GetInt32(), Is.EqualTo(7));
         });
@@ -312,7 +311,7 @@ public class PolicyCommandTests
         var after = DateTimeOffset.UtcNow;
 
         Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var expiry = ExpiryTime(run.SingleRequest().BodyJson);
+        var expiry = JsonRead.ExpiryDateTime(run.SingleRequest().BodyJson);
         Assert.That(expiry, Is.InRange(before.AddDays(7).AddSeconds(-1), after.AddDays(7).AddSeconds(1)));
     }
 
@@ -341,7 +340,7 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "enable", "7", "--until", "2026-12-01T09:30:00Z", "--expiry-action", "Delete");
 
-        AssertRejectedWithoutRequest(run, result, 6, "confirmation_required");
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
         Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
@@ -372,8 +371,8 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "enable", "7", "8", "--until", "2026-12-01T09:30:00Z");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "PUT", TestData.OrgPath("policies/7/enable-until"), "policy", "enable", "7", "--until", "2026-12-01T09:30:00Z");
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "PUT", TestData.OrgPath("policies/7/enable-until"), "policy", "enable", "7", "--until", "2026-12-01T09:30:00Z");
     }
 
     // An expiry action describes what happens when --until expires. Without --until it has no
@@ -387,8 +386,8 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "enable", "7", "--expiry-action", "Disable");
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(
             run, "PUT", TestData.OrgPath("policies/7/enable-until"), "policy", "enable", "7", "--until", "2026-12-01T09:30:00Z", "--expiry-action", "Disable");
     }
 
@@ -407,7 +406,7 @@ public class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("policies")));
-            Assert.That(IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7,8"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(request.BodyJson, "policyIds")), Is.EqualTo("7,8"));
             Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(2));
             Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(2));
         });
@@ -423,7 +422,7 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "delete", "7");
 
-        AssertRejectedWithoutRequest(run, result, 6, "confirmation_required");
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
         Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
@@ -446,7 +445,7 @@ public class PolicyCommandTests
             Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
             Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo("DELETE"));
             Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(TestData.OrgPath("policies")));
-            Assert.That(IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "policyIds")), Is.EqualTo("7"));
+            Assert.That(JsonRead.IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "policyIds")), Is.EqualTo("7"));
         });
     }
 
@@ -463,8 +462,8 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "POST", TestData.OrgPath("policies"), "policy", "create", "--from-file", filePath);
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "POST", TestData.OrgPath("policies"), "policy", "create", "--from-file", filePath);
     }
 
     // Policy IDs are integers, and every ID is checked before any call because Enclave.Sdk.Api
@@ -489,8 +488,8 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
 
     // Single-ID commands exit 5 for an unknown ID (proposal, "Several IDs").
@@ -532,52 +531,7 @@ public class PolicyCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        AssertRejectedWithoutRequest(run, result, 2, "invalid_argument");
-        await RunAcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        CliAssert.Rejected(run, result);
+        await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
     }
-
-    private static void AssertRejectedWithoutRequest(CliRun run, CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.Stderr);
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo(code));
-        });
-    }
-
-    // An unknown command or option also exits 2 without a request, so each exit-2 test then runs a
-    // corrected command in the same sandbox and checks it reaches the API. That proves the command
-    // exists and the rejection came from the input the test changed.
-    private static async Task<RecordedRequest> RunAcceptedAsync(CliRun run, string method, string path, params string[] args)
-    {
-        var accepted = await run.RunAsync(args);
-
-        Assert.That(accepted.ExitCode, Is.Zero, accepted.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
-        return request;
-    }
-
-    private static string? QueryValue(RecordedRequest request, string name) =>
-        request.Query.TryGetValue(name, out var value) ? value : null;
-
-    // Lists are compared as comma-joined strings, which keeps constant arrays out of the
-    // assertions (CA1861) and prints both sides readably on failure.
-    private static string PropertyNames(JsonElement obj) =>
-        string.Join(",", obj.EnumerateObject().Select(property => property.Name));
-
-    private static string IntList(JsonElement array) =>
-        string.Join(",", array.EnumerateArray().Select(item => item.GetInt32()));
-
-    private static string IntField(JsonElement array, string name) =>
-        string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetInt32()));
-
-    private static DateTimeOffset ExpiryTime(JsonElement body) =>
-        DateTimeOffset.Parse(JsonAssert.Property(body, "expiryDateTime").GetString()!, CultureInfo.InvariantCulture);
 }

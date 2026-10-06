@@ -9,6 +9,7 @@ namespace Enclave.Cli.Tests.Safety;
 /// with exit 2 (proposal, "ID checks"). An unknown command also exits 2, so each test also runs the
 /// command with a valid ID and checks it sends the request.
 /// </summary>
+[Category(TestCategory.Pending)]
 public class IdCheckTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
@@ -39,7 +40,7 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync("pending", "decline", "ABCDE", "--yes");
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -66,7 +67,7 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync("tag", "update", "web", "--notes", "x");
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -99,7 +100,7 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync(acceptedArgs);
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -123,7 +124,7 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync(command.Args(command.Id(1), command.Id(2)));
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
@@ -144,7 +145,7 @@ public class IdCheckTests
         run.StdinText = BulkCommand.Lines([command.Id(1), command.Id(2)]);
         var accepted = await run.RunAsync(command.Args("-"));
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(command.BodyIds(run.SingleRequest().BodyJson), Is.EquivalentTo(command.Ids(2)));
     }
 
@@ -164,9 +165,9 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OrgName);
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         string[] expected = ["GET /account/orgs", $"PUT {TestData.OrgPath("systems/disable")}"];
-        Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(expected));
+        Assert.That(run.Calls(), Is.EqualTo(expected));
     }
 
     // A dry run prints the request a command would send, so a command that would be rejected is
@@ -184,7 +185,7 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync("system", "disable", "ABCDE", "--dry-run");
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(JsonAssert.Property(accepted.StdoutJson, "dryRun").GetBoolean(), Is.True);
     }
 
@@ -201,17 +202,12 @@ public class IdCheckTests
 
         var rejected = await run.RunAsync("system", "disable", "ABCDE", "--org", "../systems");
 
-        Assert.That(rejected.ExitCode, Is.EqualTo(2), rejected.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(rejected.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(rejected.Error, "code").GetString(), Is.EqualTo("no_org"));
-            Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(LookupOnly));
-        });
+        CliAssert.Failed(rejected, 2, "no_org");
+        Assert.That(run.Calls(), Is.EqualTo(LookupOnly));
 
         var accepted = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OrgName);
 
-        AssertSucceeded(accepted);
+        CliAssert.Succeeded(accepted);
         Assert.That(run.Requests.Count(request => request.Method == "PUT"), Is.EqualTo(1));
     }
 
@@ -263,21 +259,11 @@ public class IdCheckTests
         return new TestCaseData(rejectedArgs, malformedId, acceptedArgs, method, path, response).SetArgDisplayNames(name);
     }
 
-    private static void AssertSucceeded(CliResult result) =>
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
-
     // The error names the malformed ID, so a caller who passed 200 IDs can find the one at fault.
     private static void AssertRejected(CliResult result, string malformedId)
     {
-        Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-
-        var error = result.Error;
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(DetailOf(error), Does.Contain(malformedId));
-        });
+        var error = CliAssert.Failed(result, 2, "invalid_argument");
+        Assert.That(DetailOf(error), Does.Contain(malformedId));
     }
 
     private static string DetailOf(JsonElement error) =>

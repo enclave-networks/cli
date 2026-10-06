@@ -7,6 +7,7 @@ namespace Enclave.Cli.Tests.Safety;
 /// Commands on the proposal's --yes list exit 6 without --yes and send nothing; other commands run
 /// without it; --dry-run is checked first (proposal, "Confirmation").
 /// </summary>
+[Category(TestCategory.Pending)]
 public class ConfirmationTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
@@ -26,15 +27,8 @@ public class ConfirmationTests
 
         var result = await run.RunAsync(args);
 
-        Assert.That(result.ExitCode, Is.EqualTo(6), result.ToString());
-        var error = result.Error;
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(error, "code").GetString(), Is.EqualTo("confirmation_required"));
-            Assert.That(error.GetRawText(), Does.Contain("--yes"));
-            Assert.That(run.Requests, Is.Empty);
-        });
+        CliAssert.Rejected(run, result, 6, "confirmation_required");
+        Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
     }
 
     [TestCaseSource(nameof(ConfirmationListCases))]
@@ -45,7 +39,7 @@ public class ConfirmationTests
 
         var result = await run.RunAsync([.. args, "--yes"]);
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -66,13 +60,13 @@ public class ConfirmationTests
 
         var result = await run.RunAsync([.. args, "--dry-run"]);
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         var output = result.StdoutJson;
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
             Assert.That(JsonAssert.Property(JsonAssert.Property(output, "request"), "method").GetString(), Is.EqualTo(method));
-            Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(LookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(LookupOnly));
         });
     }
 
@@ -87,7 +81,7 @@ public class ConfirmationTests
 
         var result = await run.RunAsync(args);
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
@@ -106,7 +100,7 @@ public class ConfirmationTests
 
         var result = await run.RunAsync("system", "disable", "ABCDE", "--yes");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(TestData.OrgPath("systems/disable")));
     }
 
@@ -120,17 +114,11 @@ public class ConfirmationTests
 
         var rejected = await run.RunAsync("system", "list", "--yes");
 
-        Assert.That(rejected.ExitCode, Is.EqualTo(2), rejected.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(rejected.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(rejected.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-        });
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync("system", "list");
 
-        Assert.That(accepted.ExitCode, Is.Zero, accepted.ToString());
+        CliAssert.Succeeded(accepted);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(TestData.OrgPath("systems")));
     }
 

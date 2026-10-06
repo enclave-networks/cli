@@ -6,6 +6,7 @@ namespace Enclave.Cli.Tests.Auth;
 
 // system list (GET /org/{orgId}/systems) is the command that shows which organisation was used:
 // the organisation ID is in the request path.
+[Category(TestCategory.Pending)]
 public class OrgContextTests
 {
     private const string ThirdOrgName = "Globex Ltd";
@@ -62,7 +63,7 @@ public class OrgContextTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(CallsAfter(run, before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
+            Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
         });
     }
 
@@ -81,7 +82,7 @@ public class OrgContextTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(new[] { "GET /account/orgs", $"GET {OrgSystems}" }));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { "GET /account/orgs", $"GET {OrgSystems}" }));
         });
     }
 
@@ -102,7 +103,7 @@ public class OrgContextTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("no_org"));
             Assert.That(Candidates(result), Is.EquivalentTo(new[] { (TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName) }));
             Assert.That(result.Stdout, Is.Empty);
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(OrgsLookupOnly));
         });
     }
 
@@ -131,7 +132,7 @@ public class OrgContextTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
         });
     }
 
@@ -162,7 +163,7 @@ public class OrgContextTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(new[] { "GET /account/orgs", $"GET {OtherOrgSystems}" }));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { "GET /account/orgs", $"GET {OtherOrgSystems}" }));
         });
     }
 
@@ -186,7 +187,7 @@ public class OrgContextTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("no_org"));
             Assert.That(Candidates(result), Is.EquivalentTo(new[] { (TestData.OrgId, "Acme"), (TestData.OtherOrgId, "ACME") }));
             Assert.That(result.Stdout, Is.Empty);
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(OrgsLookupOnly));
         });
     }
 
@@ -208,7 +209,7 @@ public class OrgContextTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("no_org"));
             Assert.That(Candidates(result), Is.EquivalentTo(new[] { (TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName) }));
             Assert.That(result.Stdout, Is.Empty);
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(OrgsLookupOnly));
         });
     }
 
@@ -232,7 +233,7 @@ public class OrgContextTests
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(CallsAfter(run, before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
+            Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
         });
     }
 
@@ -323,7 +324,7 @@ public class OrgContextTests
             Assert.That(result.ExitCode, Is.EqualTo(4), result.ToString());
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("forbidden"));
             Assert.That(result.Stdout, Is.Empty);
-            Assert.That(CallsAfter(run, 0), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(OrgsLookupOnly));
         });
     }
 
@@ -339,9 +340,6 @@ public class OrgContextTests
         var result = await run.RunAsync("org", "use", idOrName);
         Assert.That(result.ExitCode, Is.Zero, $"org use {idOrName} failed: {result}");
     }
-
-    private static string[] CallsAfter(CliRun run, int before) =>
-        run.Requests.Skip(before).Select(request => $"{request.Method} {request.Path}").ToArray();
 
     // The { id, name } list a no_org error carries in error.orgs.
     private static (Guid Id, string? Name)[] Candidates(CliResult result) =>

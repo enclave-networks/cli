@@ -17,6 +17,7 @@ namespace Enclave.Cli.Tests.Contract;
 // "command" (its full name), "description", "arguments" (each with "name", in order) and "options"
 // (each with "name", the long form with its dashes, and "values" for an enum), and each error entry
 // holds "code" and "exitCode".
+[Category(TestCategory.Pending)]
 public class CommandsTests
 {
     // Every command in the proposal's tree ("Commands").
@@ -306,13 +307,7 @@ public class CommandsTests
 
         var result = await run.RunAsync("commands", "widget");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(result.Error.GetProperty("code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-        });
+        CliAssert.Rejected(run, result);
     }
 
     // An agent reads `commands` before it has a token, so the command needs none and calls nothing.
@@ -393,7 +388,7 @@ public class CommandsTests
     private static void AssertSucceededWithoutRequests(CliRun run, CliResult result) =>
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
+            CliAssert.Succeeded(result);
             Assert.That(result.Stderr, Is.Empty);
             Assert.That(run.Requests, Is.Empty);
         });

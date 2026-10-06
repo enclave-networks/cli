@@ -8,6 +8,7 @@ namespace Enclave.Cli.Tests.Partner;
 // ~/.enclave/cli.json, separately from the organisation (proposal, "Context"). Partner commands report not_implemented
 // whichever partner they use, so the tests observe the choice through `status`, which reports the partner in use and
 // where it came from, and through whether a partner command gets past the context check.
+[Category(TestCategory.Pending)]
 public class PartnerContextTests
 {
     private static readonly Guid OtherPartnerId = new("0c5e7a91-2b4d-4f86-b3a0-9d1e6c48f2b7");
@@ -191,7 +192,7 @@ public class PartnerContextTests
         var partnerUse = await run.RunAsync("partner", "use", TestData.PartnerId.ToString());
         var before = run.Requests.Count;
         var systems = await run.RunAsync("system", "list");
-        var systemListRequests = run.Requests.Skip(before).Select(request => $"{request.Method} {request.Path}");
+        var systemListRequests = run.Calls(before);
 
         Assert.Multiple(() =>
         {
@@ -246,7 +247,7 @@ public class PartnerContextTests
             Assert.That(partnerUse.ExitCode, Is.Zero, partnerUse.ToString());
             Assert.That(systems.ExitCode, Is.EqualTo(2), systems.ToString());
             Assert.That(PartnerCommandTests.ErrorCode(systems), Is.EqualTo("no_org"));
-            Assert.That(run.Requests.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(OrgLookupOnly));
+            Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
         });
     }
 

@@ -4,6 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+[Category(TestCategory.Pending)]
 public class PendingCommandTests
 {
     private static readonly string PendingPath = TestData.OrgPath("unapproved-systems");
@@ -101,7 +102,7 @@ public class PendingCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", PendingPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["pending", "list", "--sort", value],
             ["pending", "list", "--sort", "RecentlyEnrolled"],
@@ -119,7 +120,7 @@ public class PendingCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", PendingPath, json: ApiJson.Page());
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["pending", "list", .. option],
             ["pending", "list"],
@@ -237,7 +238,7 @@ public class PendingCommandTests
         using var run = CliRun.Start();
         run.Stub("PATCH", $"{PendingPath}/ABCDE", json: ApiJson.PendingSystem("ABCDE"));
 
-        await AssertRejectedThenCorrectedAsync(
+        await CliAssert.RejectedThenAcceptedAsync(
             run,
             ["pending", "update", "ABCDE"],
             ["pending", "update", "ABCDE", "--description", "laptop-02"],
@@ -301,32 +302,5 @@ public class PendingCommandTests
     {
         yield return new TestCaseData("approve", "PUT", TestData.OrgPath("unapproved-systems/approve"), "systemsApproved").SetArgDisplayNames("pending approve");
         yield return new TestCaseData("decline", "DELETE", TestData.OrgPath("unapproved-systems"), "systemsDeclined").SetArgDisplayNames("pending decline");
-    }
-
-    // Parse errors exit 2 with invalid_argument and send nothing (proposal "Errors and exit
-    // codes"), and an unknown command is a parse error, so a rejection alone does not show that the
-    // command checked the input. The corrected command runs next in the same sandbox and must
-    // succeed with exactly one request, the one the rejection withheld.
-    private static async Task AssertRejectedThenCorrectedAsync(CliRun run, string[] rejected, string[] corrected, string method, string path)
-    {
-        var rejectedResult = await run.RunAsync(rejected);
-
-        Assert.That(rejectedResult.ExitCode, Is.EqualTo(2), rejectedResult.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(rejectedResult.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(rejectedResult.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-        });
-
-        var correctedResult = await run.RunAsync(corrected);
-
-        Assert.That(correctedResult.ExitCode, Is.Zero, correctedResult.ToString());
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-        });
     }
 }

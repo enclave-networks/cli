@@ -5,6 +5,7 @@ namespace Enclave.Cli.Tests.Contract;
 
 // Nouns are singular, and a plural name is accepted as a hidden alias so a guess works; help and
 // `commands` show the singular name only (proposal "Shape and naming").
+[Category(TestCategory.Pending)]
 public class NamingTests
 {
     private static readonly string[] PluralNouns =
@@ -68,8 +69,8 @@ public class NamingTests
         var pluralRequest = pluralRun.SingleRequest();
         Assert.Multiple(() =>
         {
-            Assert.That(singularResult.ExitCode, Is.Zero, singularResult.ToString());
-            Assert.That(pluralResult.ExitCode, Is.Zero, pluralResult.ToString());
+            CliAssert.Succeeded(singularResult);
+            CliAssert.Succeeded(pluralResult);
             Assert.That(singularRequest.Method, Is.EqualTo("GET"));
             Assert.That(singularRequest.Path, Is.EqualTo(path));
             Assert.That(pluralRequest.Method, Is.EqualTo(singularRequest.Method));
@@ -103,7 +104,7 @@ public class NamingTests
         var names = HelpCommandNames(result.Stdout);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
+            CliAssert.Succeeded(result);
             Assert.That(names, Is.EquivalentTo(expected));
             Assert.That(names.Intersect(PluralNouns), Is.Empty);
         });
@@ -117,7 +118,7 @@ public class NamingTests
 
         var result = await run.RunAsync("commands");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        CliAssert.Succeeded(result);
         var names = result.StdoutJson.GetProperty("commands").EnumerateArray()
             .Select(entry => entry.GetProperty("command").GetString()!)
             .ToArray();

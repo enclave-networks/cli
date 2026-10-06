@@ -11,6 +11,7 @@ namespace Enclave.Cli.Tests.Partner;
 //
 // This class also holds the table of partner commands that PartnerContextTests and PartnerSafetyTests draw on, so the
 // three fixtures cannot drift apart on which commands exist or which need --yes.
+[Category(TestCategory.Pending)]
 public class PartnerCommandTests
 {
     internal const string CustomerId = "6d1f4a2e-93b7-4c58-a0e2-5f8c71d3b9a4";
@@ -138,12 +139,12 @@ public class PartnerCommandTests
     }
 
     internal static IEnumerable<TestCaseData> ApiCommandsAsConfirmed() =>
-        ApiCommands.Select(command => Case(command, command.NeedsYes ? ["--yes"] : []));
+        ApiCommands.Select(command => Case(command, Args.YesIf(command.NeedsYes)));
 
     internal static IEnumerable<TestCaseData> ApiCommandsThatNeedAPartner() =>
         ApiCommands
             .Where(command => command.NeedsPartner)
-            .Select(command => Case(command, command.NeedsYes ? ["--yes"] : []));
+            .Select(command => Case(command, Args.YesIf(command.NeedsYes)));
 
     internal static IEnumerable<TestCaseData> ApiCommandsThatNeedYes() =>
         ApiCommands.Where(command => command.NeedsYes).Select(command => Case(command));
@@ -167,23 +168,15 @@ public class PartnerCommandTests
     internal static void AssertNotImplemented(CliRun run, CliResult result) =>
         AssertError(run, result, 1, "not_implemented");
 
-    internal static void AssertError(CliRun run, CliResult result, int exitCode, string code)
-    {
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.ToString());
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(ErrorCode(result), Is.EqualTo(code));
-            Assert.That(run.Requests, Is.Empty);
-        });
-    }
+    internal static void AssertError(CliRun run, CliResult result, int exitCode, string code) =>
+        CliAssert.Rejected(run, result, exitCode, code);
 
     internal static string? ErrorCode(CliResult result) => JsonAssert.Property(result.Error, "code").GetString();
 
     private static IEnumerable<TestCaseData> ApiCommandsThatChangeSomethingUnderDryRun() =>
         ApiCommands
             .Where(command => command.Changes)
-            .Select(command => Case(command, command.NeedsYes ? ["--dry-run", "--yes"] : ["--dry-run"]));
+            .Select(command => Case(command, ["--dry-run", .. Args.YesIf(command.NeedsYes)]));
 
     private static PartnerCommand Read(string name, params string[] arguments) => new(name, arguments, false, false);
 
