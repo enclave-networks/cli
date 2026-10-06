@@ -275,7 +275,7 @@ public class OrgContextTests
             Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("no_org"));
             Assert.That(Candidates(result), Is.EquivalentTo(new[] { (TestData.OrgId, "Acme"), (TestData.OtherOrgId, "ACME") }));
-            Assert.That(File.Exists(run.CliConfigPath), Is.False);
+            Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
         });
     }
 

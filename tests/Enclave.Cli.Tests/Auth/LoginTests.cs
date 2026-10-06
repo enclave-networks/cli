@@ -92,9 +92,9 @@ public class LoginTests
         var result = await run.RunAsync("login");
 
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
-        Assert.That(File.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
 
-        var credentials = ReadJson(run.CredentialsPath);
+        var credentials = ReadJson(run, run.CredentialsPath);
 
         Assert.Multiple(() =>
         {
@@ -119,7 +119,7 @@ public class LoginTests
 
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
 
-        var credentials = ReadJson(run.CredentialsPath);
+        var credentials = ReadJson(run, run.CredentialsPath);
         var checks = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
 
         Assert.Multiple(() =>
@@ -132,35 +132,21 @@ public class LoginTests
     }
 
     // The file holds a token that never expires (portal TokensApiController.cs:105 issues personal
-    // access tokens with TimeSpan.MaxValue), so other local users must not be able to read it. The
-    // home directory starts without .enclave, so login creates both and sets both modes.
+    // access tokens with TimeSpan.MaxValue), so other local users must not be able to read it.
+    // Login asks the file store to write the file private to the user, which is the same request on
+    // every OS. The disk store's own tests prove that a private write creates the .enclave directory
+    // as 0700 and the file as 0600 on Linux and macOS (Storage/DiskFileStoreTests.cs).
     [Test]
-    public async Task Login_creates_the_enclave_directory_as_0700_and_credentials_json_as_0600_on_linux_and_macos()
+    public async Task Login_writes_credentials_json_private_to_the_user()
     {
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Ignore("Unix file modes exist on Linux and macOS only.");
-            return;
-        }
-
         using var run = CliRun.Start();
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-        var directory = Path.GetDirectoryName(run.CredentialsPath)!;
-        Assert.That(Directory.Exists(directory), Is.False, "The test needs a home directory without .enclave.");
 
         var result = await run.RunAsync("login");
 
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
-        Assert.That(File.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
-
-        var directoryMode = new DirectoryInfo(directory).UnixFileMode;
-        var fileMode = new FileInfo(run.CredentialsPath).UnixFileMode;
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(directoryMode, Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
-            Assert.That(fileMode, Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite));
-        });
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
+        Assert.That(run.Files.IsPrivate(run.CredentialsPath), Is.True);
     }
 
     // login prints what org list prints, so the caller sees which organisations the token reaches
@@ -264,7 +250,7 @@ public class LoginTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo(code));
             Assert.That(result.Stdout, Is.Empty);
             Assert.That(run.SingleRequest().Path, Is.EqualTo("/account/orgs"));
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
@@ -274,12 +260,12 @@ public class LoginTests
     {
         using var run = CliRun.Start();
         run.SaveCredentials(OldToken);
-        var before = await File.ReadAllTextAsync(run.CredentialsPath);
+        var before = run.Files.ReadText(run.CredentialsPath);
         run.StubProblem("GET", "/account/orgs", 401, "Unauthorized");
 
         var result = await run.RunAsync("login");
 
-        var after = File.Exists(run.CredentialsPath) ? await File.ReadAllTextAsync(run.CredentialsPath) : null;
+        var after = run.Files.ReadText(run.CredentialsPath);
 
         Assert.Multiple(() =>
         {
@@ -312,7 +298,7 @@ public class LoginTests
             Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain("--token-stdin").And.Contain("ENCLAVE_TOKEN"));
             Assert.That(result.Stdout, Is.Empty);
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
@@ -336,7 +322,7 @@ public class LoginTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
             Assert.That(result.Stdout, Is.Empty);
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
@@ -357,14 +343,15 @@ public class LoginTests
             Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
     private static string? SavedToken(CliRun run) =>
-        File.Exists(run.CredentialsPath)
-            ? JsonAssert.Property(ReadJson(run.CredentialsPath), "personalAccessToken").GetString()
+        run.Files.ReadText(run.CredentialsPath) is { } credentials
+            ? JsonAssert.Property(JsonRead.Parse(credentials), "personalAccessToken").GetString()
             : null;
 
-    private static JsonElement ReadJson(string path) => JsonRead.Parse(File.ReadAllText(path));
+    private static JsonElement ReadJson(CliRun run, string path) =>
+        JsonRead.Parse(run.Files.ReadText(path) ?? throw new AssertionException($"Expected a file at {path}."));
 }

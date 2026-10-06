@@ -24,7 +24,7 @@ public class LogoutTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
             Assert.That(Path.GetFullPath(JsonAssert.Property(output, "path").GetString()!), Is.EqualTo(Path.GetFullPath(run.CredentialsPath)));
             Assert.That(JsonAssert.Property(output, "deleted").ValueKind, Is.EqualTo(JsonValueKind.True));
             Assert.That(result.Stderr, Is.Empty);
@@ -81,16 +81,16 @@ public class LogoutTests
         using var run = CliRun.Start();
         run.SaveCredentials(TestData.Token);
         const string Settings = "{}";
-        await File.WriteAllTextAsync(run.CliConfigPath, Settings);
+        run.Files.WriteText(run.CliConfigPath, Settings, privateToUser: false);
 
         var result = await run.RunAsync("logout");
 
-        var settingsAfter = File.Exists(run.CliConfigPath) ? await File.ReadAllTextAsync(run.CliConfigPath) : null;
+        var settingsAfter = run.Files.ReadText(run.CliConfigPath);
 
         Assert.Multiple(() =>
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
             Assert.That(settingsAfter, Is.EqualTo(Settings));
         });
     }

@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -371,13 +373,14 @@ public class HarnessTests
 
         run.SaveCredentials("saved-token");
 
-        var options = JsonSerializer.Deserialize<EnclaveClientOptions>(File.ReadAllText(run.CredentialsPath), CredentialsJsonOptions);
+        var options = JsonSerializer.Deserialize<EnclaveClientOptions>(run.Files.ReadText(run.CredentialsPath)!, CredentialsJsonOptions);
 
         Assert.Multiple(() =>
         {
             Assert.That(run.CredentialsPath, Is.EqualTo(Path.Combine(run.Home, ".enclave", "credentials.json")));
             Assert.That(options!.PersonalAccessToken, Is.EqualTo("saved-token"));
             Assert.That(options.BaseUrl, Is.EqualTo(run.ApiBaseUrl));
+            Assert.That(run.Files.IsPrivate(run.CredentialsPath), Is.True);
         });
     }
 
@@ -408,14 +411,24 @@ public class HarnessTests
                 Assert.That(host.GetEnvironmentVariable("ENCLAVE_ORG"), Is.Null);
                 Assert.That(host.HomeDirectory, Is.EqualTo(run.Home));
                 Assert.That(host.HomeDirectory, Does.StartWith(Path.GetTempPath()));
-                Assert.That(Directory.Exists(host.HomeDirectory), Is.True);
-                Assert.That(Directory.EnumerateFileSystemEntries(host.HomeDirectory), Is.Empty);
+                Assert.That(Directory.Exists(host.HomeDirectory), Is.False);
+                Assert.That(host.Files, Is.SameAs(run.Files));
+                Assert.That(run.Files.Paths, Is.Empty);
                 Assert.That(host.Stdin.ReadToEnd(), Is.EqualTo("line one\nline two\n"));
                 Assert.That(host.StdinIsTerminal, Is.True);
                 Assert.That(host.DefaultApiUrl, Is.EqualTo(run.ApiUrl));
                 Assert.That(host.DefaultApiUrl.Host, Is.EqualTo("127.0.0.1"));
-                Assert.That(run.Api.Urls, Is.EqualTo(new[] { run.ApiBaseUrl }));
             });
+
+            // The fake API must accept connections from this machine only. WireMock.Net reports its
+            // URL as http://localhost:{port} when started on 127.0.0.1 (version 2.18.0), so the
+            // reported URL does not show where it listens; the open sockets on the port do.
+            var listeners = IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners()
+                .Where(endpoint => endpoint.Port == run.ApiUrl.Port)
+                .ToArray();
+
+            Assert.That(listeners, Is.Not.Empty);
+            Assert.That(listeners.Where(endpoint => !IPAddress.IsLoopback(endpoint.Address)), Is.Empty);
         }
         finally
         {
@@ -437,22 +450,35 @@ public class HarnessTests
         });
     }
 
+    // Tests keep their files in memory, so the harness writes nothing to the disk: the files a test
+    // sets up are in run.Files and no directory appears at the home or work path.
     [Test]
-    public void Dispose_removes_the_temporary_directories()
+    public void Harness_files_live_in_memory_and_never_on_disk()
     {
-        var run = CliRun.Start();
-        var home = run.Home;
-        var work = run.WorkDirectory;
-        run.WriteFile("policy.json", "{}");
-        run.SaveCredentials(TestData.Token);
+        using var run = CliRun.Start();
 
-        run.Dispose();
+        var input = run.WriteFile("policy.json", "{}");
+        run.SaveCredentials(TestData.Token);
 
         Assert.Multiple(() =>
         {
-            Assert.That(Directory.Exists(home), Is.False);
-            Assert.That(Directory.Exists(work), Is.False);
+            Assert.That(run.Files.ReadText(input), Is.EqualTo("{}"));
+            Assert.That(run.Files.IsPrivate(input), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.True);
+            Assert.That(Directory.Exists(run.Home), Is.False);
+            Assert.That(Directory.Exists(run.WorkDirectory), Is.False);
         });
+    }
+
+    // RunAsync fails a run that wrote to the disk under the run's paths, so a CLI that goes around
+    // CliHost.Files cannot pass a test. The directory is made here to stand in for such a write.
+    [Test]
+    public void RunAsync_fails_when_a_directory_appears_on_disk_under_the_run()
+    {
+        using var run = CliRun.Start();
+        Directory.CreateDirectory(run.Home);
+
+        Assert.That(async () => await run.RunAsync("--version"), Throws.TypeOf<AssertionException>());
     }
 
     [Test]

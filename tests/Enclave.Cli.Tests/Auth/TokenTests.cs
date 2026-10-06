@@ -155,7 +155,7 @@ public class TokenTests
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
             Assert.That(result.Stdout, Is.Empty);
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(File.Exists(run.CredentialsPath), Is.False);
+            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 

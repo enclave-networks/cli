@@ -31,7 +31,8 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 
 ## Testing
 - NUnit 4: `Assert.That`, `Assert.Multiple`.
-- Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin and a fake API, and records exit code, stdout, stderr and every request.
+- Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin, in-memory files (`run.Files`) and a fake API, and records exit code, stdout, stderr and every request.
+- Tests never write to the disk: set up and check files through `run.Files`. A run that writes to the disk fails. Only `Storage/DiskFileStoreTests.cs` touches the disk, in its own temp directory, to prove `DiskFileStore` itself.
 - Fake the Enclave API with WireMock.Net through `CliRun` or `LoopbackApi`, which listen on 127.0.0.1 only. A listener on every interface raises a Windows Firewall prompt and accepts connections from other machines. enclave.sdk.api's own tests use WireMock.Net the same way.
 - Shared helpers live in `Support/`: `CliAssert` (outcomes), `JsonRead` and `JsonAssert` (JSON), `ApiJson` (API response bodies), `TestData`, `Args`. Add a helper there when a second test file needs it; NEVER copy one into a test class.
 - Assert the request the fake received (method, path, query, body) as well as the CLI's output. A test MUST fail if the CLI sends the wrong request, or none.
@@ -65,6 +66,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - Analyzers: `AnalysisMode=AllEnabledByDefault` plus StyleCop; `TreatWarningsAsErrors=true`. Fix the cause. Suppress only with a comment at the suppression giving the reason.
 - Package versions live only in `Directory.Packages.props`. Restore uses nuget.org only (`NuGet.config`). NEVER add a private feed: forks and CI build without credentials.
 - `InvariantGlobalization` is on. Format and parse with `CultureInfo.InvariantCulture`.
+- Read and write files only through `CliHost.Files` (`Storage/IFileStore.cs`). NEVER call `File`, `Directory` or `FileStream` from command code: tests swap in an in-memory store, and only `DiskFileStore` touches the disk. Write the credentials file with `privateToUser: true`.
 - Releases are self-contained single-file executables.
 - Tests run the CLI as an ordinary .NET assembly, so they cannot catch a failure that exists only in the published binary. CI's smoke test (`.github/scripts/smoke-test.sh`) runs every published binary; extend it when a command depends on something the published form can break.
 

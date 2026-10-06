@@ -1,3 +1,5 @@
+using Enclave.Cli.Storage;
+
 namespace Enclave.Cli;
 
 /// <summary>
@@ -15,6 +17,11 @@ internal sealed class CliHost
 
     public required Uri DefaultApiUrl { get; init; }
 
+    /// <summary>
+    /// Every file the CLI reads or writes goes through this store.
+    /// </summary>
+    public required IFileStore Files { get; init; }
+
     public static CliHost FromProcess() => new()
     {
         GetEnvironmentVariable = Environment.GetEnvironmentVariable,
@@ -22,5 +29,6 @@ internal sealed class CliHost
         Stdin = Console.In,
         StdinIsTerminal = !Console.IsInputRedirected,
         DefaultApiUrl = new Uri("https://api.enclave.io"),
+        Files = new DiskFileStore(),
     };
 }

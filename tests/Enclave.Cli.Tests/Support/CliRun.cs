@@ -10,8 +10,8 @@ using WireMock.Server;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// One test's sandbox for running the CLI in-process: a fake Enclave API on loopback, an empty
-/// user profile directory, a working directory for input files, and the only environment
+/// One test's sandbox for running the CLI in-process: a fake Enclave API on loopback, files held
+/// in memory under a user profile path and a working directory path, and the only environment
 /// variables, stdin and API URL the CLI sees.
 /// </summary>
 internal sealed class CliRun : IDisposable
@@ -27,9 +27,6 @@ internal sealed class CliRun : IDisposable
         _root = root;
         Home = Path.Combine(root, "home");
         WorkDirectory = Path.Combine(root, "work");
-
-        Directory.CreateDirectory(Home);
-        Directory.CreateDirectory(WorkDirectory);
     }
 
     public WireMockServer Api { get; }
@@ -45,14 +42,20 @@ internal sealed class CliRun : IDisposable
     public Uri ApiUrl => new(ApiBaseUrl);
 
     /// <summary>
-    /// The temporary user profile directory; ~/.enclave lives here.
+    /// The user profile path the CLI receives; ~/.enclave lives here. Nothing exists at it on disk:
+    /// the files under it are in <see cref="Files"/>.
     /// </summary>
     public string Home { get; }
 
     /// <summary>
-    /// The temporary directory WriteFile writes into.
+    /// The path WriteFile puts input files under, in <see cref="Files"/>.
     /// </summary>
     public string WorkDirectory { get; }
+
+    /// <summary>
+    /// The CLI's files. Tests set up starting files and check what the CLI wrote here.
+    /// </summary>
+    public MemoryFileStore Files { get; } = new();
 
     public string CredentialsPath => Path.Combine(Home, ".enclave", "credentials.json");
 
@@ -87,8 +90,8 @@ internal sealed class CliRun : IDisposable
     }
 
     /// <summary>
-    /// The host RunAsync gives the CLI: this run's environment, home directory, stdin and the fake
-    /// API's URL as the default API URL, so a run can never reach the live API.
+    /// The host RunAsync gives the CLI: this run's environment, home directory, stdin, in-memory
+    /// files, and the fake API's URL as the default API URL, so a run can never reach the live API.
     /// </summary>
     public CliHost CreateHost() => new()
     {
@@ -97,6 +100,7 @@ internal sealed class CliRun : IDisposable
         Stdin = new StringReader(StdinText),
         StdinIsTerminal = StdinIsTerminal,
         DefaultApiUrl = ApiUrl,
+        Files = Files,
     };
 
     public async Task<CliResult> RunAsync(params string[] args)
@@ -107,6 +111,13 @@ internal sealed class CliRun : IDisposable
         var exitCode = await Program.CreateRootCommand(CreateHost())
             .Parse(args)
             .InvokeAsync(new InvocationConfiguration { Output = stdout, Error = stderr });
+
+        // Home and WorkDirectory exist only in memory, so anything on disk under this run's root
+        // came from the CLI going around CliHost.Files.
+        if (Directory.Exists(_root))
+        {
+            throw new AssertionException($"The CLI wrote to the disk under {_root}; every file it reads or writes must go through CliHost.Files.");
+        }
 
         return new CliResult(exitCode, stdout.ToString(), stderr.ToString());
     }
@@ -169,18 +180,19 @@ internal sealed class CliRun : IDisposable
     }
 
     /// <summary>
-    /// Writes a file into the work directory and returns its full path.
+    /// Puts a file under the work directory in <see cref="Files"/> and returns its full path.
     /// </summary>
     public string WriteFile(string name, string content)
     {
         var path = Path.Combine(WorkDirectory, name);
-        File.WriteAllText(path, content);
+        Files.WriteText(path, content, privateToUser: false);
         return path;
     }
 
     /// <summary>
-    /// Writes ~/.enclave/credentials.json in the format Enclave.Sdk.Api reads
-    /// (EnclaveClient.GetSettingsFile, version 1.0.4). The base URL defaults to the fake API's.
+    /// Puts ~/.enclave/credentials.json in <see cref="Files"/>, private to the user as login writes
+    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.GetSettingsFile, version 1.0.4). The
+    /// base URL defaults to the fake API's.
     /// </summary>
     public void SaveCredentials(string token, string? baseUrl = null)
     {
@@ -190,14 +202,20 @@ internal sealed class CliRun : IDisposable
             ["baseUrl"] = baseUrl ?? ApiBaseUrl,
         };
 
-        Directory.CreateDirectory(Path.GetDirectoryName(CredentialsPath)!);
-        File.WriteAllText(CredentialsPath, credentials.ToJsonString(IndentedJson));
+        Files.WriteText(CredentialsPath, credentials.ToJsonString(IndentedJson), privateToUser: true);
     }
 
     public void Dispose()
     {
         Api.Stop();
         Api.Dispose();
+
+        // A directory here means the CLI wrote to the disk, which RunAsync reports; it is removed
+        // so the failure leaves nothing behind.
+        if (!Directory.Exists(_root))
+        {
+            return;
+        }
 
         try
         {
