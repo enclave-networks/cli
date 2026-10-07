@@ -1,4 +1,5 @@
 using Enclave.Cli.Tests.Support;
+using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
@@ -16,6 +17,7 @@ namespace Enclave.Cli.Tests.Safety;
 /// <param name="ReadPathSuffix">A path below /org/{orgId}/ the command may read first, or null.</param>
 /// <param name="ReadResponse">The body of that read.</param>
 /// <param name="OtherPathSuffix">A second spelling of the change's path, or null.</param>
+/// <param name="Needs">The <see cref="SdkApiChange"/> the change needs, or null when it needs none.</param>
 public readonly record struct ChangeCommand(
     string Name,
     string[] Args,
@@ -24,7 +26,8 @@ public readonly record struct ChangeCommand(
     string? Response,
     string? ReadPathSuffix = null,
     string? ReadResponse = null,
-    string? OtherPathSuffix = null)
+    string? OtherPathSuffix = null,
+    string? Needs = null)
 {
     // Declared before All, whose initialiser reads it: static initialisers run in textual order.
     private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
@@ -58,7 +61,7 @@ public readonly record struct ChangeCommand(
         new("key enable", ["key", "enable", "--id", "12"], "PUT", "enrolment-keys/enable", ApiJson.Bulk("keysModified", 1)),
         new("key enable --for", ["key", "enable", "--id", "31", "--for", "14d", "--then", "delete"], "PUT", "enrolment-keys/31/enable-until", ApiJson.Key(31, "contractor laptops")),
         new("key disable", ["key", "disable", "--id", "12"], "PUT", "enrolment-keys/disable", ApiJson.Bulk("keysModified", 1)),
-        new("key delete", ["key", "delete", "--id", "12"], "DELETE", "enrolment-keys", ApiJson.Bulk("keysDeleted", 1)),
+        new("key delete", ["key", "delete", "--id", "12"], "DELETE", "enrolment-keys", ApiJson.Bulk("keysDeleted", 1), Needs: SdkApiChange.KeyDelete),
         new("policy create", ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432"], "POST", "policies", ApiJson.Policy(42, "web to db")),
         new("policy update", ["policy", "update", "--id", "42", "--set-senders", "web,api"], "PATCH", "policies/42", ApiJson.Policy(42, "web to db")),
         new("policy enable", ["policy", "enable", "--id", "42"], "PUT", "policies/enable", ApiJson.Bulk("policiesUpdated", 1)),
@@ -77,6 +80,15 @@ public readonly record struct ChangeCommand(
         new("trust update", ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only")),
         new("trust delete", ["trust", "delete", "--id", "5"], "DELETE", "trust-requirements", ApiJson.Bulk("requirementsDeleted", 1)),
     ];
+
+    // A test whose command builds the change, to send it or to print it under --dry-run, takes
+    // Cases, so a command whose change needs an Enclave.Sdk.Api change is Pending in it.
+
+    /// <summary>
+    /// Every command as a test case, in the Pending category when its change needs an
+    /// Enclave.Sdk.Api change.
+    /// </summary>
+    public static IEnumerable<TestCaseData> Cases => All.Select(command => new TestCaseData(command).PendingOn(command.Needs));
 
     /// <summary>
     /// The change's full URL path for the test organisation.

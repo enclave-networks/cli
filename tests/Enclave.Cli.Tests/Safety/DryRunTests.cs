@@ -11,7 +11,6 @@ namespace Enclave.Cli.Tests.Safety;
 /// with the requests Enclave.Sdk.Api builds for the change, sends none of them and exits 0
 /// (proposed-cli-surface.md "Dry run").
 /// </summary>
-[Category(TestCategory.Pending)]
 public class DryRunTests
 {
     // Each request's fields, sorted and joined with commas.
@@ -27,7 +26,8 @@ public class DryRunTests
     // only the change is withheld. The change itself is answered by the fake API, so a CLI that
     // sent it would show it in the requests. The organisation is given by ID (ENCLAVE_ORG_ID), so
     // no lookup is made and its name is null (proposed-cli-surface.md "Dry run").
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_prints_the_request_a_change_would_send_and_sends_no_change(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -48,7 +48,8 @@ public class DryRunTests
         });
     }
 
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_a_bulk_command_prints_the_ids_it_would_send(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -69,7 +70,8 @@ public class DryRunTests
 
     // The API takes at most 200 IDs per bulk call (portal Enclave.Utilities/HardLimits.cs:22), so a
     // command over 200 IDs makes several calls, and the dry run shows each of them, in order.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_a_bulk_command_over_200_items_shows_each_call_it_would_make(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -93,6 +95,7 @@ public class DryRunTests
     // An empty list makes no call (proposed-cli-surface.md "Several IDs"), so its dry run shows no
     // request.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_given_an_empty_list_on_stdin_shows_no_request(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -112,6 +115,7 @@ public class DryRunTests
     // Example 4 in proposed-cli-surface.md: a reviewer sees which systems an approval would admit
     // before it is sent.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_system_approve_prints_the_ids_of_the_list_on_stdin()
     {
         using var run = CliRun.Start();
@@ -136,6 +140,7 @@ public class DryRunTests
     // one lookup in each run, the dry run included, and --id none ("Calls per command", "Dry run").
     [TestCase(false)]
     [TestCase(true)]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_policy_delete_prints_the_request_policy_delete_then_sends(bool byName)
     {
         using var run = CliRun.Start();
@@ -177,6 +182,7 @@ public class DryRunTests
     // when the name comes from --org, so the output shows the named one was used.
     [TestCase(false)]
     [TestCase(true)]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_prints_the_organisation_given_by_name_and_builds_the_url_from_its_id(bool fromEnvironment)
     {
         using var run = CliRun.Start();
@@ -205,6 +211,7 @@ public class DryRunTests
     // An organisation given by ID needs no lookup, so the dry run makes none and has no name to
     // print (proposed-cli-surface.md "Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id_and_prints_a_null_name()
     {
         using var run = CliRun.Start();
@@ -228,6 +235,7 @@ public class DryRunTests
     // the lookup carrying the token shows the CLI held the token it left out.
     [TestCase(false)]
     [TestCase(true)]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_output_leaves_out_the_authorization_header_and_the_token(bool tokenFromCredentialsFile)
     {
         using var run = CliRun.Start();
@@ -257,6 +265,7 @@ public class DryRunTests
     // PatchClient keys the body by the model's property name (Enclave.Sdk.Api 1.0.4,
     // PatchClient.cs, Set), which JsonAssert.Property matches ignoring case.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_an_update_prints_a_body_holding_only_the_fields_given()
     {
         using var run = CliRun.Start();
@@ -280,6 +289,7 @@ public class DryRunTests
     // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api 1.0.4), which the dry run
     // shows as "body": null (proposed-cli-surface.md "Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_a_request_without_a_body_prints_a_null_body()
     {
         using var run = CliRun.Start();
@@ -303,6 +313,7 @@ public class DryRunTests
     // the command would make: an update when the tag exists, a create when it does not.
     [TestCase(true, "PATCH", "tags/web")]
     [TestCase(false, "POST", "tags")]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_tag_set_reads_the_tag_and_shows_the_update_or_create_it_chooses(bool tagExists, string method, string pathSuffix)
     {
         ArgumentNullException.ThrowIfNull(pathSuffix);
@@ -339,6 +350,7 @@ public class DryRunTests
     // the dry run makes too ("Dry run"), and the dry run shows the list it would send.
     // 172.16.0.0/12 is left out, so it goes. A label can hold a comma, since the flag is repeated.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_an_update_that_replaces_a_list_shows_the_labels_it_keeps()
     {
         using var run = CliRun.Start();
@@ -381,6 +393,7 @@ public class DryRunTests
     // command"), --for counts from when the command runs, and the CLI sends the expiry as a UTC
     // instant ("Details").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_a_timed_enable_prints_the_expiry_and_the_action_taken_then()
     {
         using var run = CliRun.Start();

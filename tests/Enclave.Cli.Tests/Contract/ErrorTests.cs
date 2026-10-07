@@ -9,10 +9,11 @@ namespace Enclave.Cli.Tests.Contract;
 // and exit codes"). On every error stdout is empty and stderr holds exactly one line, a JSON object
 // with an "error" object (CliAssert.Failed checks both), so a caller never parses a partial result
 // and nothing but the error reaches stderr without --verbose.
-[Category(TestCategory.Pending)]
 public class ErrorTests
 {
     private const string ValidationError = "The search term must be 100 characters or fewer.";
+
+    private const string CancelInvite = "org cancel-invite sam@acme.example";
 
     private static readonly string SystemsPath = TestData.OrgPath("systems");
 
@@ -41,8 +42,14 @@ public class ErrorTests
         yield return SingleId("policy update --id 7 --notes Reviewed", "PATCH", "policies/7");
         yield return SingleId("policy enable --id 7 --for 8h", "PUT", "policies/7/enable-until");
         yield return SingleId("dns delete-zone --id 4", "DELETE", "dns/zones/4");
-        yield return SingleId("org cancel-invite sam@acme.example", "DELETE", "invites");
+        yield return SingleId(CancelInvite, "DELETE", "invites");
     }
+
+    // Enclave.Sdk.Api 1.0.5 does not check the status of the CancelInviteAync response, so a 404
+    // without problem details reaches org cancel-invite as success and that case needs
+    // SdkApiChange.StatusChecks (src/Enclave.Cli/Commands/Org/OrgCommand.cs, Invite).
+    public static IEnumerable<TestCaseData> SingleIdCommandsAnsweredWithoutProblemDetails() =>
+        SingleIdCommands().Select(data => data.Arguments[0] is CancelInvite ? data.PendingOn(SdkApiChange.StatusChecks) : data);
 
     // Each is wrong before any call: a bad ID ("ID checks"), a value outside the option's set
     // ("Options on every command"), and two options that contradict each other ("Details").
@@ -167,7 +174,7 @@ public class ErrorTests
         CliAssert.Failed(result, code);
     }
 
-    [TestCaseSource(nameof(SingleIdCommands))]
+    [TestCaseSource(nameof(SingleIdCommandsAnsweredWithoutProblemDetails))]
     public async Task A_404_that_is_not_problem_details_on_a_single_id_command_exits_5_with_not_found(string command, string method, string path)
     {
         ArgumentNullException.ThrowIfNull(command);

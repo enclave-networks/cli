@@ -6,7 +6,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-[Category(TestCategory.Pending)]
 public class SystemCommandTests
 {
     private static readonly string SystemsPath = TestData.OrgPath("systems");

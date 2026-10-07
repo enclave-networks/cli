@@ -19,7 +19,6 @@ namespace Enclave.Cli.Tests.Resources;
 /// <summary>
 /// Tests for the tag commands: list, show, set and delete.
 /// </summary>
-[Category(TestCategory.Pending)]
 public class TagCommandTests
 {
     private const string TagRefText = "ref:0123456789abcdef0123456789abcdef";
@@ -368,6 +367,7 @@ public class TagCommandTests
     // The read tag set makes to choose between update and create still runs under --dry-run, and
     // the change it chose is printed and not sent ("Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Tag_set_with_dry_run_on_a_tag_that_exists_prints_the_update_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -385,6 +385,7 @@ public class TagCommandTests
     }
 
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Tag_set_with_dry_run_on_a_tag_that_does_not_exist_prints_the_create_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -451,6 +452,7 @@ public class TagCommandTests
     }
 
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Tag_delete_with_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

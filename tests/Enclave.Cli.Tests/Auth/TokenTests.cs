@@ -7,7 +7,6 @@ namespace Enclave.Cli.Tests.Auth;
 // Where the token comes from, when it is checked, and that no command of this area prints it
 // (proposed-cli-surface.md "Options on every command", "Errors and exit codes" and "Login, logout
 // and status").
-[Category(TestCategory.Pending)]
 public class TokenTests
 {
     private const string FileToken = "file-token-2b8e61";

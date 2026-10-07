@@ -10,11 +10,10 @@ namespace Enclave.Cli.Tests.Safety;
 // Each command runs with a known token to the point where it could print it, and each test also
 // checks what the command did, so a command that printed nothing because it did nothing does not
 // pass. Partner commands are covered with their own outcomes in Partner/.
-[Category(TestCategory.Pending)]
 public class TokenOutputTests
 {
     // The change request carrying the token shows the CLI held the token it left out.
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
     public async Task Command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr_under_verbose(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -30,7 +29,8 @@ public class TokenOutputTests
         });
     }
 
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
+    [Category(TestCategory.Pending)]
     public async Task Dry_run_of_a_command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -49,7 +49,7 @@ public class TokenOutputTests
 
     // The token comes from ENCLAVE_TOKEN or from credentials.json (proposed-cli-surface.md "Options
     // on every command"), and either way stays out of the output.
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
     public async Task Token_from_credentials_json_is_printed_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();

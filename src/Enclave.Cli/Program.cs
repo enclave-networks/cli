@@ -1,6 +1,15 @@
-using System.CommandLine;
-using System.CommandLine.Invocation;
-using System.Reflection;
+using Enclave.Cli.Commands.Auth;
+using Enclave.Cli.Commands.Describe;
+using Enclave.Cli.Commands.Dns;
+using Enclave.Cli.Commands.Key;
+using Enclave.Cli.Commands.Log;
+using Enclave.Cli.Commands.Org;
+using Enclave.Cli.Commands.Partner;
+using Enclave.Cli.Commands.Policy;
+using Enclave.Cli.Commands.Systems;
+using Enclave.Cli.Commands.Tag;
+using Enclave.Cli.Commands.Trust;
+using Enclave.Cli.Core;
 
 namespace Enclave.Cli;
 
@@ -8,38 +17,30 @@ internal static class Program
 {
     public static Task<int> Main(string[] args) => CreateRootCommand().Parse(args).InvokeAsync();
 
-    internal static RootCommand CreateRootCommand() => CreateRootCommand(CliHost.FromProcess());
+    internal static CliRootCommand CreateRootCommand() => CreateRootCommand(CliHost.FromProcess());
 
-    internal static RootCommand CreateRootCommand(CliHost host)
+    // Each noun builds its own command in its own folder under Commands/, so work on one noun does
+    // not touch another's files or this one.
+    internal static CliRootCommand CreateRootCommand(CliHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        var root = new RootCommand("Command-line tool for the Enclave Management APIs.");
+        var root = new CliRootCommand(host);
 
-        // The built-in --version prints the entry assembly's version, which is the host's version
-        // when the CLI runs inside another process, as it does in tests (System.CommandLine 2.0,
-        // VersionOption.GetExecutableVersion:
-        // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/VersionOption.cs).
-        // Replacing the action keeps the option's validator, which rejects --version combined with
-        // other arguments.
-        root.Options.OfType<VersionOption>().Single().Action = new PrintVersionAction();
-
-        root.SetAction(parseResult => parseResult.InvocationConfiguration.Output.WriteLine("Hello, World!"));
+        root.Add(LoginCommand.Create());
+        root.Add(LogoutCommand.Create());
+        root.Add(StatusCommand.Create());
+        root.Add(OrgCommand.Create());
+        root.Add(PartnerCommand.Create());
+        root.Add(SystemCommand.Create());
+        root.Add(KeyCommand.Create());
+        root.Add(PolicyCommand.Create());
+        root.Add(TagCommand.Create());
+        root.Add(DnsCommand.Create());
+        root.Add(TrustCommand.Create());
+        root.Add(LogCommand.Create());
+        root.Add(CommandsCommand.Create());
 
         return root;
-    }
-
-    private sealed class PrintVersionAction : SynchronousCommandLineAction
-    {
-        public override int Invoke(ParseResult parseResult)
-        {
-            var version = typeof(Program).Assembly
-                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!
-                .InformationalVersion;
-
-            parseResult.InvocationConfiguration.Output.WriteLine(version);
-
-            return 0;
-        }
     }
 }

@@ -8,7 +8,6 @@ namespace Enclave.Cli.Tests.Safety;
 /// IDs, arguments and the --&lt;item&gt; options take names, and the CLI never inspects a value to guess
 /// its type (proposed-cli-surface.md "Shape and naming").
 /// </summary>
-[Category(TestCategory.Pending)]
 public class OptionDecidesParsingTests
 {
     private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");

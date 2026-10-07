@@ -14,7 +14,6 @@ namespace Enclave.Cli.Tests.Resources;
 /// <summary>
 /// Tests for the trust commands: list, show and delete.
 /// </summary>
-[Category(TestCategory.Pending)]
 public partial class TrustCommandTests
 {
     private const string None = "(none)";
@@ -300,6 +299,7 @@ public partial class TrustCommandTests
     // The output form "Dry run" gives: requests is a list, and org.name is null because CliRun names
     // the organisation by ID (ENCLAVE_ORG_ID), so no lookup gives its name.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Trust_delete_with_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

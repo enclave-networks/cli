@@ -3,11 +3,11 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Enclave.Sdk.Api 1.0.4 has no partner API clients and no partner API base URL
+// Enclave.Sdk.Api 1.0.5 has no partner API clients and no partner API base URL
 // (proposed-cli-surface.md "Partner API", and item 8 of "Needs Enclave.Sdk.Api changes";
-// src/Enclave.Cli/Partner/PartnerApi.cs). A partner customer command that would call the partner
-// API therefore exits 1 with not_implemented, prints nothing on stdout and makes no call ("Errors
-// and exit codes"). It parses and checks its command line before that point, so a bad argument
+// src/Enclave.Cli/Commands/Partner/Customer/PartnerCustomerCommand.cs). A partner customer command
+// that would call the partner API therefore exits 1 with not_implemented, prints nothing on stdout
+// and makes no call ("Errors and exit codes"). It parses and checks its command line before that point, so a bad argument
 // exits 2 with invalid_argument whatever the partner API's state, and the command names, flags and
 // argument rules can be tested before the partner clients exist.
 //
@@ -21,7 +21,6 @@ namespace Enclave.Cli.Tests.Partner;
 //
 // This class also holds the table of partner customer commands that PartnerContextTests and
 // PartnerSafetyTests draw on, so the three fixtures cannot drift apart on which commands exist.
-[Category(TestCategory.Pending)]
 public class PartnerCommandTests
 {
     private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";

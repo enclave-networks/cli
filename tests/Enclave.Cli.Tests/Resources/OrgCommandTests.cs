@@ -8,7 +8,6 @@ namespace Enclave.Cli.Tests.Resources;
 // The org commands that act on the organisation in use: its properties, users and invites
 // (proposed-cli-surface.md "Commands" and "Command options"). org list and org use choose the
 // organisation and are tested with the organisation context.
-[Category(TestCategory.Pending)]
 public class OrgCommandTests
 {
     private const string SamEmail = "sam@example.com";
@@ -349,6 +348,7 @@ public class OrgCommandTests
     // A change the API did not make must never be reported as made.
     [TestCase("org invite alex@example.com", "POST", "invites")]
     [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
+    [Category(TestCategory.Pending)]
     public async Task Org_invite_changes_report_a_proxy_error_as_transient(string commandLine, string method, string suffix)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -369,6 +369,7 @@ public class OrgCommandTests
 
     // As above, for RemoveUserAsync.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Org_remove_user_reports_a_proxy_error_as_transient()
     {
         using var run = CliRun.Start();
@@ -390,6 +391,7 @@ public class OrgCommandTests
     [TestCase("org update --name Initech --dry-run", "PATCH", null, "Name", "Initech")]
     [TestCase("org invite alex@example.com --dry-run", "POST", "invites", "emailAddress", AlexEmail)]
     [TestCase("org cancel-invite sam@example.com --dry-run", "DELETE", "invites", "emailAddress", SamEmail)]
+    [Category(TestCategory.Pending)]
     public async Task Org_changes_with_dry_run_print_the_requests_and_send_nothing(string commandLine, string method, string? suffix, string field, string value)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -417,6 +419,7 @@ public class OrgCommandTests
     // The email lookup is a read the change depends on, so it runs, and only the DELETE it finds the
     // account for is withheld (proposed-cli-surface.md "Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Org_remove_user_with_dry_run_looks_the_email_up_and_prints_the_removal_without_sending_it()
     {
         using var run = CliRun.Start();

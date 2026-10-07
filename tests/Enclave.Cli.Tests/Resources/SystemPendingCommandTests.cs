@@ -7,7 +7,6 @@ namespace Enclave.Cli.Tests.Resources;
 // Systems waiting for approval are reached with --pending on system list, show and update, and
 // approved or declined with system approve and decline (proposed-cli-surface.md "Commands"). The
 // API keeps them apart from enrolled systems, under unapproved-systems.
-[Category(TestCategory.Pending)]
 public class SystemPendingCommandTests
 {
     private static readonly string PendingPath = TestData.OrgPath("unapproved-systems");

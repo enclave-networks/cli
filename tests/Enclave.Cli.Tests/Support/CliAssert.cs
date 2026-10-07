@@ -90,9 +90,9 @@ internal static class CliAssert
     /// the fake API.
     /// </summary>
     // A command the CLI lists but cannot run makes no call (proposed-cli-surface.md "Errors and exit
-    // codes"), which is every partner command while Enclave.Sdk.Api has no partner clients
-    // (src/Enclave.Cli/Partner/PartnerApi.cs). CliRun gives the CLI no partner API URL, so the fake
-    // API's request log covers the main API only.
+    // codes"). Partner customer commands exit not_implemented until Enclave.Sdk.Api has partner
+    // clients (src/Enclave.Cli/Commands/Partner/Customer/PartnerCustomerCommand.cs). CliRun gives
+    // the CLI no partner API URL, so the fake API's request log covers the main API only.
     public static void NotImplemented(CliRun run, CliResult result) => Rejected(run, result, "not_implemented");
 
     /// <summary>

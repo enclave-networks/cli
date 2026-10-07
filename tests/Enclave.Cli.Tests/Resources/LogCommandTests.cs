@@ -10,7 +10,6 @@ namespace Enclave.Cli.Tests.Resources;
 // Enclave.Api/Modules/ActivityLogs/Logs/Models/LogsRequestModel.cs), so the CLI applies every filter
 // to the entries it reads, and reads only the pages it needs ("Calls per command"). Where a test
 // checks the page size, the fake API serves pages of the size the CLI asks for, as the API does.
-[Category(TestCategory.Pending)]
 public class LogCommandTests
 {
     private const string Sam = "sam@example.com";

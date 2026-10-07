@@ -17,7 +17,6 @@ namespace Enclave.Cli.Tests.Contract;
 // for people, and are the only output that is not JSON ("Errors and exit codes"). Lists and their
 // envelope are in ListTests; the output-format options that no longer exist are in
 // ParseErrorTests.
-[Category(TestCategory.Pending)]
 public class OutputTests
 {
     private const string KeySecret = "KEY-SECRET-5d1e";

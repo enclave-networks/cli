@@ -9,7 +9,6 @@ namespace Enclave.Cli.Tests.Auth;
 // { "id", "source" } } (proposed-cli-surface.md "Login, logout and status"). A source is the option
 // or variable that made the choice, the path of the file it came from, or only-organisation when
 // the token sees one organisation.
-[Category(TestCategory.Pending)]
 public class StatusTests
 {
     private const string FileToken = "file-token-2b8e61";

@@ -12,7 +12,6 @@ namespace Enclave.Cli.Tests.Contract;
 // "options" (each with "name", the long form with its dashes, and "values" when the option takes
 // one of a fixed set). Each error entry holds "code" and "exitCode". Agents read these by their
 // exact names, so the lookups here are exact.
-[Category(TestCategory.Pending)]
 public class CommandsTests
 {
     // Every command in proposed-cli-surface.md "Commands", with its arguments named as the tree

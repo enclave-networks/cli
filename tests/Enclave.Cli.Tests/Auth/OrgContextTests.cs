@@ -9,7 +9,6 @@ namespace Enclave.Cli.Tests.Auth;
 // naming" for --org and --org-id). system list (GET /org/{orgId}/systems) shows which organisation
 // a command used, since the organisation ID is in the request path, and the requests before it show
 // whether the CLI looked the organisation up.
-[Category(TestCategory.Pending)]
 public class OrgContextTests
 {
     private const string OrgLookup = "GET /account/orgs";

@@ -8,14 +8,13 @@ namespace Enclave.Cli.Tests.Safety;
 /// Commands that take several items: the bulk call, the { requested, affected } output, calls of at
 /// most 200 IDs, and the commands that take one item (proposed-cli-surface.md "Several IDs").
 /// </summary>
-[Category(TestCategory.Pending)]
 public class SeveralIdsTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
 
     // A command that accepts several IDs makes the bulk call for one ID too, so its output has one
     // shape whatever the number of IDs, and a caller handles one form.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_makes_the_bulk_call_for_one_item(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -34,7 +33,7 @@ public class SeveralIdsTests
         });
     }
 
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_sends_every_item_given_in_one_call_in_the_order_given(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -56,7 +55,7 @@ public class SeveralIdsTests
     // The bulk calls return a count only, and the API counts the items it changed: unknown IDs and
     // items already in that state are left out (portal UnapprovedSystemsController.cs:170-177 for
     // approve). Exit 0 makes a re-run after a timeout safe, and the counts carry the difference.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_exits_0_when_fewer_items_are_affected_than_requested(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -93,7 +92,7 @@ public class SeveralIdsTests
         });
     }
 
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_sends_a_list_of_more_than_200_items_from_stdin_in_calls_of_200(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -111,7 +110,7 @@ public class SeveralIdsTests
     // A failed call stops the command, so nothing more is sent after a failure. The counts of the
     // calls that succeeded tell the caller what changed, and since items already in that state are
     // not counted, running the command again is safe (proposed-cli-surface.md "Several IDs").
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_stops_at_a_failed_call_and_its_error_carries_the_counts_of_the_calls_that_succeeded(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -288,7 +287,7 @@ public class SeveralIdsTests
     // Duplicate IDs are removed whether given as arguments, with --id or through "-", and the rest
     // keep the order given (proposed-cli-surface.md "Several IDs"). Each item is acted on once and
     // counted once in requested.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_removes_duplicate_ids_given_as_arguments_and_keeps_the_order_given(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -379,8 +378,8 @@ public class SeveralIdsTests
     {
         foreach (var command in BulkCommand.All)
         {
-            yield return new TestCaseData(command, 201).SetArgDisplayNames(command.Name, "201");
-            yield return new TestCaseData(command, 450).SetArgDisplayNames(command.Name, "450");
+            yield return new TestCaseData(command, 201).SetArgDisplayNames(command.Name, "201").PendingOn(command.Needs);
+            yield return new TestCaseData(command, 450).SetArgDisplayNames(command.Name, "450").PendingOn(command.Needs);
         }
     }
 

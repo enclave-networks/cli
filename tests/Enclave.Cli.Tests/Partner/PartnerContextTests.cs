@@ -9,10 +9,9 @@ namespace Enclave.Cli.Tests.Partner;
 // --id` saves in ~/.enclave/cli.json. The organisation is chosen separately: partner commands use
 // the partner, and every other command that acts within an organisation uses the organisation
 // (proposed-cli-surface.md "Context"). A partner customer command that has a partner and a token
-// reports not_implemented (Enclave.Sdk.Api 1.0.4 has no partner clients), so the tests observe the
+// reports not_implemented (Enclave.Sdk.Api 1.0.5 has no partner clients), so the tests observe the
 // choice through whether a command gets past the context check, which source's value the ID check
 // sees, and what cli.json holds.
-[Category(TestCategory.Pending)]
 public class PartnerContextTests
 {
     private const string PartnerIdOption = "--partner-id";

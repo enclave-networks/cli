@@ -42,6 +42,7 @@ public partial class PolicyCommandTests
     // Example 11, checked first: the lookup is a read, and the PATCH is printed and not sent ("Dry
     // run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_dry_run_prints_the_patch_and_sends_only_the_lookup()
     {
         using var run = CliRun.Start();
@@ -188,7 +189,7 @@ public partial class PolicyCommandTests
     // The CLI writes Ordered where Enclave.Sdk.Api.Data 304.48.0 names the value Prioritised ("Needs
     // Enclave.Sdk.Api changes", item 9).
     [TestCase("balanced", "Balanced")]
-    [TestCase("ordered", "Ordered")]
+    [TestCase("ordered", "Ordered", Category = TestCategory.Pending)]
     [TestCase("geographic", "Geographic")]
     public async Task Policy_update_patches_the_gateway_mode(string mode, string expected)
     {
@@ -316,6 +317,7 @@ public partial class PolicyCommandTests
     // Example 80. The reads run, so the printed request shows the kept labels, and the PATCH is not
     // sent ("Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_dry_run_prints_the_subnet_filters_with_their_kept_labels_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -338,6 +340,7 @@ public partial class PolicyCommandTests
     // needs Enclave.Sdk.Api to accept null in a patch ("Needs Enclave.Sdk.Api changes", item 3).
     [TestCase(true)]
     [TestCase(false)]
+    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_empty_active_hours_removes_the_restriction(bool byDescription)
     {
         using var run = CliRun.Start();

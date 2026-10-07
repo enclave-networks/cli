@@ -19,7 +19,6 @@ namespace Enclave.Cli.Tests.Contract;
 // and its rules are the same on every OS. The clock reads 20:00 UTC, which is 01:30 the next day
 // in that zone, so reading a time in UTC and reading it in the zone give different dates as well as
 // different hours.
-[Category(TestCategory.Pending)]
 public class TimeInputTests
 {
     private const string ZoneName = "Enclave CLI test UTC+05:30";

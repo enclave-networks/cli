@@ -4,7 +4,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-[Category(TestCategory.Pending)]
 public class KeyCommandTests
 {
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
@@ -163,6 +162,7 @@ public class KeyCommandTests
     // BulkKeyActionModel, BulkEnrolmentKeyDeleteResult). Key IDs are typed integer IDs, written as
     // JSON numbers, so IntList fails on an ID sent as a string.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Key_delete_given_the_list_of_disabled_keys_deletes_those_keys()
     {
         using var run = CliRun.Start();
@@ -859,7 +859,7 @@ public class KeyCommandTests
     // API counts two of the three keys, and the output carries its count. Key IDs are JSON numbers.
     [TestCase("enable", "PUT", "enrolment-keys/enable", "keysModified")]
     [TestCase("disable", "PUT", "enrolment-keys/disable", "keysModified")]
-    [TestCase("delete", "DELETE", "enrolment-keys", "keysDeleted")]
+    [TestCase("delete", "DELETE", "enrolment-keys", "keysDeleted", Category = TestCategory.Pending)]
     public async Task Key_bulk_verb_sends_every_id_given_in_one_bulk_call_and_prints_requested_and_affected(
         string verb, string method, string pathSuffix, string resultField)
     {

@@ -22,7 +22,6 @@ namespace Enclave.Cli.Tests.Contract;
 // metadata.nextPage is null ("Calls per command"), and prints once every page is read, so stdout
 // never holds part of a list. log reads only the pages it needs ("Command options"), so it takes
 // part in the envelope rules here and not in the paging rules.
-[Category(TestCategory.Pending)]
 public class ListTests
 {
     private const string PageSize = "200";
@@ -43,7 +42,8 @@ public class ListTests
         new("trust list", "trust-requirements", "trust", typeof(TrustRequirementSummaryModel), id => ApiJson.Trust(Number(id))),
     }.ToDictionary(list => list.Command, StringComparer.Ordinal);
 
-    public static IEnumerable<string> PagedListCommands() => PagedLists.Keys;
+    public static IEnumerable<TestCaseData> PagedListCommands() =>
+        PagedLists.Keys.Select(command => new TestCaseData(command).SetArgDisplayNames(command));
 
     // 450 items take three pages of 200; 400 fill two pages exactly, where reading on until a page
     // comes back empty would ask for a third; one item and no items take one page.

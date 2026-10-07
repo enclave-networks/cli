@@ -7,10 +7,9 @@ namespace Enclave.Cli.Tests.Safety;
 /// "-" in place of the arguments reads a list an enclave-cli list command printed, of the command's
 /// own kind, and acts on its items by ID (proposed-cli-surface.md "Several IDs").
 /// </summary>
-[Category(TestCategory.Pending)]
 public class StdinListTests
 {
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Dash_acts_on_the_items_of_a_list_of_the_commands_kind_on_stdin(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -35,7 +34,7 @@ public class StdinListTests
     // share its IDs. The refused list holds IDs the command would accept, so only the kind check can
     // refuse it. The second run gives the same IDs in a list of the command's kind and shows the
     // command reads lists.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Dash_exits_2_and_sends_nothing_for_a_list_of_another_kind(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -98,7 +97,7 @@ public class StdinListTests
     }
 
     // A bare ID per line carries no kind, so the command could not tell key IDs from policy IDs.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Dash_exits_2_and_sends_nothing_for_ids_one_per_line(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -118,7 +117,7 @@ public class StdinListTests
 
     // A list built or joined with jq can name an item twice. Each item is acted on once and counted
     // once in requested, and the rest keep the list's order (proposed-cli-surface.md "Several IDs").
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Dash_removes_duplicate_ids_from_the_list_and_keeps_its_order(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -154,7 +153,7 @@ public class StdinListTests
     // The CLI never waits for input (AGENTS.md "CLI contract"), and an agent driving a terminal
     // would hang on a read. stdin holds a list of the command's kind, so a CLI that read it anyway
     // would send the bulk call; the second run, with stdin redirected, shows the list is accepted.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Dash_exits_2_without_reading_stdin_when_stdin_is_a_terminal(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -246,7 +245,7 @@ public class StdinListTests
             "enrolment-keys",
             "keysDeleted",
             "keyIds",
-            "12,31");
+            "12,31").PendingOn(SdkApiChange.KeyDelete);
         yield return Example(
             "14: system list --not-seen-for 90d | system revoke -",
             ["system", "revoke", "-"],

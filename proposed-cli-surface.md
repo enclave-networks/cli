@@ -158,7 +158,7 @@ enclave-cli
 - `--keep-disconnected 30m` keeps systems enrolled with an ephemeral key for that long after they disconnect. Without `--ephemeral` it exits 2; the API accepts it only on ephemeral keys (portal `EnrolmentKeyCreateValidator.cs:24`).
 - `--for 8h` (a duration: `30m`, `8h`, `14d`) or `--until <time>` makes the change temporary. Afterwards the item is disabled; `--then revoke` (systems) or `--then delete` (keys, policies) removes it instead. `enable` and `create` both take them.
 - `--until` takes an RFC 3339 time with its zone (`2026-10-09T17:30:00Z`, `2026-10-09T17:30:00-04:00`), or a time without a zone, which is read in the machine's time zone: a date and time, `2026-10-09T17:30`, or a clock time, `18:00`, meaning its next occurrence. The CLI takes the time zone from the system, and the user never sets it. Formats do not follow the system locale, so a command means the same on every machine. `--since` on `log` reads times the same way. Output times are UTC.
-- `key create` sends every setting of the key, with the portal's values (portal-spa `createKeyDetailsSaga.ts:21-29`, `Purpose/Create.tsx:54-59`):
+- `key create` sends every setting of the key, with the portal's values: the general-purpose defaults from portal-spa `createKeyDetailsSaga.ts:21-29`, and for an ephemeral key the automatic approval and unlimited uses the portal sends (`createEnrolmentKeySaga.ts:38-39,49`) and its 30-minute default (`appConstants/enrolmentKeys.ts:14`):
 
   | Key | Approval | Uses | Keeps disconnected systems |
   |---|---|---|---|
@@ -178,7 +178,7 @@ enclave-cli
   The ranges are checked first, and a failed range check is not overridden by an allowed country.
 - `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes, matched ignoring case.
 - Each authority takes only its own settings, as the API does (portal `TrustRequirementSettingsUserAuthValidator.cs:34-48`): `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2.
-- `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
+- `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". It sends the update, and on a 404 sends the create. Under `--dry-run` it reads the tag instead, to show which of the two it would send. `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs:356-370, 432-437`).
 - `partner customer create` sends every field of the API's `CustomerCreateModel`, with the partner portal's values when a flag is left out (portal `Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345`, `Shared/AdminTable.razor:171`):
 
@@ -335,7 +335,9 @@ Capturing the request needs an `Enclave.Sdk.Api` change (see below). Printing th
 - ACL ports are a port from 1 to 65535 or a range `low-high` with low no greater than high; anything else exits 2.
 - `--active-hours` takes `<days> <start>-<end> [<zone>]`. Days are `mon` to `sun`, a range (`mon-fri`, `sat-sun`) or a comma list (`mon,wed,fri`); times are 24-hour `HH:MM`. Anything else exits 2.
 - A hostname's zone is the longest zone name it ends in, at a label boundary: with zones `internal` and `eu.internal`, `db.eu.internal` is in `eu.internal`. The record name is the rest and may contain dots. A hostname with no zone, or equal to a zone's name, exits 2. `dns update-hostname --name` takes a full hostname in the same zone; another zone exits 2, since the API cannot move a record between zones.
-- `log` asks for pages of 200, or of `--limit` when that is smaller; with neither `--limit` nor `--since`, it asks for one page of 100. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case.
+- `log` asks for pages of 200, or of `--limit` when that is smaller; with neither `--limit` nor `--since`, it asks for one page of 100. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case. `--since` and `--until` given a duration count back from now.
+- `--verbose` writes diagnostics to stderr as JSON lines, `{ "verbose": "…" }`, so stderr stays machine-readable.
+- `key update --keep-disconnected` on a general-purpose key is passed to the API, which refuses it (portal `EnrolmentKeyModifyHandler.cs:113-118`).
 - `commands` takes a command's words, `commands partner customer create` included, and prints `{ "commands": [ { "command", "description", "arguments": [ { "name" } ], "options": [ { "name", "values" } ] } ], "errors": [ { "code", "exitCode" } ] }`.
 
 ## Output
@@ -390,6 +392,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 - A key, policy, zone or trust requirement given by name adds one call, and so does a customer given by name, or an admin or invite given by email.
 - `--add-tags` and `--remove-tags` read the item first, which adds one call. So do `--set-subnet-filter`, `--set-allow-ip`, `--set-acl`, `--enable-gateway-for` and the `trust update` `--set-` flags, to keep existing labels and, on trust requirements, the conditions of other kinds.
 - `tag set` on a tag that does not exist makes a second call to create it.
+- `dns create-hostname` reads the zone list to find the hostname's zone, and so does `dns update-hostname --name`, which also reads the hostname first when it is given by `--id`.
 
 ## Partner API
 

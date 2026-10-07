@@ -8,7 +8,6 @@ namespace Enclave.Cli.Tests.Editing;
 // Enclave.Api.Scaffolding/Models/PatchModel.cs, WasSet), so a field sent that the caller did not give
 // would overwrite what the item has. A field that needs no read is set with the one PATCH call
 // ("Calls per command"). An update with no change flag has nothing to send and exits 2 ("Details").
-[Category(TestCategory.Pending)]
 public class UpdateFieldsTests
 {
     // The item can also be read, so a CLI that read it first would succeed and the extra request,

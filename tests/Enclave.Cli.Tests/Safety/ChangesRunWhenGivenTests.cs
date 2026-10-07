@@ -9,13 +9,12 @@ namespace Enclave.Cli.Tests.Safety;
 /// prompt, and stdin is read only after "-" (proposed-cli-surface.md "Changes run when given";
 /// AGENTS.md "CLI contract").
 /// </summary>
-[Category(TestCategory.Pending)]
 public class ChangesRunWhenGivenTests
 {
     // There is no confirmation option, so --yes is an unknown option, a parse error that exits 2
     // and sends nothing. A parse error alone does not show the command exists, so the second run,
     // without --yes, shows it sends its change.
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
     public async Task Yes_is_an_unknown_option_on_a_command_that_changes_something(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -36,7 +35,7 @@ public class ChangesRunWhenGivenTests
     // would refuse a prompt, so a CLI that asked would send nothing. stdout holds the command's
     // JSON object alone: the model, the bulk counts, or {} for a response with no body
     // (proposed-cli-surface.md "Several IDs").
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
     public async Task Command_that_changes_something_runs_without_a_prompt_when_stdin_is_a_terminal(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -58,7 +57,7 @@ public class ChangesRunWhenGivenTests
 
     // IDs come from stdin only after "-" (proposed-cli-surface.md "Several IDs"). stdin holds a list
     // of other items of the command's own kind, so a CLI that read it would add them to the call.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Command_given_ids_as_arguments_leaves_a_list_on_stdin_unread(BulkCommand command)
     {
         using var run = CliRun.Start();

@@ -14,7 +14,6 @@ namespace Enclave.Cli.Tests.Resources;
 /// <summary>
 /// Tests for the policy commands: list, show, enable, disable and delete.
 /// </summary>
-[Category(TestCategory.Pending)]
 public partial class PolicyCommandTests
 {
     private const string None = "(none)";
@@ -596,6 +595,7 @@ public partial class PolicyCommandTests
     // Example 54. The lookup is a read a change depends on, so it still runs; only the delete is
     // withheld ("Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Policy_delete_by_description_with_dry_run_prints_the_delete_and_sends_only_the_lookup()
     {
         using var run = CliRun.Start();
@@ -613,6 +613,7 @@ public partial class PolicyCommandTests
     }
 
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Policy_delete_with_id_and_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

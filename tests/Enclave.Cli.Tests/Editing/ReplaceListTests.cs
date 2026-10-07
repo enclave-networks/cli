@@ -9,7 +9,6 @@ namespace Enclave.Cli.Tests.Editing;
 // whole list (portal SystemPatchModel.Tags, DnsRecordPatchModel.Tags), so the API has no call that
 // adds or removes one tag, and the read is what keeps the tags the item has. --set- flags need no
 // read; the add and remove flags add one ("Calls per command").
-[Category(TestCategory.Pending)]
 public class ReplaceListTests
 {
     [TestCaseSource(nameof(TagLists))]
@@ -120,6 +119,7 @@ public class ReplaceListTests
     // (proposed-cli-surface.md "Dry run"): the read gives the whole list, so the printed body holds
     // every tag the patch would send.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Add_tags_with_dry_run_reads_the_item_and_prints_the_whole_list_it_would_send()
     {
         using var run = CliRun.Start();

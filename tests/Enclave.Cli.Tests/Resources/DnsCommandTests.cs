@@ -10,7 +10,6 @@ namespace Enclave.Cli.Tests.Resources;
 // ("Names and IDs"). A hostname is written in full, and the API keeps db.internal as the record
 // "db" in the zone "internal" (portal DnsRecordModel: name, zoneId, fqdn). A hostname's zone is the
 // longest zone name it ends in, at a label boundary, and the record name is the rest ("Details").
-[Category(TestCategory.Pending)]
 public class DnsCommandTests
 {
     private static readonly string Zones = TestData.OrgPath("dns/zones");
@@ -757,6 +756,7 @@ public class DnsCommandTests
     [TestCase("dns delete-zone --id 4 --dry-run", "DELETE", "dns/zones/4")]
     [TestCase("dns update-hostname --id 7 --notes Reviewed --dry-run", "PATCH", "dns/records/7")]
     [TestCase("dns delete-hostname --id 7,8 --dry-run", "DELETE", "dns/records")]
+    [Category(TestCategory.Pending)]
     public async Task Dns_changes_with_dry_run_print_the_requests_and_send_nothing(string commandLine, string method, string suffix)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -784,6 +784,7 @@ public class DnsCommandTests
     // (proposed-cli-surface.md "Dry run"). The printed body carries the zone the lookup found and the
     // record type.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Dns_create_hostname_with_dry_run_looks_the_zone_up_and_prints_the_post_without_sending_it()
     {
         using var run = CliRun.Start();

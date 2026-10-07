@@ -9,7 +9,6 @@ namespace Enclave.Cli.Tests.Auth;
 // login checks a personal access token with one GetOrganisationsAsync call, saves it in
 // credentials.json, prints the organisations the token can see, and never prompts
 // (proposed-cli-surface.md "Login, logout and status").
-[Category(TestCategory.Pending)]
 public class LoginTests
 {
     private const string StdinToken = "stdin-token-51c2e8";

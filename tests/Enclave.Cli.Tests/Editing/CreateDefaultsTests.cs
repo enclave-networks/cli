@@ -7,7 +7,6 @@ namespace Enclave.Cli.Tests.Editing;
 // defaults does not change what a command does, and --dry-run shows every value sent
 // (proposed-cli-surface.md "Create and update"). A list flag left out is sent as an empty list
 // ("Details"). The values each noun documents for its other settings are tested with that noun.
-[Category(TestCategory.Pending)]
 public class CreateDefaultsTests
 {
     private static readonly string Zones = TestData.OrgPath("dns/zones");
@@ -41,6 +40,7 @@ public class CreateDefaultsTests
     // --dry-run shows every value sent ("Create and update"), the values for flags left out
     // included, and the zone lookup the create depends on runs ("Dry run").
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Create_with_dry_run_prints_every_value_it_would_send()
     {
         using var run = CliRun.Start();

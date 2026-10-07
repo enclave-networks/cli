@@ -10,7 +10,6 @@ namespace Enclave.Cli.Tests.Safety;
 /// exit 2 (proposed-cli-surface.md "ID checks"). A parse error also exits 2, so each test runs the
 /// command again with valid IDs and checks it then sends its request.
 /// </summary>
-[Category(TestCategory.Pending)]
 public class IdCheckTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
@@ -51,7 +50,7 @@ public class IdCheckTests
 
     // One malformed ID among several stops the whole command: sending the valid ones would leave the
     // caller to work out which items changed.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_given_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -70,7 +69,7 @@ public class IdCheckTests
 
     // A list on stdin is checked as arguments are: its IDs go into the same calls. The bad item sits
     // between two good ones, so a CLI that sent the good items would show a request.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
     public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_in_a_list_on_stdin_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -234,6 +233,7 @@ public class IdCheckTests
 
     // A dry run prints the request the command would send, so it applies the same checks.
     [Test]
+    [Category(TestCategory.Pending)]
     public async Task Id_check_applies_under_dry_run()
     {
         using var run = CliRun.Start();

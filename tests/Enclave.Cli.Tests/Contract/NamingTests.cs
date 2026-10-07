@@ -7,7 +7,6 @@ namespace Enclave.Cli.Tests.Contract;
 // `commands` show the singular name only. A noun's own parts take hyphenated verbs, and `partner
 // customer` is the one second-level noun (proposed-cli-surface.md "Shape and naming"). Commands
 // the old shape had, such as `dns zone list`, are parse errors, in ParseErrorTests.
-[Category(TestCategory.Pending)]
 public class NamingTests
 {
     // Every noun with a plural (AGENTS.md "Architecture" lists the nouns; dns has no plural).

@@ -11,7 +11,6 @@ namespace Enclave.Cli.Tests.Contract;
 // object, whose detail names the first problem and whose errors lists them all. CliAssert.Rejected
 // checks the one line on stderr, the code, the exit code, the empty stdout and that no request was
 // made.
-[Category(TestCategory.Pending)]
 public class ParseErrorTests
 {
     private const string Secret = "s3cret-value";

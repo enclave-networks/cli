@@ -6,17 +6,16 @@ namespace Enclave.Cli.Tests.Partner;
 
 // Every ID is checked before any call, and one bad ID exits 2 (proposed-cli-surface.md "ID
 // checks"). Organisation IDs (a partner's customers included), account IDs and partner IDs are
-// GUIDs. Enclave.Sdk.Api 1.0.4 puts IDs into URL paths unescaped (for example
+// GUIDs. Enclave.Sdk.Api 1.0.5 puts IDs into URL paths unescaped (for example
 // UnapprovedSystemsClient.cs:95) and .NET resolves ".." when it combines the path with the base
 // address, so "../x" is the value that matters most: unchecked, it sends the request to another
-// resource. A command that passes the checks reports not_implemented (Enclave.Sdk.Api 1.0.4 has no
+// resource. A command that passes the checks reports not_implemented (Enclave.Sdk.Api 1.0.5 has no
 // partner clients), and each ID case runs the corrected command in the same sandbox to show that,
 // since a rejection alone does not show the command exists.
 //
 // No command prints the token ("Login, logout and status"). A partner customer command exits with
 // not_implemented under --dry-run too, since there is no partner client to build the request
 // ("Dry run").
-[Category(TestCategory.Pending)]
 public class PartnerSafetyTests
 {
     private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";
