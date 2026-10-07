@@ -342,13 +342,12 @@ public class OrgCommandTests
         await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(suffix ?? string.Empty), commandLine.Split(' '));
     }
 
-    // Enclave.Sdk.Api 1.0.4 passes a failure that is not problem details through these calls as
-    // success (OrganisationClient.cs:91-133; proposed-cli-surface.md "Needs Enclave.Sdk.Api
-    // changes" 6), and the CLI maps a plain 502 from a proxy to transient ("Errors and exit codes").
-    // A change the API did not make must never be reported as made.
+    // A change the API did not make must never be reported as made. A plain 502 from a proxy is a
+    // failure without problem details, which the CLI maps to transient ("Errors and exit codes").
+    // These calls report it only since Enclave.Sdk.Api 1.1.0 checks their status
+    // (proposed-cli-surface.md "Enclave.Sdk.Api changes" 6).
     [TestCase("org invite alex@example.com", "POST", "invites")]
     [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
-    [Category(TestCategory.Pending)]
     public async Task Org_invite_changes_report_a_proxy_error_as_transient(string commandLine, string method, string suffix)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -369,7 +368,6 @@ public class OrgCommandTests
 
     // As above, for RemoveUserAsync.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Org_remove_user_reports_a_proxy_error_as_transient()
     {
         using var run = CliRun.Start();

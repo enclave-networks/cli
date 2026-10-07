@@ -45,12 +45,6 @@ public class ErrorTests
         yield return SingleId(CancelInvite, "DELETE", "invites");
     }
 
-    // Enclave.Sdk.Api 1.0.5 does not check the status of the CancelInviteAync response, so a 404
-    // without problem details reaches org cancel-invite as success and that case needs
-    // SdkApiChange.StatusChecks (src/Enclave.Cli/Commands/Org/OrgCommand.cs, Invite).
-    public static IEnumerable<TestCaseData> SingleIdCommandsAnsweredWithoutProblemDetails() =>
-        SingleIdCommands().Select(data => data.Arguments[0] is CancelInvite ? data.PendingOn(SdkApiChange.StatusChecks) : data);
-
     // Each is wrong before any call: a bad ID ("ID checks"), a value outside the option's set
     // ("Options on every command"), and two options that contradict each other ("Details").
     public static IEnumerable<TestCaseData> BadArguments()
@@ -174,7 +168,7 @@ public class ErrorTests
         CliAssert.Failed(result, code);
     }
 
-    [TestCaseSource(nameof(SingleIdCommandsAnsweredWithoutProblemDetails))]
+    [TestCaseSource(nameof(SingleIdCommands))]
     public async Task A_404_that_is_not_problem_details_on_a_single_id_command_exits_5_with_not_found(string command, string method, string path)
     {
         ArgumentNullException.ThrowIfNull(command);

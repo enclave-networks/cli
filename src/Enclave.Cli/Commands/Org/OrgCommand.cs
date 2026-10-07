@@ -116,13 +116,9 @@ internal static class OrgCommand
         return verb;
     }
 
-    // Enclave.Sdk.Api 1.0.5 does not check the status of the invite and cancel-invite responses
-    // (OrganisationScopedClient.InviteUserAsync and CancelInviteAync), so a failure the API reports
-    // without problem details, such as a proxy's 502, reaches these commands as success. A failure
-    // with problem details is thrown by Enclave.Sdk.Api's ProblemDetailsHttpMessageHandler and
-    // reported as usual. The status check belongs in Enclave.Sdk.Api (proposed-cli-surface.md
-    // "Needs Enclave.Sdk.Api changes", item 6), since every API call goes through it (AGENTS.md
-    // "Architecture").
+    // A failed invite or cancel-invite is reported, with or without problem details: Enclave.Sdk.Api
+    // 1.1.0 checks the status of these responses (proposed-cli-surface.md "Enclave.Sdk.Api changes",
+    // item 6), and CliAction maps its exception like any other.
     private static CliVerb Invite()
     {
         var verb = new CliVerb("invite", "Invite someone to the organisation by email address.", CommandScope.Organisation, changes: true);

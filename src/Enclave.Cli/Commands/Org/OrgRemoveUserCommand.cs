@@ -37,9 +37,8 @@ internal static class OrgRemoveUserCommand
             }
 
             // One account named by ID or email address: a 404 means it is not a member, exit 5
-            // ("Several IDs"). Enclave.Sdk.Api 1.0.5 does not check the status of this response
-            // (OrganisationScopedClient.RemoveUserAsync), so only a failure with problem details is
-            // reported; proposed-cli-surface.md "Needs Enclave.Sdk.Api changes", item 6.
+            // ("Several IDs"). Enclave.Sdk.Api 1.1.0 checks the status of this response, so a
+            // failure without problem details is reported too ("Enclave.Sdk.Api changes", item 6).
             await SingleItem.CallAsync(() => org.Client.RemoveUserAsync(accountId.ToString()));
 
             // The API answers a removal with no body, which prints {} ("Several IDs").

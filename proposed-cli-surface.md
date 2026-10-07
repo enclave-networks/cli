@@ -1,6 +1,6 @@
 # Proposed CLI surface
 
-`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api` 1.0.5. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
+`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api` 1.1.0. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
 
 ## Shape and naming
 
@@ -34,7 +34,7 @@ enclave-cli
 │   ├── list-invites
 │   ├── invite <email>
 │   └── cancel-invite <email>
-├── partner                                     partner customer commands need Enclave.Sdk.Api partner clients
+├── partner
 │   ├── use --id <partnerId>
 │   └── customer
 │       ├── list
@@ -66,7 +66,7 @@ enclave-cli
 │   ├── update <key>
 │   ├── enable <key...>
 │   ├── disable <key...>
-│   └── delete <key...>                         needs an Enclave.Sdk.Api change
+│   └── delete <key...>
 ├── policy
 │   ├── list
 │   ├── show <policy>
@@ -252,7 +252,7 @@ enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 
 ## Filters
 
-`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type` and `--gateway`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). `--key-id` uses the API's `enrolment_key` parameter, which takes one key's ID (portal `SystemsRequestModel.cs:16-18`); `--key` looks the key up by name first, then does the same. `--dns-name` uses the API's `dns` parameter (`SystemsRequestModel.cs:43-45`). `Enclave.Sdk.Api` 1.0.5 passes both (`ISystemsClient.GetSystemsAsync`). On `key list` and `policy list`, `--state disabled` lists disabled items without `--include-disabled`.
+`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type` and `--gateway`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). `--key-id` uses the API's `enrolment_key` parameter, which takes one key's ID (portal `SystemsRequestModel.cs:16-18`); `--key` looks the key up by name first, then does the same. `--dns-name` uses the API's `dns` parameter (`SystemsRequestModel.cs:43-45`). `Enclave.Sdk.Api` 1.1.0 passes both (`ISystemsClient.GetSystemsAsync`). On `key list` and `policy list`, `--state disabled` lists disabled items without `--include-disabled`.
 
 Flag values are written as the API's search values, which are not always the CLI's (portal `*SearchKeyService.cs`):
 
@@ -279,7 +279,7 @@ Keys, policies, DNS zones, hostnames and trust requirements are given as argumen
 
 ## ID checks
 
-Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1.0.5 puts IDs into URL paths unescaped (for example `UnapprovedSystemsClient.cs:95`), and .NET resolves `..` when it combines the path with the base address. `system decline ../systems/ABCDE` would send `DELETE org/<id>/systems/ABCDE`, which revokes system ABCDE.
+Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1.1.0 escapes IDs in URL paths, so `system decline ../systems/ABCDE` could no longer revoke system ABCDE as it could with 1.0.5. The CLI still checks every ID itself, so a malformed one exits 2 with an error that names it, and no request is sent.
 
 | ID | Format |
 |---|---|
@@ -287,7 +287,7 @@ Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1
 | tag | `^([a-z0-9]+[-.])*[a-z0-9]+$`, the API's tag rule (portal `TagValidationExtensions.cs:13`); tags are given by name only |
 | organisation (a partner's customers included), account, partner | GUID |
 | key, policy, zone, hostname, trust requirement | integer, after `--id` or an option naming the item (portal `Enclave.Configuration.Data/Identifiers`, `IdBackingType.Int`). A name goes to the lookup and never into a URL path |
-| partner API invite | string (`OrganisationInviteId`, `IdBackingType.String`); the exact format is taken from the API when partner clients are added |
+| partner API invite | found by email in the customer's invites, so the CLI never takes an invite ID from the user |
 
 ## Changes run when given
 
@@ -307,7 +307,7 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 - Partner customer commands exit with `not_implemented` under `--dry-run` too, since there is no partner client to build the request.
 - `login`, `logout`, `org use` and `partner use` change only local files and do not take `--dry-run`.
 
-Capturing the request needs an `Enclave.Sdk.Api` change (see below). Printing the captured request keeps URL building in one place and shows exactly what would be sent.
+The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api` 1.1.0). Printing the captured request keeps URL building in one place and shows exactly what would be sent.
 
 ## Create and update
 
@@ -356,7 +356,7 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | Exit | `code` | Meaning |
 |---|---|---|
 | 0 | | success |
-| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run, which is every `partner customer` command until `Enclave.Sdk.Api` has partner clients. It makes no call |
+| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run yet. It makes no call |
 | 2 | `invalid_argument`, `no_org`, `no_partner` | bad arguments, bad ID, no organisation or partner chosen |
 | 3 | `token_missing`, `token_invalid` | no token, or HTTP 401 |
 | 4 | `forbidden` | HTTP 403: the token lacks the scope |
@@ -398,7 +398,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 
 The partner API is a separate service (portal `src/Enclave.Partner.Api`) with every route under `/partner/{partnerId}/`. It covers the partner (properties, users, invites) and its customers (properties, admins, invites, auto-sync). The CLI uses the customer routes only, the ones a personal access token can reach.
 
-- It runs on its own host: `PartnerApiUrl`, `http://partner-api.local:8083` in development (portal `Enclave.Partner.Portal.Server/appsettings.Development.json:5`) and set at deployment in production. `Enclave.Sdk.Api` needs partner clients and a partner base URL; `credentials.json` holds one `baseUrl`.
+- It runs on its own host: `https://partner-api.enclave.io` in production and `https://staging-partner-api.enclave.io` in staging, beside `https://api.enclave.io` and `https://staging-api.enclave.io`. `Enclave.Sdk.Api`'s `EnclaveClientOptions.PartnerApiBaseUrl` defaults to production, as `BaseUrl` does. The CLI reads `partnerApiBaseUrl` from `credentials.json` beside `baseUrl`, so staging means setting both there.
 - Personal access tokens can carry the partner scopes `ReadCustomers` and `WriteCustomers`, and no other partner scope (portal `Enclave.Accounts/Config/EnclaveIdentityClientConfig.cs:195-216`). The partner API requires the scope claim on the token (portal `Enclave.Api.Scaffolding/Authorisation/AuthorizationExtensions.cs:38`). With a personal access token:
   - The customer routes work: reading needs `ReadCustomers`, and changes and the invite list need `WriteCustomers` (portal `CustomersController.cs`).
   - The partner's own properties, users and invites need `ReadPartnerList`, `ReadPartnerInfo` or `WritePartnerSettings` (portal `Enclave.Partner.Api/WebStartup.cs:115-121`), which a personal access token cannot carry, so the CLI has no commands for them.
@@ -420,19 +420,19 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 - The partner API's `countries` and `referlink` (data for the partner portal's screens) and `customer oldest-version`.
 - The partner's own properties, users and invites, and listing partners: personal access tokens cannot carry the scopes they need (see "Partner API").
 
-## Needs `Enclave.Sdk.Api` changes
+## `Enclave.Sdk.Api` changes
 
-Each is added in enclave-networks/enclave.sdk.api first, with tests there, then used here. The API itself does not change: everything here uses routes and fields the API has. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
+These were added to `Enclave.Sdk.Api`, with tests there, for the CLI: number 5 in 1.0.5 and the rest in 1.1.0. The API itself did not change. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
 
-1. Escape IDs in URL paths.
-2. An HTTP handler option on `EnclaveClientOptions`, for `--dry-run`.
-3. Allow `null` in a patch, so an update flag given an empty value (`--set-active-hours ""`) can clear a field; `PatchClient.Set` rejects null (`Data/PatchClient.cs:32`).
-4. Enrolment key delete, single and bulk, for `key delete`. The API has both (portal `EnrolmentKeysController.cs:265,295`).
-5. Done in `Enclave.Sdk.Api` 1.0.5: `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, which has `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
-6. Status checks on calls that pass a failure through as success when the response is not problem+json: `RemoveUserAsync`, `InviteUserAsync`, `CancelInviteAync` (`OrganisationClient.cs:91-133`) and the single create, enable and disable calls.
-7. The `meta/search-keys` endpoints, so `commands` can describe the keys `--filter` accepts.
-8. Partner API clients for the customer routes (customers, customer admins, customer invites, auto-sync), and a partner API base URL.
-9. `GatewayPriorityType` in `Enclave.Sdk.Api.Data` 304.48.0, the version `Enclave.Sdk.Api` 1.0.4 and 1.0.5 use, has `Prioritised` where the API has `Ordered`. The package compiles its own copy of the enum (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the enum from the sdk repository's `Enclave.Sdk.Network` package (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `Enclave.Sdk.Api` writes and reads enums by name (`Constants.cs:17`, `JsonStringEnumConverter`), so it would send `Prioritised`, which the API does not accept, and reading a policy set to `Ordered` would fail. `Enclave.Sdk.Api` maps the value itself, writing and reading `Ordered`.
+1. IDs are escaped in URL paths, and an empty ID, `.` or `..` throws.
+2. `EnclaveClientOptions.HttpMessageHandler` sends every request through a caller's handler, which `--dry-run` uses to capture the requests and `--verbose` to log them.
+3. `PatchClient.Set` takes `null`, so an update flag given an empty value (`--set-active-hours ""`) clears the field.
+4. Enrolment key delete, single and bulk, for `key delete`.
+5. `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, with `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
+6. A failed response that is not problem+json throws `HttpRequestException` with its status, on every call, including `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync`, which reported such failures as success.
+7. `GetSearchKeysAsync` on the systems, unapproved systems, enrolment keys, policies and tags clients, so `commands` can describe the keys `--filter` accepts.
+8. `CreatePartnerClient(PartnerId)`, whose `Customers` client covers the customer routes. `EnclaveClientOptions.PartnerApiBaseUrl` defaults to `https://partner-api.enclave.io`.
+9. `GatewayPriorityType.Prioritised` is sent and read as `Ordered`, the API's name for it. `Enclave.Sdk.Api.Data` 304.48.0 names it `Prioritised` (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the sdk repository's enum (`Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `GatewayPriorityTypeJsonConverter` does the mapping, and the CLI adds it to the options it prints models with.
 
 ## Changes to AGENTS.md
 
@@ -460,7 +460,7 @@ If this proposal is accepted, AGENTS.md changes to match:
 2. `list` and `show` for every top-level noun.
 3. Changes, with `--dry-run`: `system`, `key`, `policy`, `tag`.
 4. `dns`, `trust`, `org update`, `org list-users`, `org remove-user`, the invite commands, and the commands that wait on `Enclave.Sdk.Api` changes.
-5. `partner customer`, once `Enclave.Sdk.Api` has partner clients.
+5. `partner customer`.
 
 ## Examples
 
