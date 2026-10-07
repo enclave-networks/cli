@@ -38,8 +38,9 @@ internal sealed class CliAction : AsynchronousCommandLineAction
         ArgumentNullException.ThrowIfNull(parseResult);
 
         var verbose = _verb is not null && parseResult.GetResult(_verb.VerboseOption) is { Implicit: false };
-        var output = new CliOutput(parseResult.InvocationConfiguration.Output, parseResult.InvocationConfiguration.Error, verbose);
-        var context = new CliContext(parseResult, CliRootCommand.HostOf(parseResult), output, _verb, cancellationToken);
+        var dryRun = _verb?.DryRunOption is { } dryRunOption && parseResult.GetResult(dryRunOption) is { Implicit: false } ? new DryRun() : null;
+        var output = new CliOutput(parseResult.InvocationConfiguration.Output, parseResult.InvocationConfiguration.Error, verbose, dryRun is not null);
+        using var context = new CliContext(parseResult, CliRootCommand.HostOf(parseResult), output, _verb, dryRun, cancellationToken);
 
         try
         {
@@ -60,6 +61,14 @@ internal sealed class CliAction : AsynchronousCommandLineAction
             else
             {
                 await _handler!(context);
+            }
+
+            // Under --dry-run the command's own output would come from the answers the CLI gave its
+            // changes (DryRun.Answer), which the API never sent, so the report is the only output
+            // (proposed-cli-surface.md "Dry run").
+            if (dryRun is not null)
+            {
+                await output.WriteDryRunAsync(dryRun.Report(), cancellationToken);
             }
 
             await output.FlushAsync();

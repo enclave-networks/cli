@@ -27,8 +27,8 @@ internal static class CliErrors
         new(ErrorCode.InvalidArgument, message, errors: Field(key, message)) { Candidates = candidates };
 
     /// <summary>
-    /// Exit 1: the command exists but cannot run until Enclave.Sdk.Api gains what it needs. It
-    /// makes no call.
+    /// Exit 1: a command the CLI lists but cannot run, such as a verb with no handler. It makes no
+    /// call.
     /// </summary>
     public static CliException NotImplemented(string message) => new(ErrorCode.NotImplemented, message);
 

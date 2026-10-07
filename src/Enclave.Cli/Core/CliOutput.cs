@@ -16,27 +16,41 @@ internal sealed class CliOutput
 
     private readonly StringBuilder _pending = new();
 
-    public CliOutput(TextWriter stdout, TextWriter stderr, bool verbose)
+    private readonly bool _dropCommandOutput;
+
+    /// <summary>
+    /// The output of one command. With <paramref name="dryRun"/> set, everything the command prints
+    /// on stdout is dropped, and <see cref="WriteDryRunAsync"/> prints the dry-run report in its place.
+    /// </summary>
+    // Under --dry-run each change is answered by the CLI itself (DryRun.Answer), so the model or
+    // count a command would print comes from that answer, which the API never sent. Dropping it
+    // unread keeps it out of stdout, and spares writing a model whose fields hold default values.
+    public CliOutput(TextWriter stdout, TextWriter stderr, bool verbose, bool dryRun = false)
     {
         _stdout = stdout;
         _stderr = stderr;
         IsVerbose = verbose;
+        _dropCommandOutput = dryRun;
     }
 
     public bool IsVerbose { get; }
 
     /// <summary>
-    /// Prints an Enclave.Sdk.Api model, or any value, as JSON.
+    /// Prints an Enclave.Sdk.Api model, or any value, as JSON. Under --dry-run it prints nothing.
     /// </summary>
     /// <typeparam name="T">The value's type, which decides the properties written.</typeparam>
-    // SerializeAsync, because some Enclave.Sdk.Api models hold IAsyncEnumerable properties, which
-    // only the asynchronous serializer writes (System.Text.Json, JsonSerializer.Serialize throws
-    // NotSupportedException for them).
-    public async Task WriteAsync<T>(T value, CancellationToken cancellationToken = default)
+    public Task WriteAsync<T>(T value, CancellationToken cancellationToken = default) =>
+        _dropCommandOutput ? Task.CompletedTask : AppendJsonAsync(value, cancellationToken);
+
+    /// <summary>
+    /// Prints the --dry-run report, { "dryRun", "org", "requests" }, as the command's only output.
+    /// </summary>
+    public Task WriteDryRunAsync(JsonObject report, CancellationToken cancellationToken = default)
     {
-        using var stream = new MemoryStream();
-        await JsonSerializer.SerializeAsync(stream, value, CliJson.Output, cancellationToken);
-        _pending.Append(Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length)).Append('\n');
+        ArgumentNullException.ThrowIfNull(report);
+
+        _pending.Clear();
+        return AppendJsonAsync(report, cancellationToken);
     }
 
     /// <summary>
@@ -68,7 +82,11 @@ internal sealed class CliOutput
     /// </summary>
     public Task WriteTextAsync(string text)
     {
-        _pending.Append(text);
+        if (!_dropCommandOutput)
+        {
+            _pending.Append(text);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -138,6 +156,16 @@ internal sealed class CliOutput
         }
 
         return new JsonObject { ["error"] = body };
+    }
+
+    // SerializeAsync, because some Enclave.Sdk.Api models hold IAsyncEnumerable properties, which
+    // only the asynchronous serializer writes (System.Text.Json, JsonSerializer.Serialize throws
+    // NotSupportedException for them).
+    private async Task AppendJsonAsync<T>(T value, CancellationToken cancellationToken)
+    {
+        using var stream = new MemoryStream();
+        await JsonSerializer.SerializeAsync(stream, value, CliJson.Output, cancellationToken);
+        _pending.Append(Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length)).Append('\n');
     }
 
     private sealed record ListEnvelope<T>(string Kind, IReadOnlyCollection<T> Items, int Total);

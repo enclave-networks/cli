@@ -99,7 +99,8 @@ enclave-cli
 │   ├── update <trust>
 │   └── delete <trust...>
 ├── log                                         the organisation's activity log
-└── commands [<command words>...]               every command, option, value and error code, as JSON
+└── commands [<command words>...]               every command, option, value and error code, as JSON;
+                                                --search-keys adds a list's search keys from the API
 ```
 
 - A customer is an organisation. `<customer>` is its name, or `--org-id <orgId>` gives its organisation ID, the only ID a customer has (portal `CustomersController.cs:69` reads the customer ID as an `OrganisationGuid`). Anything else a partner customer command needs is a named option (`--user`, `--user-id`, `--email`).
@@ -139,6 +140,7 @@ enclave-cli
 | `partner customer update` | `--name`, `--contact <name>`, `--systems <n>`, `--gateways <n>`, `--industry-discount` or `--no-industry-discount`, `--hard-limit` or `--no-hard-limit` |
 | `partner customer convert` | `--billing-months 1\|12\|24\|36` (required) |
 | `log` | `--limit <n>`, `--since <when>`, `--until <when>`, `--user <email>`, `--level information\|warning\|error`, `--filter <text>` |
+| `commands` | `--search-keys` (on `system list`, `key list`, `policy list`, `tag list`), `--pending` (with `--search-keys` on `system list`) |
 
 - `--acl` takes a protocol (`any`, `tcp`, `udp`, `icmp`) and, for TCP and UDP, a port or range: `tcp:5432`, `udp:53`, `tcp:8000-8100`. `policy create` requires at least one `--acl`, and `--acl any` allows every protocol, so the command always states what traffic the policy allows. The API accepts a policy with no ACLs, and the agent then allows no traffic through it (fabric `StateTracker.cs:909-921`; the API reports such a policy as `InactiveNoAcls`, portal `PolicyModelExtensions.cs:25-29`).
 - `--gateway GW001:10.0.0.0/16,10.1.0.0/16` makes a gateway policy: the senders reach those routes through system GW001. `--subnet-filter` narrows the addresses they may reach through it; it is the portal's "Subnet filter" (portal-spa `policies.json:69`) and the API's `gatewayAllowedIpRanges`. It applies to gateway policies only: without `--gateway` it exits 2, since the API accepts allowed ranges on gateway policies only (portal `PolicyCreateModelValidator.cs:47`). The API sets no limit on how many there are. `--gateway` and `--receivers` together exit 2. The CLI sends the traffic direction `exit`, the only one the API accepts (portal `PolicyCreateModelValidator.cs:56` rejects `entry`).
@@ -185,16 +187,16 @@ enclave-cli
   | Flag | API field | Without the flag |
   |---|---|---|
   | `<name>` | `Name` | required |
-  | `--owner <email>` | `OwnerEmail`, the user who will own the customer's organisation | not sent |
-  | `--domain <domain>` | `Domain` | not sent |
-  | `--contact <name>` | `ContactName` | not sent |
+  | `--owner <email>` | `OwnerEmail`, the user who will own the customer's organisation | null |
+  | `--domain <domain>` | `Domain` | null |
+  | `--contact <name>` | `ContactName` | null |
   | `--systems <n>` | `InitialSystemsCount`, at least 2 | 50 |
   | `--gateways <n>` | `InitialGatewaysCount` | 0 |
   | `--industry-discount` | `IndustryDiscount`, a request for the discount | off |
   | `--hard-limit` | `HardLimit` | off |
   | `--auto-sync` | `AdminAutoSyncIsEnabled` | off |
 
-- `partner customer update` sets `LicensedAgentsCount` with `--systems` (at least 2) and `LicensedGatewaysCount` with `--gateways` (portal `CustomerPatchModelValidator.cs:14-16`). Auto-sync changes through `enable-auto-sync` and `disable-auto-sync`, which have their own API routes.
+- `partner customer update` sets `LicensedAgentsCount` with `--systems` (at least 2) and `LicensedGatewaysCount` with `--gateways` (portal `CustomerPatchModelValidator.cs:14-16`). Auto-sync changes through `enable-auto-sync` and `disable-auto-sync`, which have their own API routes. The API answers those routes with no body (204) for a customer the partner does not have, which the CLI reports as exit 5 `not_found`, as it does a 404.
 - `partner customer convert` requires `--billing-months`, one of the periods the API accepts (portal `ConvertCustomerModelValidator.cs:13-17`), so the command states the billing period it commits to; the API's default is 1.
 - `log` prints the newest 100 entries, newest first; `--limit` changes the number. `--since 24h` (a duration, or a time as for `--until`) prints every entry back to then, with no limit. The API returns entries newest first (portal `ActivityLogRepository.cs:43`), so the CLI stops reading at the first entry older than `--since`. `--until` leaves out entries newer than that time.
 - The logs API takes only a page and page size (portal `LogsRequestModel.cs`), so the CLI applies `--user`, `--level` and `--filter` to the entries it reads. `--user` matches the entry's `userName`, `--level` takes one or more levels (`--level warning,error`), and `--filter` matches text in the message. With these filters and no `--since`, `--limit` counts matching entries, and the CLI reads back until it has that many or reaches the start of the log.
@@ -203,7 +205,7 @@ enclave-cli
 
 | Option | Applies to | Meaning |
 |---|---|---|
-| `--org <name>`, `--org-id <orgId>` | commands that act within an organisation | the organisation to use (see "Context") |
+| `--org <name>`, `--org-id <orgId>` | commands that act within an organisation, and `commands --search-keys` | the organisation to use (see "Context") |
 | `--partner-id <partnerId>` | `partner` commands | the partner to use (see "Context") |
 | `--verbose` | every command | diagnostics on stderr |
 | `--dry-run` | commands that change something through the API | prints the request and sends nothing |
@@ -295,7 +297,7 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 
 ## Dry run
 
-`--dry-run` prints the requests `Enclave.Sdk.Api` builds for the change, with the organisation, and sends none of them. The Authorization header is left out.
+`--dry-run` prints the requests `Enclave.Sdk.Api` builds for the change, with the organisation (the partner, for a partner customer command), and sends none of them. The Authorization header is left out.
 
 ```
 { "dryRun": true, "org": { "id": "…", "name": "…" }, "requests": [ { "method": "PUT", "url": "https://api.enclave.io/org/…/systems/disable", "body": { … } } ] }
@@ -304,10 +306,10 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 - `requests` is a list: a bulk command over 200 IDs shows each call, and an empty `-` list shows none.
 - The reads a change depends on still run: name lookups, the read that keeps tags, labels and conditions, and the read `tag set` makes to choose between update and create. Only the change is withheld.
 - `org.name` is null when the organisation was given by ID, since then no lookup is made. A request without a body shows `"body": null`.
-- Partner customer commands exit with `not_implemented` under `--dry-run` too, since there is no partner client to build the request.
+- Partner customer commands take `--dry-run` like any other command that changes something. They print `"partner": { "id" }` in place of `org`.
 - `login`, `logout`, `org use` and `partner use` change only local files and do not take `--dry-run`.
 
-The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api` 1.1.0). Printing the captured request keeps URL building in one place and shows exactly what would be sent.
+The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api` 1.1.0). Printing the captured request keeps URL building in one place and shows exactly what would be sent. The CLI answers each captured change itself, with status 200 and the body `{}`, which every `Enclave.Sdk.Api` call accepts, so the command goes on to its next call; nothing read from that answer is printed.
 
 ## Create and update
 
@@ -336,9 +338,14 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 - `--active-hours` takes `<days> <start>-<end> [<zone>]`. Days are `mon` to `sun`, a range (`mon-fri`, `sat-sun`) or a comma list (`mon,wed,fri`); times are 24-hour `HH:MM`. Anything else exits 2.
 - A hostname's zone is the longest zone name it ends in, at a label boundary: with zones `internal` and `eu.internal`, `db.eu.internal` is in `eu.internal`. The record name is the rest and may contain dots. A hostname with no zone, or equal to a zone's name, exits 2. `dns update-hostname --name` takes a full hostname in the same zone; another zone exits 2, since the API cannot move a record between zones.
 - `log` asks for pages of 200, or of `--limit` when that is smaller; with neither `--limit` nor `--since`, it asks for one page of 100. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case. `--since` and `--until` given a duration count back from now.
-- `--verbose` writes diagnostics to stderr as JSON lines, `{ "verbose": "…" }`, so stderr stays machine-readable.
+- `--verbose` writes diagnostics to stderr as JSON lines, `{ "verbose": "…" }`, so stderr stays machine-readable. They include the method and URL of each request, in the order sent, and never the token or the Authorization header.
 - `key update --keep-disconnected` on a general-purpose key is passed to the API, which refuses it (portal `EnrolmentKeyModifyHandler.cs:113-118`).
 - `commands` takes a command's words, `commands partner customer create` included, and prints `{ "commands": [ { "command", "description", "arguments": [ { "name" } ], "options": [ { "name", "values" } ] } ], "errors": [ { "code", "exitCode" } ] }`.
+- `commands <list command> --search-keys`, for `system list` (with or without `--pending`), `key list`, `policy list` and `tag list`, adds the search keys that list's `--filter` accepts, as the API gives them (`GetSearchKeysAsync`, `GET /org/{orgId}/<list>/meta/search-keys`). It makes that one call, so it needs a token and an organisation. Without `--search-keys`, `commands` needs neither and makes no call.
+  - The keys go on that command's entry as `searchKeys`, a list of `Enclave.Sdk.Api`'s `SearchKey` models unchanged: `{ "command": "key list", "description", "arguments", "options", "searchKeys": [ { "name", "modifiers", "dataType", "description", "hintText", "hintValues", "canHaveMultiple", "isDefault", "useExactMatch" } ] }`. `errors` is printed as without `--search-keys`.
+  - `commands system list --pending --search-keys` gives the keys of the systems waiting for approval (`GET /org/{orgId}/unapproved-systems/meta/search-keys`); the entry is `system list`'s.
+  - `--search-keys` takes `--org` and `--org-id`, and the organisation is chosen as for any other command (see "Context").
+  - `--search-keys` with no command words, with a noun, or with any command but those four lists exits 2 `invalid_argument`. So do `--pending` without `--search-keys` or with a list other than `system list`, and `--org` or `--org-id` without `--search-keys`. These are argument errors, so they exit 2 with or without a token or organisation, and make no call.
 
 ## Output
 
@@ -356,7 +363,7 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | Exit | `code` | Meaning |
 |---|---|---|
 | 0 | | success |
-| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run yet. It makes no call |
+| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists that has no handler, which makes no call |
 | 2 | `invalid_argument`, `no_org`, `no_partner` | bad arguments, bad ID, no organisation or partner chosen |
 | 3 | `token_missing`, `token_invalid` | no token, or HTTP 401 |
 | 4 | `forbidden` | HTTP 403: the token lacks the scope |
@@ -369,13 +376,13 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 - Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2), then the call. A command with bad arguments fails the same way with or without a token.
 - `--help` and `--version` print text for people, and are the only output that is not JSON. `enclave-cli` with no arguments prints the help and exits 0.
 
-`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:20`). The CLI maps `HttpRequestException` status codes to the same exit codes, so a plain 401 or a proxy's 502 still gets 3 or 6.
+`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:29`, 1.1.0), and throws `HttpRequestException` with the status for any other failure. The CLI maps those status codes to the same exit codes, so a plain 401 or a proxy's 502 still gets 3 or 6.
 
 ## Login, logout and status
 
 - `login --token-stdin` reads the token from stdin, without a trailing newline; with `ENCLAVE_TOKEN` set, `login` saves that token. `--token-stdin` wins over `ENCLAVE_TOKEN`. It never prompts: `--token-stdin` with stdin a terminal exits 2, and no token, or empty stdin, exits 3 `token_missing`. An empty `ENCLAVE_TOKEN` counts as unset, as does any empty environment variable the CLI reads.
 - `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
-- `credentials.json` holds `personalAccessToken` and `baseUrl`, the format `Enclave.Sdk.Api` reads (`EnclaveClient.cs:97-114`). `login` keeps an existing `baseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
+- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`, 1.1.0). `login` keeps an existing `baseUrl` and `partnerApiBaseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
 - The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and `ENCLAVE_TOKEN` keeps the file's `baseUrl`.
 - `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
 - `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
@@ -388,7 +395,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 
 - A list makes one call per page of 200, the most the API returns per page (portal `PaginationDefaults.cs:11`), until the response's `metadata.nextPage` is null. `log` reads only the pages it needs.
 - A bulk command makes one call per 200 IDs.
-- Looking up an organisation by name, or with no organisation chosen, adds one call.
+- Looking up an organisation by name, or with no organisation chosen, adds one call. `commands` makes no call, except with `--search-keys`, which makes one, plus that lookup when the organisation needs it.
 - A key, policy, zone or trust requirement given by name adds one call, and so does a customer given by name, or an admin or invite given by email.
 - `--add-tags` and `--remove-tags` read the item first, which adds one call. So do `--set-subnet-filter`, `--set-allow-ip`, `--set-acl`, `--enable-gateway-for` and the `trust update` `--set-` flags, to keep existing labels and, on trust requirements, the conditions of other kinds.
 - `tag set` on a tag that does not exist makes a second call to create it.

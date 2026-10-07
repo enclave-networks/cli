@@ -20,7 +20,7 @@ internal static class SystemCommand
 
         // approve and decline act on waiting systems only, so they read the list system list
         // --pending prints; the other verbs act on enrolled systems ("Several IDs"). The calls and
-        // routes are those of Enclave.Sdk.Api 1.0.5 UnapprovedSystemsClient and SystemsClient.
+        // routes are those of Enclave.Sdk.Api 1.1.0 UnapprovedSystemsClient and SystemsClient.
         noun.Add(SystemBulkCommand.Create("approve", "Approve systems waiting for approval.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.ApproveSystemsAsync(batch)));
         noun.Add(SystemBulkCommand.Create("decline", "Decline systems waiting for approval, removing them.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.DeclineSystems(batch)));
         noun.Add(SystemEnableCommand.Create());

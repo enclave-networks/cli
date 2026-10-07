@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Web;
 using Enclave.Api.Modules.OrganisationManagement;
 using Enclave.Api.Modules.SystemManagement.Dns.Models;
 using Enclave.Api.Modules.SystemManagement.EnrolmentKeys.Models;
@@ -130,6 +132,56 @@ public class OutputTests
         });
     }
 
+    // --verbose writes diagnostics as JSON lines, { "verbose": "…" } ("Details"), and among them the
+    // method and URL of each request, so a caller can see what was sent and where without a proxy.
+    // The list reads two pages, so a CLI that logged one request per command, or none, fails, and
+    // the bulk disable is a change. Each logged request is compared with what the fake API received,
+    // in order, query included. The token is in no line ("Login, logout and status").
+    [TestCase("system list", "GET")]
+    [TestCase("system disable ABCDE", "PUT")]
+    public async Task Verbose_logs_the_method_and_url_of_each_request_in_the_order_sent(string command, string method)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        using var run = CliRun.Start();
+        run.StubPages(TestData.OrgPath("systems"), 1, ApiJson.System("ABCDE"), ApiJson.System("FGHIJ"));
+        run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
+
+        var result = await run.RunAsync([.. command.Split(' '), "--verbose"]);
+
+        CliAssert.Succeeded(result);
+        var received = run.Requests.Select(request => Describe(request.Method, new Uri(run.ApiUrl, request.Path), request.Query)).ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(received, Is.Not.Empty.And.All.StartWith(method + " "));
+            Assert.That(LoggedRequests(result), Is.EqualTo(received));
+            TokenAssert.Absent(result);
+        });
+    }
+
+    // The API names the gateway priority that follows the order of the gateways Ordered, and
+    // Enclave.Sdk.Api.Data 304.48.0 names that enum member Prioritised (proposed-cli-surface.md
+    // "`Enclave.Sdk.Api` changes", item 9). Output keeps the API's names ("Output"), so a policy the
+    // API sends as Ordered prints as Ordered, in a single item and in a list.
+    [TestCase("policy show --id 7")]
+    [TestCase("policy list")]
+    public async Task A_policy_whose_gateway_priority_is_ordered_prints_it_as_Ordered(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        using var run = CliRun.Start();
+        var policy = JsonNode.Parse(ApiJson.Policy(7, "office LAN"))!;
+        policy["type"] = "Gateway";
+        policy["gatewayTrafficDirection"] = "Exit";
+        policy["gatewayPriority"] = "Ordered";
+        run.Stub("GET", TestData.OrgPath("policies/7"), json: policy.ToJsonString());
+        run.StubPages(TestData.OrgPath("policies"), 200, policy.ToJsonString());
+
+        var result = await run.RunAsync(command.Split(' '));
+
+        CliAssert.Succeeded(result);
+        var printed = command.EndsWith("list", StringComparison.Ordinal) ? CliAssert.List(result, "policy")[0] : result.StdoutJson;
+        Assert.That(JsonAssert.Property(printed, "gatewayPriority").GetString(), Is.EqualTo("Ordered"), result.ToString());
+    }
+
     // `enclave-cli` with no arguments prints the help and exits 0 ("Errors and exit codes"), the
     // same text --help prints. Help is for reading before anything is set up, so neither run has a
     // token or an organisation, and neither calls the API.
@@ -185,6 +237,42 @@ public class OutputTests
 
     private static TestCaseData SingleItem(string command, string pathSuffix, Type model, string json) =>
         new TestCaseData(command, TestData.OrgPath(pathSuffix), model, json).SetArgDisplayNames(command);
+
+    // A request as "METHOD scheme://host:port/path?query", with the query parameters in name order,
+    // so a URL logged with its parameters in another order compares equal.
+    private static string Describe(string method, Uri url, IReadOnlyDictionary<string, string> query)
+    {
+        var parameters = string.Join("&", query.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"));
+        return $"{method} {url.GetLeftPart(UriPartial.Path)}?{parameters}";
+    }
+
+    // The requests --verbose logged: each stderr line { "verbose": "<METHOD> <URL> …" } whose text
+    // starts with an HTTP method and an absolute URL.
+    private static string[] LoggedRequests(CliResult result)
+    {
+        var logged = new List<string>();
+
+        foreach (var line in result.StderrJson)
+        {
+            if (!line.TryGetProperty("verbose", out var text) || text.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var words = text.GetString()!.Split(' ');
+
+            if (words.Length >= 2
+                && words[0] is "GET" or "POST" or "PUT" or "PATCH" or "DELETE"
+                && Uri.TryCreate(words[1], UriKind.Absolute, out var url))
+            {
+                var query = HttpUtility.ParseQueryString(url.Query);
+                var parameters = query.AllKeys.OfType<string>().ToDictionary(key => key, key => query[key] ?? string.Empty, StringComparer.Ordinal);
+                logged.Add(Describe(words[0], url, parameters));
+            }
+        }
+
+        return [.. logged];
+    }
 
     private static void StubSystems(CliRun run, string path)
     {

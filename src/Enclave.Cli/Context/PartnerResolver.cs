@@ -17,13 +17,13 @@ internal static class PartnerResolver
     /// lower source only when no higher one gives a value; null when none does. An empty variable
     /// counts as unset, and a malformed source that is read exits 2.
     /// </summary>
-    public static PartnerInUse? Choose(CliContext context)
+    public static PartnerChoice? Choose(CliContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
 
         if (context.Verb?.PartnerIdOption is { } option && context.Get(option) is { } id)
         {
-            return new PartnerInUse(id, option.Name);
+            return new PartnerChoice(id, option.Name);
         }
 
         var host = context.Host;
@@ -31,7 +31,7 @@ internal static class PartnerResolver
         if (host.GetEnvironmentVariable(IdVariable) is { Length: > 0 } text)
         {
             return IdFormats.Guid.TryParse(text, out var guid)
-                ? new PartnerInUse(guid, IdVariable)
+                ? new PartnerChoice(guid, IdVariable)
                 : throw CliErrors.InvalidArgument(IdVariable, $"{IdVariable} takes a partner ID: {IdFormats.Guid.Describe}.");
         }
 
@@ -43,7 +43,7 @@ internal static class PartnerResolver
         }
 
         return saved["id"] is JsonValue value && value.TryGetValue(out string? savedId) && IdFormats.Guid.TryParse(savedId, out var savedGuid)
-            ? new PartnerInUse(savedGuid, path)
+            ? new PartnerChoice(savedGuid, path)
             : throw CliErrors.InvalidArgument($"The default partner in {path} has no valid ID. Save it again with `enclave-cli partner use --id <partnerId>`.");
     }
 
@@ -51,7 +51,7 @@ internal static class PartnerResolver
     /// The partner for a partner command; exits 2 with no_partner, naming both ways to choose one,
     /// when none is chosen.
     /// </summary>
-    public static PartnerInUse Resolve(CliContext context) =>
+    public static PartnerChoice Resolve(CliContext context) =>
         Choose(context)
         ?? throw new CliException(
             ErrorCode.NoPartner,

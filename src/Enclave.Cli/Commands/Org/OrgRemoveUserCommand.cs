@@ -30,7 +30,7 @@ internal static class OrgRemoveUserCommand
             else
             {
                 // GetOrganisationUsersAsync returns every user in one response
-                // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.0.5), so the address is matched in
+                // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so the address is matched in
                 // that one list.
                 var users = await org.Client.GetOrganisationUsersAsync();
                 accountId = NameLookup.Match([context.Get(email)!], users, user => user.EmailAddress, user => user.Id, email.Name, "user")[0].Id;
@@ -38,7 +38,8 @@ internal static class OrgRemoveUserCommand
 
             // One account named by ID or email address: a 404 means it is not a member, exit 5
             // ("Several IDs"). Enclave.Sdk.Api 1.1.0 checks the status of this response, so a
-            // failure without problem details is reported too ("Enclave.Sdk.Api changes", item 6).
+            // failure without problem details is reported too ("`Enclave.Sdk.Api` changes",
+            // item 6).
             await SingleItem.CallAsync(() => org.Client.RemoveUserAsync(accountId.ToString()));
 
             // The API answers a removal with no body, which prints {} ("Several IDs").

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -10,8 +11,10 @@ namespace Enclave.Cli.Tests.Contract;
 // {"commands": [...], "errors": [...]} ("Details"). Each command entry holds "command" (its full
 // name, such as "dns list-zones"), "description", "arguments" (each with "name", in order) and
 // "options" (each with "name", the long form with its dashes, and "values" when the option takes
-// one of a fixed set). Each error entry holds "code" and "exitCode". Agents read these by their
-// exact names, so the lookups here are exact.
+// one of a fixed set). Each error entry holds "code" and "exitCode". With --search-keys and the
+// words of system list, key list, policy list or tag list, the one entry also holds "searchKeys",
+// the API's search keys for that list ("Details"). Agents read these by their exact names, so the
+// lookups here are exact.
 public class CommandsTests
 {
     // Every command in proposed-cli-surface.md "Commands", with its arguments named as the tree
@@ -164,6 +167,8 @@ public class CommandsTests
 
     private static readonly string[] SystemListOnly = ["system list"];
 
+    private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
+
     // Each case names options the command must list and options it must not, so a command that
     // lists options it does not take fails as well as one that misses its own ("Command options").
     // The lists are space-separated to keep the cases on one line each.
@@ -205,7 +210,54 @@ public class CommandsTests
         yield return Options("login", "--token-stdin", "--dry-run --org --org-id --partner-id");
         yield return Options("logout", "--verbose", "--dry-run --org --org-id --partner-id");
         yield return Options("status", "--org --org-id --partner-id", "--dry-run");
-        yield return Options("commands", "--verbose", "--dry-run --org --org-id --partner-id");
+        yield return Options("commands", "--search-keys --pending --org --org-id --verbose", "--dry-run --partner-id");
+    }
+
+    // The lists whose search keys Enclave.Sdk.Api 1.1.0 reads (GetSearchKeysAsync on
+    // ISystemsClient, IUnapprovedSystemsClient, IEnrolmentKeysClient, IPoliciesClient and
+    // ITagsClient), each with the route the call takes and a body for the fake API to serve there
+    // ("Details"). --pending chooses the systems waiting for approval, as it does on system list.
+    public static IEnumerable<TestCaseData> SearchKeyLists()
+    {
+        yield return SearchKeys("system list", "system list", "systems/meta/search-keys", ApiJson.SystemSearchKeys());
+        yield return SearchKeys("system list --pending", "system list", "unapproved-systems/meta/search-keys", ApiJson.SystemSearchKeys());
+        yield return SearchKeys("key list", "key list", "enrolment-keys/meta/search-keys", ApiJson.KeySearchKeys());
+        yield return SearchKeys("policy list", "policy list", "policies/meta/search-keys", ApiJson.PolicySearchKeys());
+        yield return SearchKeys("tag list", "tag list", "tags/meta/search-keys", ApiJson.TagSearchKeys());
+    }
+
+    // Each case is a command line --search-keys or --pending makes wrong, the option the error names,
+    // and a corrected command line. --search-keys takes one of the four lists by its words, so no
+    // words, a noun, a command that is not a list, and a list Enclave.Sdk.Api reads no search keys
+    // for each exit 2. --pending chooses the waiting systems' keys, so it needs --search-keys and
+    // system list. The organisation options choose the organisation the search keys come from, and
+    // without --search-keys `commands` acts within none ("Details").
+    public static IEnumerable<TestCaseData> SearchKeyRejections()
+    {
+        yield return Rejection("--search-keys", "--search-keys", "system list --search-keys", "systems/meta/search-keys");
+        yield return Rejection("system --search-keys", "--search-keys", "system list --search-keys", "systems/meta/search-keys");
+        yield return Rejection("system show --search-keys", "--search-keys", "system list --search-keys", "systems/meta/search-keys");
+        yield return Rejection("trust list --search-keys", "--search-keys", "tag list --search-keys", "tags/meta/search-keys");
+        yield return Rejection("dns list-hostnames --search-keys", "--search-keys", "policy list --search-keys", "policies/meta/search-keys");
+        yield return Rejection("log --search-keys", "--search-keys", "key list --search-keys", "enrolment-keys/meta/search-keys");
+        yield return Rejection("partner customer list --search-keys", "--search-keys", "key list --search-keys", "enrolment-keys/meta/search-keys");
+        yield return Rejection("commands --search-keys", "--search-keys", "tag list --search-keys", "tags/meta/search-keys");
+        yield return Rejection("key list --pending --search-keys", "--pending", "system list --pending --search-keys", "unapproved-systems/meta/search-keys");
+        yield return Rejection("system list --pending", "--pending", "system list --pending --search-keys", "unapproved-systems/meta/search-keys");
+        yield return Rejection($"system list --org-id {TestData.OrgId}", "--org-id", $"system list --org-id {TestData.OrgId} --search-keys", "systems/meta/search-keys");
+        yield return Rejection($"system list --org {TestData.OrgName}", "--org", $"system list --org-id {TestData.OrgId} --search-keys", "systems/meta/search-keys");
+    }
+
+    // --search-keys acts within an organisation, so --org and --org-id choose it over ENCLAVE_ORG_ID
+    // ("Context"). The environment names Acme and the options Globex, and the fake API serves both
+    // organisations' routes, so a CLI that ignored the options would ask for Acme's keys. A name
+    // costs one lookup call; an ID costs none.
+    public static IEnumerable<TestCaseData> SearchKeyOrganisations()
+    {
+        var path = OtherOrgPath("enrolment-keys/meta/search-keys");
+
+        yield return new TestCaseData("--org-id", TestData.OtherOrgId.ToString(), new[] { $"GET {path}" }).SetArgDisplayNames("--org-id");
+        yield return new TestCaseData("--org", TestData.OtherOrgName, new[] { "GET /account/orgs", $"GET {path}" }).SetArgDisplayNames("--org");
     }
 
     // The values are the ones the option table in "Command options" lists, and for --sort the API
@@ -558,8 +610,8 @@ public class CommandsTests
         CliAssert.Rejected(run, result);
     }
 
-    // An agent reads `commands` before it has a token or has chosen an organisation, so the command
-    // needs neither and calls nothing.
+    // An agent reads `commands` before it has a token or has chosen an organisation, so without
+    // --search-keys the command needs neither and calls nothing.
     [TestCase("commands")]
     [TestCase("commands system list")]
     public async Task Commands_needs_no_token_or_organisation_and_makes_no_request(string command)
@@ -575,11 +627,156 @@ public class CommandsTests
         Assert.That(CommandEntries(result.StdoutJson), Does.ContainKey("system list"));
     }
 
+    // --search-keys tells an agent which keys a list's --filter takes, as the API gives them
+    // ("Details"). The output is the one command's entry with "searchKeys" holding the API's
+    // SearchKey models unchanged, so it is compared whole with the body the fake API served. The
+    // fake API serves only the expected route, and WireMock.Net answers any other with 404, so a
+    // call to the wrong list fails the command as well as the call check.
+    [TestCaseSource(nameof(SearchKeyLists))]
+    public async Task Commands_search_keys_adds_the_search_keys_the_api_gives_for_the_list_with_one_call(string command, string list, string route, string body)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(list);
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(body);
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath(route);
+        run.Stub("GET", path, json: body);
+
+        var result = await run.RunAsync(["commands", .. command.Split(' '), "--search-keys"]);
+
+        CliAssert.Succeeded(result);
+        var entries = CommandEntries(result.StdoutJson);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
+            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(entries.Keys, Is.EqualTo(new[] { list }));
+        });
+
+        var keys = entries[list].GetProperty("searchKeys").GetRawText();
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonNode.DeepEquals(JsonNode.Parse(keys), JsonNode.Parse(body)), Is.True, keys);
+            Assert.That(OptionNames(entries[list]), Does.Contain("--filter"));
+        });
+    }
+
+    // A plural noun is a hidden alias wherever a noun is accepted ("Shape and naming"), --search-keys
+    // included.
+    [Test]
+    public async Task Commands_search_keys_takes_a_plural_noun()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("policies/meta/search-keys");
+        run.Stub("GET", path, json: ApiJson.PolicySearchKeys());
+
+        await CliAssert.AcceptedAsync(run, "GET", path, "commands", "policies", "list", "--search-keys");
+    }
+
+    // Checks run in the order arguments, token, organisation, call ("Errors and exit codes"), so
+    // with --search-keys and no token the command exits 3 and asks the API nothing.
+    [Test]
+    public async Task Commands_search_keys_without_a_token_exits_3_with_token_missing_and_makes_no_request()
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Stub("GET", TestData.OrgPath("policies/meta/search-keys"), json: ApiJson.PolicySearchKeys());
+
+        var result = await run.RunAsync("commands", "policy", "list", "--search-keys");
+
+        CliAssert.Rejected(run, result, "token_missing");
+    }
+
+    // With no organisation chosen the command looks up the token's organisations, and several exit
+    // 2 with no_org, as every organisation command does ("Context"). The fake API serves the search
+    // keys too, so a CLI that skipped the organisation would show the call.
+    [Test]
+    public async Task Commands_search_keys_with_no_organisation_chosen_and_several_exits_2_with_no_org()
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        run.Stub("GET", TestData.OrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
+        run.Stub("GET", OtherOrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
+
+        var result = await run.RunAsync("commands", "tag", "list", "--search-keys");
+
+        CliAssert.Failed(result, "no_org");
+        Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
+    }
+
+    [TestCaseSource(nameof(SearchKeyOrganisations))]
+    public async Task Commands_search_keys_reads_the_search_keys_of_the_organisation_the_options_choose(string option, string value, string[] calls)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        run.Stub("GET", TestData.OrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
+        run.Stub("GET", OtherOrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
+
+        var result = await run.RunAsync("commands", "key", "list", "--search-keys", option, value);
+
+        CliAssert.Succeeded(result);
+        Assert.That(run.Calls(), Is.EqualTo(calls));
+    }
+
+    // Argument errors come before the token and the organisation ("Errors and exit codes"), so each
+    // wrong command line exits 2 with no token and no organisation, and names the option at fault.
+    // An unknown option is a parse error, which also exits 2, so the corrected command line, run in
+    // the same sandbox once it has a token and an organisation, shows the options exist and that the
+    // rejection withheld the call.
+    [TestCaseSource(nameof(SearchKeyRejections))]
+    public async Task Commands_search_keys_on_anything_but_one_of_the_four_lists_exits_2_before_the_token_is_read(string rejected, string key, string corrected, string route)
+    {
+        ArgumentNullException.ThrowIfNull(rejected);
+        ArgumentNullException.ThrowIfNull(corrected);
+        ArgumentNullException.ThrowIfNull(route);
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+
+        var result = await run.RunAsync(["commands", .. rejected.Split(' ')]);
+
+        CliAssert.Rejected(run, result);
+        Assert.That(JsonRead.PropertyNames(result.Error.GetProperty("errors")), Is.EqualTo(new[] { key }), result.ToString());
+
+        run.Environment["ENCLAVE_TOKEN"] = TestData.Token;
+        run.Environment["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString();
+        var path = TestData.OrgPath(route);
+        run.Stub("GET", path, json: ApiJson.SystemSearchKeys());
+
+        await CliAssert.AcceptedAsync(run, "GET", path, ["commands", .. corrected.Split(' ')]);
+    }
+
+    // stdout holds nothing unless the command succeeds ("Output"), and the API's 403 is forbidden,
+    // exit 4 ("Errors and exit codes").
+    [Test]
+    public async Task Commands_search_keys_refused_by_the_api_exits_4_with_forbidden_and_prints_nothing_on_stdout()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("systems/meta/search-keys");
+        run.StubProblem("GET", path, 403, "Forbidden");
+
+        var result = await run.RunAsync("commands", "system", "list", "--search-keys");
+
+        CliAssert.Failed(result, "forbidden");
+        Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
+    }
+
     private static TestCaseData Options(string command, string present, string absent) =>
         new TestCaseData(command, present.Split(' '), absent.Split(' ')).SetArgDisplayNames(command);
 
     private static TestCaseData Values(string command, string option, params string[] values) =>
         new TestCaseData(command, option, values).SetArgDisplayNames(command, option);
+
+    private static TestCaseData SearchKeys(string command, string list, string route, string body) =>
+        new TestCaseData(command, list, route, body).SetArgDisplayNames(command);
+
+    private static TestCaseData Rejection(string rejected, string key, string corrected, string route) =>
+        new TestCaseData(rejected, key, corrected, route).SetArgDisplayNames(rejected);
+
+    // Enclave.Sdk.Api writes the organisation ID in a path as 32 hex digits (TestData.OrgPath).
+    private static string OtherOrgPath(string suffix) => $"/org/{TestData.OtherOrgId:N}/{suffix}";
 
     private static Dictionary<string, JsonElement> CommandEntries(JsonElement document) =>
         document.GetProperty("commands").EnumerateArray()

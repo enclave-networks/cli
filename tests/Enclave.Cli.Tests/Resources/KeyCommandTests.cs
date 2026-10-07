@@ -105,7 +105,7 @@ public class KeyCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.0.4 writes the flag with bool.ToString()
+    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString()
     // (EnrolmentKeysClient.BuildQueryString), which gives "True".
     [Test]
     public async Task Key_list_include_disabled_sends_include_disabled_true()
@@ -162,7 +162,6 @@ public class KeyCommandTests
     // BulkKeyActionModel, BulkEnrolmentKeyDeleteResult). Key IDs are typed integer IDs, written as
     // JSON numbers, so IntList fails on an ID sent as a string.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Key_delete_given_the_list_of_disabled_keys_deletes_those_keys()
     {
         using var run = CliRun.Start();
@@ -341,7 +340,7 @@ public class KeyCommandTests
     // create sends an empty list for a list flag left out ("Details"). The API accepts a retention
     // time on ephemeral keys only (portal EnrolmentKeyCreateValidator.cs:24), and a key without --for
     // or --until does not expire. The body is Enclave.Sdk.Api's create model in camelCase
-    // (Enclave.Sdk.Api 1.0.4 EnrolmentKeysClient.CreateAsync).
+    // (Enclave.Sdk.Api 1.1.0 EnrolmentKeysClient.CreateAsync).
     [Test]
     public async Task Key_create_sends_a_general_purpose_key_that_requires_approval_and_has_unlimited_uses()
     {
@@ -617,7 +616,7 @@ public class KeyCommandTests
     }
 
     // Example 32, second command. --require-approval sets ApprovalMode to Manual; Enclave.Sdk.Api
-    // 1.0.4 keys a patch body by EnrolmentKeyPatchModel's property names (PatchClient.Set), and an
+    // 1.1.0 keys a patch body by EnrolmentKeyPatchModel's property names (PatchClient.Set), and an
     // update sends only the fields given (proposed-cli-surface.md "Create and update"). --id makes no
     // lookup.
     [Test]
@@ -854,12 +853,12 @@ public class KeyCommandTests
 
     // A command that takes several items sends them in one bulk call and prints requested and
     // affected (proposed-cli-surface.md "Several IDs"); --id takes several IDs, comma separated.
-    // Enable and disable are Enclave.Sdk.Api 1.0.4 EnrolmentKeysClient's (BulkEnableAsync,
-    // BulkDisableAsync); delete is the API's bulk route (portal EnrolmentKeysController.cs:295). The
+    // The calls are Enclave.Sdk.Api 1.1.0 EnrolmentKeysClient's BulkEnableAsync, BulkDisableAsync
+    // and BulkDeleteAsync; delete is the API's bulk route (portal EnrolmentKeysController.cs:295). The
     // API counts two of the three keys, and the output carries its count. Key IDs are JSON numbers.
     [TestCase("enable", "PUT", "enrolment-keys/enable", "keysModified")]
     [TestCase("disable", "PUT", "enrolment-keys/disable", "keysModified")]
-    [TestCase("delete", "DELETE", "enrolment-keys", "keysDeleted", Category = TestCategory.Pending)]
+    [TestCase("delete", "DELETE", "enrolment-keys", "keysDeleted")]
     public async Task Key_bulk_verb_sends_every_id_given_in_one_bulk_call_and_prints_requested_and_affected(
         string verb, string method, string pathSuffix, string resultField)
     {

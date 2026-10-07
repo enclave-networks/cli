@@ -131,8 +131,8 @@ public class TagCommandTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(TagPath("web")));
     }
 
-    // Enclave.Sdk.Api 1.0.4 puts the tag into the URL path unescaped (TagsClient.GetAsync and
-    // Update), so a name outside the tag rule never reaches it ("ID checks").
+    // A tag name goes into the URL path (TagsClient.GetAsync and Update), and a name outside the tag
+    // rule exits 2 naming it before any call ("ID checks").
     [TestCase("Web", "web")]
     [TestCase("web_servers", "web-servers")]
     [TestCase("../systems", "web")]
@@ -146,7 +146,7 @@ public class TagCommandTests
     }
 
     // The patch holds only the fields given ("Create and update"). Enclave.Sdk.Api keys a PATCH
-    // body by the C# property name (PatchClient.Set, version 1.0.4).
+    // body by the C# property name (PatchClient.Set, version 1.1.0).
     [Test]
     public async Task Tag_set_on_a_tag_that_exists_patches_only_the_fields_given_and_prints_the_tag()
     {
@@ -367,7 +367,6 @@ public class TagCommandTests
     // The read tag set makes to choose between update and create still runs under --dry-run, and
     // the change it chose is printed and not sent ("Dry run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Tag_set_with_dry_run_on_a_tag_that_exists_prints_the_update_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -385,7 +384,6 @@ public class TagCommandTests
     }
 
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Tag_set_with_dry_run_on_a_tag_that_does_not_exist_prints_the_create_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -405,8 +403,8 @@ public class TagCommandTests
     }
 
     // A command that takes several items always makes the bulk call, and the tag bulk delete takes
-    // names in a "tags" array (Enclave.Sdk.Api 1.0.4, TagsClient.DeleteTagsAsync). affected below
-    // requested is still success ("Several IDs").
+    // names in a "tags" array (Enclave.Sdk.Api 1.1.0, TagsClient.DeleteTagsAsync). affected below
+    // requested is a success ("Several IDs").
     [Test]
     public async Task Tag_delete_sends_every_tag_named_in_one_bulk_call()
     {
@@ -452,7 +450,6 @@ public class TagCommandTests
     }
 
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Tag_delete_with_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

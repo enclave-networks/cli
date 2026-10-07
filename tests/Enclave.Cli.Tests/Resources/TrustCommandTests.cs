@@ -166,8 +166,8 @@ public partial class TrustCommandTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(TrustPath(5)));
     }
 
-    // Trust requirement IDs are 32-bit integers, checked before any call, because Enclave.Sdk.Api
-    // 1.0.4 puts IDs into URL paths unescaped ("ID checks", "Details").
+    // Trust requirement IDs are 32-bit integers, checked before any call, so a malformed one exits 2
+    // naming it and sends nothing ("ID checks", "Details").
     [TestCase("show", "../policies", "5", "GET", "trust-requirements/5")]
     [TestCase("show", "4294967296", "5", "GET", "trust-requirements/5")]
     [TestCase("delete", "5,five", "5,6", "DELETE", "trust-requirements")]
@@ -299,7 +299,6 @@ public partial class TrustCommandTests
     // The output form "Dry run" gives: requests is a list, and org.name is null because CliRun names
     // the organisation by ID (ENCLAVE_ORG_ID), so no lookup gives its name.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Trust_delete_with_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

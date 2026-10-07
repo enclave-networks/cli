@@ -8,10 +8,10 @@ namespace Enclave.Cli.Tests.Partner;
 // The partner is chosen by --partner-id, then ENCLAVE_PARTNER_ID, then the default `partner use
 // --id` saves in ~/.enclave/cli.json. The organisation is chosen separately: partner commands use
 // the partner, and every other command that acts within an organisation uses the organisation
-// (proposed-cli-surface.md "Context"). A partner customer command that has a partner and a token
-// reports not_implemented (Enclave.Sdk.Api 1.0.5 has no partner clients), so the tests observe the
-// choice through whether a command gets past the context check, which source's value the ID check
-// sees, and what cli.json holds.
+// (proposed-cli-surface.md "Context"). A partner customer command calls the partner API under
+// /partner/{partnerId}/ (Enclave.Sdk.Api 1.1.0, PartnerClient), so the tests observe the choice
+// through the partner in the path of the request the command sends, which source's value the ID
+// check sees, and what cli.json holds.
 public class PartnerContextTests
 {
     private const string PartnerIdOption = "--partner-id";
@@ -25,6 +25,8 @@ public class PartnerContextTests
     private static readonly Guid OtherPartnerId = new("0c5e7a91-2b4d-4f86-b3a0-9d1e6c48f2b7");
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
+
+    private static readonly string[] CustomerListOnly = [$"GET {TestData.PartnerPath("customers")}"];
 
     // With no partner chosen, a partner command exits 2 with an error naming both ways to choose
     // one ("Context"), so an agent can recover without reading help. CliRun sets ENCLAVE_ORG_ID, and
@@ -43,14 +45,15 @@ public class PartnerContextTests
     [TestCase(PartnerIdOption)]
     [TestCase(PartnerIdVariable)]
     [TestCase(PartnerUse)]
-    public async Task A_partner_chosen_by_any_one_source_takes_a_partner_command_past_the_context_check(string source)
+    public async Task A_partner_chosen_by_any_one_source_is_the_partner_a_partner_command_calls_the_api_for(string source)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
         var options = await ChooseTestPartnerAsync(run, source);
 
         var result = await run.RunAsync(["partner", "customer", "list", .. options]);
 
-        CliAssert.NotImplemented(run, result);
+        PartnerApiFake.AssertSentToThePartnerApi(run, result);
     }
 
     // partner use records an ID and makes no API call: a personal access token cannot look partners
@@ -64,6 +67,7 @@ public class PartnerContextTests
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
         StubTwoOrgs(run);
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var use = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
 
@@ -80,7 +84,7 @@ public class PartnerContextTests
             Assert.That(run.Requests, Is.Empty);
         });
 
-        CliAssert.NotImplemented(run, await run.RunAsync("partner", "customer", "list"));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
     // The saved default is one partner, so a second partner use replaces the first.
@@ -157,33 +161,38 @@ public class PartnerContextTests
     }
 
     // --partner-id comes first ("Context"), so its value is the partner in use and the value the ID
-    // check sees. The lower source holds a valid ID, which a CLI that preferred it would use and go
-    // on to report not_implemented. The corrected run shows the option exists.
+    // check sees. The lower source holds a valid ID, which a CLI that preferred it would send its
+    // request for. The run with another valid partner ID shows the request goes to that partner.
     [TestCase(PartnerIdVariable)]
     [TestCase(PartnerUse)]
     public async Task The_partner_id_option_is_used_over_ENCLAVE_PARTNER_ID_and_the_saved_partner(string lowerSource)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
+        PartnerApiFake.StubCustomerList(run, OtherPartnerId);
         _ = await ChooseTestPartnerAsync(run, lowerSource);
 
         CliAssert.Rejected(run, await run.RunAsync("partner", "customer", "list", "--partner-id", "../x"));
-        CliAssert.NotImplemented(run, await run.RunAsync("partner", "customer", "list", "--partner-id", OtherPartnerId.ToString()));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list", "--partner-id", OtherPartnerId.ToString()), OtherPartnerId);
     }
 
     // ENCLAVE_PARTNER_ID comes before the saved default ("Context"), which lets each agent session
     // fix its partner without writing the shared cli.json. The saved partner is valid, so only a CLI
-    // that reads ENCLAVE_PARTNER_ID first sees the malformed value.
+    // that reads ENCLAVE_PARTNER_ID first sees the malformed value, and sends its request for the
+    // partner the variable names.
     [Test]
     public async Task ENCLAVE_PARTNER_ID_is_used_over_the_saved_partner()
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
+        PartnerApiFake.StubCustomerList(run, OtherPartnerId);
         CliAssert.Succeeded(await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString()));
 
         run.Environment[PartnerIdVariable] = "not-a-guid";
         CliAssert.Rejected(run, await run.RunAsync("partner", "customer", "list"));
 
         run.Environment[PartnerIdVariable] = OtherPartnerId.ToString();
-        CliAssert.NotImplemented(run, await run.RunAsync("partner", "customer", "list"));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"), OtherPartnerId);
     }
 
     // A context source lower in the precedence is not read when a higher one is given, so a
@@ -195,12 +204,13 @@ public class PartnerContextTests
     public async Task A_malformed_partner_source_is_not_read_when_a_higher_one_is_given(string higher, string lower)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
         SetMalformedPartner(run, lower);
 
         CliAssert.Rejected(run, await run.RunAsync("partner", "customer", "list"));
 
         var options = await ChooseTestPartnerAsync(run, higher);
-        CliAssert.NotImplemented(run, await run.RunAsync(["partner", "customer", "list", .. options]));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(["partner", "customer", "list", .. options]));
     }
 
     // An empty environment variable counts as unset ("Login, logout and status"): with no other
@@ -209,12 +219,13 @@ public class PartnerContextTests
     public async Task An_empty_ENCLAVE_PARTNER_ID_counts_as_unset()
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
         run.Environment[PartnerIdVariable] = string.Empty;
 
         CliAssert.Rejected(run, await run.RunAsync("partner", "customer", "list"), "no_partner");
 
         CliAssert.Succeeded(await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString()));
-        CliAssert.NotImplemented(run, await run.RunAsync("partner", "customer", "list"));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
     // Checks run in this order: arguments (exit 2), the token (3), the partner (2), then the call,
@@ -225,6 +236,7 @@ public class PartnerContextTests
     public async Task Checks_run_in_the_order_arguments_token_partner_then_the_partner_api(string[] rejected, string[] corrected)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubPartnerApi(run);
         run.Environment.Remove("ENCLAVE_TOKEN");
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
@@ -235,11 +247,11 @@ public class PartnerContextTests
         CliAssert.Rejected(run, await run.RunAsync(corrected), "no_partner");
 
         run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
-        CliAssert.NotImplemented(run, await run.RunAsync(corrected));
+        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
     }
 
     // The token is checked before the call, so a partner customer command that has its partner but
-    // no token exits 3 and does not reach not_implemented ("Errors and exit codes").
+    // no token exits 3 and sends nothing ("Errors and exit codes").
     [TestCaseSource(typeof(PartnerCommandTests), nameof(PartnerCommandTests.CommandsByName))]
     public async Task Every_partner_customer_command_exits_3_token_missing_without_a_token(string[] args)
     {
@@ -274,10 +286,12 @@ public class PartnerContextTests
         run.Environment.Remove("ENCLAVE_ORG_ID");
         run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
         StubTwoOrgs(run);
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var result = await run.RunAsync("partner", "customer", "list");
 
-        CliAssert.NotImplemented(run, result);
+        CliAssert.Succeeded(result);
+        Assert.That(run.Calls(), Is.EqualTo(CustomerListOnly));
     }
 
     // ENCLAVE_ORG names an organisation the token does not see, which stops any command that looks
@@ -290,10 +304,12 @@ public class PartnerContextTests
         run.Environment["ENCLAVE_ORG"] = "Initrode";
         run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
         StubTwoOrgs(run);
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var result = await run.RunAsync("partner", "customer", "list");
 
-        CliAssert.NotImplemented(run, result);
+        CliAssert.Succeeded(result);
+        Assert.That(run.Calls(), Is.EqualTo(CustomerListOnly));
     }
 
     // Choosing a partner does not choose an organisation: with no organisation chosen, an
@@ -377,13 +393,15 @@ public class PartnerContextTests
     }
 
     // The partner is saved first and the organisation after it, so if org use lost the saved
-    // partner, the partner command would exit 2 no_partner.
+    // partner, the partner command would exit 2 no_partner; with it, the command sends its request
+    // for the saved partner.
     [Test]
     public async Task Org_use_keeps_the_saved_partner()
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
         StubTwoOrgs(run);
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         CliAssert.Succeeded(await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString()));
         var partnerBefore = Compact(Saved(run, "partner"));
@@ -391,12 +409,12 @@ public class PartnerContextTests
         var before = run.Requests.Count;
         var result = await run.RunAsync("partner", "customer", "list");
 
-        CliAssert.Failed(result, "not_implemented");
+        CliAssert.Succeeded(result);
         var partner = Saved(run, "partner");
         Assert.Multiple(() =>
         {
             Assert.That(Compact(partner), Is.EqualTo(partnerBefore));
-            Assert.That(run.Requests, Has.Count.EqualTo(before));
+            Assert.That(run.Calls(before), Is.EqualTo(CustomerListOnly));
         });
     }
 

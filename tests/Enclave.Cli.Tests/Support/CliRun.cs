@@ -11,9 +11,9 @@ using WireMock.Server;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// One test's sandbox for running the CLI in-process: a fake Enclave API on loopback, files held
-/// in memory under a user profile path and a working directory path, and the only environment
-/// variables, stdin and API URL the CLI sees.
+/// One test's sandbox for running the CLI in-process: a fake Enclave API on loopback, which also
+/// serves the partner API, files held in memory under a user profile path and a working directory
+/// path, and the only environment variables, stdin and API URLs the CLI sees.
 /// </summary>
 internal sealed class CliRun : IDisposable
 {
@@ -41,6 +41,15 @@ internal sealed class CliRun : IDisposable
     /// The URL of the fake API, which the CLI receives as its default API URL.
     /// </summary>
     public Uri ApiUrl => new(ApiBaseUrl);
+
+    /// <summary>
+    /// The URL the CLI receives as its default partner API URL: the same fake API as
+    /// <see cref="ApiUrl"/>. Stub partner routes with <see cref="Stub"/> and TestData.PartnerPath.
+    /// </summary>
+    // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). Every partner
+    // route is under /partner/{partnerId}/ and no main API route is, so one fake serves both, and
+    // Requests holds a run's partner calls beside its main API calls, in the order they were sent.
+    public Uri PartnerApiUrl => ApiUrl;
 
     /// <summary>
     /// The user profile path the CLI receives; ~/.enclave lives here. Nothing exists at it on disk:
@@ -110,8 +119,8 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// The host RunAsync gives the CLI: this run's environment, home directory, stdin, in-memory
-    /// files, clock, and the fake API's URL as the default API URL, so a run can never reach the
-    /// live API.
+    /// files, clock, and the fake API's URL as the default API URL and the default partner API URL,
+    /// so a run can never reach the live API or the live partner API.
     /// </summary>
     public CliHost CreateHost() => new()
     {
@@ -120,6 +129,7 @@ internal sealed class CliRun : IDisposable
         Stdin = new StringReader(StdinText),
         StdinIsTerminal = StdinIsTerminal,
         DefaultApiUrl = ApiUrl,
+        DefaultPartnerApiUrl = PartnerApiUrl,
         Files = Files,
         Time = Time,
     };
@@ -306,16 +316,21 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// Puts ~/.enclave/credentials.json in <see cref="Files"/>, private to the user as login writes
-    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.GetSettingsFile, version 1.0.4). The
-    /// base URL defaults to the fake API's.
+    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.1.0). The
+    /// base URL defaults to the fake API's. The file holds partnerApiBaseUrl only when one is given.
     /// </summary>
-    public void SaveCredentials(string token, string? baseUrl = null)
+    public void SaveCredentials(string token, string? baseUrl = null, string? partnerApiBaseUrl = null)
     {
         var credentials = new JsonObject
         {
             ["personalAccessToken"] = token,
             ["baseUrl"] = baseUrl ?? ApiBaseUrl,
         };
+
+        if (partnerApiBaseUrl is not null)
+        {
+            credentials["partnerApiBaseUrl"] = partnerApiBaseUrl;
+        }
 
         Files.WriteText(CredentialsPath, credentials.ToJsonString(IndentedJson), privateToUser: true);
     }

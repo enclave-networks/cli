@@ -164,7 +164,7 @@ public class SystemCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.0.4 writes the flag with bool.ToString() (SystemsClient.BuildQueryString),
+    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString() (SystemsClient.BuildQueryString),
     // which gives "True".
     [Test]
     public async Task System_list_include_disabled_sends_include_disabled_true()
@@ -269,7 +269,7 @@ public class SystemCommandTests
 
     // Example 14: the list --not-seen-for prints is the input of system revoke, which revokes the
     // listed systems and no others. Both commands run in one sandbox, as a shell pipeline runs them.
-    // The route and result field are those of Enclave.Sdk.Api 1.0.4 SystemsClient.RevokeSystemsAsync.
+    // The route and result field are those of Enclave.Sdk.Api 1.1.0 SystemsClient.RevokeSystemsAsync.
     [Test]
     public async Task System_revoke_given_the_list_of_systems_not_seen_for_90_days_revokes_those_systems()
     {
@@ -329,7 +329,7 @@ public class SystemCommandTests
     }
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update").
-    // Enclave.Sdk.Api 1.0.4 keys a patch body by SystemPatchModel's property names (PatchClient.Set).
+    // Enclave.Sdk.Api 1.1.0 keys a patch body by SystemPatchModel's property names (PatchClient.Set).
     // The output is the model the API returned, whose description differs from the one sent.
     [Test]
     public async Task System_update_sends_the_description_and_notes_as_the_only_patch_fields_and_prints_the_updated_system()
@@ -600,7 +600,7 @@ public class SystemCommandTests
 
     // A command that takes several items sends them in one bulk call and prints requested and
     // affected (proposed-cli-surface.md "Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api 1.0.4 SystemsClient (BulkEnableAsync, BulkDisableAsync, RevokeSystemsAsync).
+    // Enclave.Sdk.Api 1.1.0 SystemsClient (BulkEnableAsync, BulkDisableAsync, RevokeSystemsAsync).
     // The API counts two of the three systems, and the output carries its count. The disable case is
     // examples 44 and 45, where the shell expands the file's IDs into arguments.
     [TestCase("enable", "PUT", "systems/enable", "systemsUpdated")]

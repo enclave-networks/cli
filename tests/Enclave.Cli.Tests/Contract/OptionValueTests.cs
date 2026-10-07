@@ -17,7 +17,7 @@ public class OptionValueTests
     // Each --sort value with the API enum member it names: SystemQuerySortMode,
     // EnrolmentKeySortOrder, PolicySortOrder, TagQuerySortOrder and TrustRequirementSortOrder in the
     // portal's Enclave.Configuration.Data/Modules/*/Enums, and UnapprovedSystemQuerySortMode in
-    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api 1.0.4 writes
+    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api 1.1.0 writes
     // the member name into the sort parameter (each list client's BuildQueryString).
     public static IEnumerable<TestCaseData> SortValues()
     {

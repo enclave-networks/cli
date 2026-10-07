@@ -85,9 +85,9 @@ public class NamingTests
         });
     }
 
-    // Partner customer commands report not_implemented and make no call while Enclave.Sdk.Api has no
-    // partner clients ("Errors and exit codes"), so the alias is shown to reach the same command by
-    // the same result. An unknown noun would exit 2 with invalid_argument.
+    // The partner customer list is read from the partner API, which CliRun serves from the same fake
+    // (TestData.PartnerPath), so the alias is shown to reach the same command by the same request
+    // and output. An unknown noun would exit 2 with invalid_argument and send nothing.
     [TestCase("partner customers list")]
     [TestCase("partners customer list")]
     [TestCase("partners customers list")]
@@ -96,15 +96,27 @@ public class NamingTests
         ArgumentNullException.ThrowIfNull(plural);
         using var singularRun = CliRun.Start();
         using var pluralRun = CliRun.Start();
-        singularRun.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
-        pluralRun.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+        var path = TestData.PartnerPath("customers");
+        var customers = ApiJson.Page(ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName, "2026.1.1"));
+
+        foreach (var run in new[] { singularRun, pluralRun })
+        {
+            run.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+            run.Stub("GET", path, json: customers);
+        }
 
         var singularResult = await singularRun.RunAsync("partner", "customer", "list");
         var pluralResult = await pluralRun.RunAsync(plural.Split(' '));
 
-        CliAssert.NotImplemented(singularRun, singularResult);
-        CliAssert.NotImplemented(pluralRun, pluralResult);
-        Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+        CliAssert.Succeeded(singularResult);
+        Assert.Multiple(() =>
+        {
+            Assert.That(singularRun.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
+            Assert.That(pluralRun.Calls(), Is.EqualTo(singularRun.Calls()));
+            Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
+            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
+            Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+        });
     }
 
     // `partner use --id` saves the partner in ~/.enclave/cli.json, makes no call and prints
@@ -232,17 +244,17 @@ public class NamingTests
         await CliAssert.AcceptedAsync(run, "GET", path, command.Split(' '));
     }
 
-    // partner customer takes its own hyphenated verbs, and its commands report not_implemented
-    // where an unknown command would exit 2 with invalid_argument.
+    // partner customer takes its own hyphenated verbs: list-admins reads the customer's admins from
+    // the partner API, where an unknown command would exit 2 with invalid_argument and send nothing.
     [Test]
     public async Task Partner_customer_takes_hyphenated_verbs()
     {
         using var run = CliRun.Start();
         run.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+        var path = TestData.CustomerPath(TestData.OtherOrgId.ToString(), "admins");
+        run.Stub("GET", path, json: ApiJson.CustomerAdmins(ApiJson.CustomerAdmin(TestData.CustomerAdminAccountId, TestData.CustomerAdminEmail)));
 
-        var result = await run.RunAsync("partner", "customer", "list-admins", "--org-id", TestData.OtherOrgId.ToString());
-
-        CliAssert.NotImplemented(run, result);
+        await CliAssert.AcceptedAsync(run, "GET", path, "partner", "customer", "list-admins", "--org-id", TestData.OtherOrgId.ToString());
     }
 
     private static TestCaseData Alias(string singular, string plural, string method, string path, string json) =>

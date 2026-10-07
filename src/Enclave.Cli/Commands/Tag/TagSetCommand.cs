@@ -33,14 +33,7 @@ internal static class TagSetCommand
                 ? ids.Distinct().Select(TrustRequirementId.FromInt).ToArray()
                 : await TrustRequirementIdsAsync(context, org, context.Get(trust), trust.Name);
 
-            // The API has separate update and create calls, and to a user both mean "make the tag
-            // look like this" ("Command options"). The update comes first and is the only call for a
-            // tag that exists; the API answers it 404 for a tag it does not hold (portal
-            // TagModifyHandler.cs:56-62, GetResponseAsync returns no model, which the API answers as
-            // not found), and only then does the create follow ("Calls per command").
-            TagModel result;
-
-            try
+            Task<TagModel> UpdateAsync()
             {
                 var patch = org.Client.Tags.Update(tagName);
 
@@ -64,26 +57,68 @@ internal static class TagSetCommand
                     patch.Set(model => model.TrustRequirements, requirements);
                 }
 
-                result = await patch.ApplyAsync();
+                return patch.ApplyAsync();
             }
-            catch (Exception exception) when (ApiErrors.IsNotFound(exception))
+
+            // A create sends an empty list for a list flag left out ("Details").
+            Task<TagModel> CreateAsync() => org.Client.Tags.CreateAsync(new TagCreateModel
             {
-                // --name renames, so the tag must exist: a rename of a tag that does not exist is the
-                // single-item not found, exit 5, and creating a tag under either name would not be
-                // what was asked.
+                Tag = tagName,
+                Colour = context.Get(colour),
+                Notes = context.Get(notes),
+                TrustRequirements = requirements ?? [],
+            });
+
+            // --name renames, so the tag must exist: a rename of a tag that does not exist is the
+            // single-item not found, exit 5, and creating a tag under either name would not be what
+            // was asked.
+            void RefuseRenameOfMissingTag(Exception notFound)
+            {
                 if (context.IsGiven(name))
                 {
-                    throw ApiErrors.ToCliException(exception, notFoundIsUnknownItem: true);
+                    throw ApiErrors.ToCliException(notFound, notFoundIsUnknownItem: true);
+                }
+            }
+
+            // The API has separate update and create calls, and to a user both mean "make the tag
+            // look like this" ("Command options"). The update comes first and is the only call for a
+            // tag that exists; the API answers it 404 for a tag it does not hold (portal
+            // TagModifyHandler.cs:56-62, GetResponseAsync returns no model, which the API answers as
+            // not found), and only then does the create follow ("Calls per command").
+            //
+            // Under --dry-run the update is captured and answered as a success (DryRun.Answer), so
+            // the 404 that leads to the create never comes. The dry run reads the tag instead, and
+            // shows the update for a tag that exists and the create for one that does not ("Dry run").
+            TagModel result;
+
+            if (context.IsDryRun)
+            {
+                bool exists;
+
+                try
+                {
+                    _ = await org.Client.Tags.GetAsync(tagName);
+                    exists = true;
+                }
+                catch (Exception exception) when (ApiErrors.IsNotFound(exception))
+                {
+                    RefuseRenameOfMissingTag(exception);
+                    exists = false;
                 }
 
-                // A create sends an empty list for a list flag left out ("Details").
-                result = await org.Client.Tags.CreateAsync(new TagCreateModel
+                result = exists ? await UpdateAsync() : await CreateAsync();
+            }
+            else
+            {
+                try
                 {
-                    Tag = tagName,
-                    Colour = context.Get(colour),
-                    Notes = context.Get(notes),
-                    TrustRequirements = requirements ?? [],
-                });
+                    result = await UpdateAsync();
+                }
+                catch (Exception exception) when (ApiErrors.IsNotFound(exception))
+                {
+                    RefuseRenameOfMissingTag(exception);
+                    result = await CreateAsync();
+                }
             }
 
             await context.Output.WriteAsync(result, context.CancellationToken);

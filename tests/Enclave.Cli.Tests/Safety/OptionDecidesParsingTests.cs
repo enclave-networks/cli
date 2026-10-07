@@ -14,7 +14,7 @@ public class OptionDecidesParsingTests
 
     // 12 is the ID of one key and the description of another, so the systems request shows which
     // reading the CLI took. --key-id uses the API's enrolment_key parameter (proposed-cli-surface.md
-    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api 1.0.4).
+    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api 1.1.0).
     [Test]
     public async Task Key_id_option_reads_its_value_as_a_key_id_and_makes_no_lookup()
     {
@@ -155,14 +155,15 @@ public class OptionDecidesParsingTests
     }
 
     // --user-id takes an account ID, a GUID, and neither an email address nor a number. Arguments
-    // are checked before anything else ("Errors and exit codes"), so the refusal comes although a
-    // partner customer command cannot run; the second run, with a GUID, passes the check and
-    // reaches not_implemented, the outcome of every partner customer command without partner clients.
-    [TestCase("add-admin", "alex@example.com")]
-    [TestCase("remove-admin", "12")]
-    public async Task User_id_option_takes_only_a_guid(string verb, string userId)
+    // are checked before anything else ("Errors and exit codes"), so the refusal comes before the
+    // customer lookup and sends nothing. The second run, with a GUID, passes the check, and the
+    // command calls that account's admin route.
+    [TestCase("add-admin", "alex@example.com", "PUT")]
+    [TestCase("remove-admin", "12", "DELETE")]
+    public async Task User_id_option_takes_only_a_guid(string verb, string userId, string method)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubPartnerApi(run);
         var partner = TestData.PartnerId.ToString();
 
         var rejected = await run.RunAsync("partner", "customer", verb, "Globex Ltd", "--user-id", userId, "--partner-id", partner);
@@ -171,7 +172,8 @@ public class OptionDecidesParsingTests
 
         var accepted = await run.RunAsync("partner", "customer", verb, "Globex Ltd", "--user-id", AccountId.ToString(), "--partner-id", partner);
 
-        CliAssert.NotImplemented(run, accepted);
+        PartnerApiFake.AssertSentToThePartnerApi(run, accepted);
+        Assert.That(run.Calls().Last(), Is.EqualTo($"{method} {TestData.CustomerAdminPath(TestData.CustomerOrgId, AccountId.ToString())}"), accepted.ToString());
     }
 
     // A name and its ID option given together contradict each other, and nothing in the values says

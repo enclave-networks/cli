@@ -40,7 +40,6 @@ public class CreateDefaultsTests
     // --dry-run shows every value sent ("Create and update"), the values for flags left out
     // included, and the zone lookup the create depends on runs ("Dry run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Create_with_dry_run_prints_every_value_it_would_send()
     {
         using var run = CliRun.Start();

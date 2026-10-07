@@ -123,7 +123,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.0.4 writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
+    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
     // the value is compared ignoring case.
     [Test]
     public async Task Policy_list_with_include_disabled_asks_the_api_for_disabled_policies()
@@ -227,8 +227,8 @@ public partial class PolicyCommandTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(PolicyPath(42)));
     }
 
-    // Policy IDs are 32-bit integers, checked before any call, because Enclave.Sdk.Api 1.0.4 puts
-    // IDs into URL paths unescaped ("ID checks", "Details").
+    // Policy IDs are 32-bit integers, checked before any call, so a malformed one exits 2 naming it
+    // and sends nothing ("ID checks", "Details").
     [TestCase("show", "../systems", "42", "GET", "policies/42")]
     [TestCase("show", "4x2", "42", "GET", "policies/42")]
     [TestCase("show", "2147483648", "42", "GET", "policies/42")]
@@ -595,7 +595,6 @@ public partial class PolicyCommandTests
     // Example 54. The lookup is a read a change depends on, so it still runs; only the delete is
     // withheld ("Dry run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Policy_delete_by_description_with_dry_run_prints_the_delete_and_sends_only_the_lookup()
     {
         using var run = CliRun.Start();
@@ -613,7 +612,6 @@ public partial class PolicyCommandTests
     }
 
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Policy_delete_with_id_and_dry_run_prints_the_delete_and_sends_nothing()
     {
         using var run = CliRun.Start();

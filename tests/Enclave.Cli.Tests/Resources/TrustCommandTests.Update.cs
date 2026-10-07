@@ -9,7 +9,7 @@ namespace Enclave.Cli.Tests.Resources;
 // settings object, configuration and conditions together (portal TrustRequirementPatchModel), so a
 // --set- flag reads the requirement first and replaces only the conditions or setting of its own
 // kind: the rest, and the labels of entries that stay, go back as they were ("Calls per command").
-// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set, version 1.0.4).
+// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set, version 1.1.0).
 
 /// <summary>
 /// Tests for trust update.

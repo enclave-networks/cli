@@ -1,5 +1,4 @@
 using Enclave.Cli.Tests.Support;
-using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
@@ -16,7 +15,6 @@ namespace Enclave.Cli.Tests.Safety;
 /// <param name="Kind">The list kind the command reads after "-", whose IDs are the command's IDs.</param>
 /// <param name="OtherKind">A list kind the command refuses, whose IDs are also valid IDs for the command.</param>
 /// <param name="MalformedId">An ID the command's ID check refuses.</param>
-/// <param name="Needs">The <see cref="SdkApiChange"/> the bulk call needs, or null when it needs none.</param>
 public readonly record struct BulkCommand(
     string Name,
     string Method,
@@ -25,14 +23,14 @@ public readonly record struct BulkCommand(
     string ResultField,
     string Kind,
     string OtherKind,
-    string MalformedId,
-    string? Needs = null)
+    string MalformedId)
 {
-    // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.0.4 (SystemsClient,
+    // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.1.0 (SystemsClient,
     // UnapprovedSystemsClient, EnrolmentKeysClient, PoliciesClient, TagsClient, DnsClient,
-    // TrustRequirementsClient) and of the portal's bulk result models. Enclave.Sdk.Api lacks key
-    // delete; its route and fields are the API's (portal EnrolmentKeysController.cs:295,
-    // DeleteBulkEnrolmentKeys, BulkKeyActionModel and BulkEnrolmentKeyDeleteResult).
+    // TrustRequirementsClient) and of the portal's bulk result models. Key delete is
+    // EnrolmentKeysClient.BulkDeleteAsync, which reads keysDeleted, where the bulk enable and
+    // disable read keysModified (portal EnrolmentKeysController.cs:295, DeleteBulkEnrolmentKeys,
+    // BulkKeyActionModel and BulkEnrolmentKeyDeleteResult).
     //
     // approve and decline act on systems waiting for approval, so they read the output of
     // system list --pending and refuse that of system list; the other system verbs take the reverse
@@ -52,7 +50,7 @@ public readonly record struct BulkCommand(
         new("system revoke", "DELETE", "systems", "systemIds", "systemsRevoked", "system", "pending-system", "../systems/ABCDE"),
         new("key enable", "PUT", "enrolment-keys/enable", "keyIds", "keysModified", "key", "policy", "12a"),
         new("key disable", "PUT", "enrolment-keys/disable", "keyIds", "keysModified", "key", "policy", "1.5"),
-        new("key delete", "DELETE", "enrolment-keys", "keyIds", "keysDeleted", "key", "policy", "../12", Needs: SdkApiChange.KeyDelete),
+        new("key delete", "DELETE", "enrolment-keys", "keyIds", "keysDeleted", "key", "policy", "../12"),
         new("policy enable", "PUT", "policies/enable", "policyIds", "policiesUpdated", "policy", "key", "0x1F"),
         new("policy disable", "PUT", "policies/disable", "policyIds", "policiesUpdated", "policy", "key", "three"),
         new("policy delete", "DELETE", "policies", "policyIds", "policiesDeleted", "policy", "key", "99999999999"),
@@ -60,17 +58,6 @@ public readonly record struct BulkCommand(
         new("dns delete-hostname", "DELETE", "dns/records", "recordIds", "dnsRecordsDeleted", "hostname", "zone", "7/../8"),
         new("trust delete", "DELETE", "trust-requirements", "requirementIds", "requirementsDeleted", "trust", "policy", "five"),
     ];
-
-    // A test whose command builds the bulk call, to send it or to print it under --dry-run, takes
-    // Cases, so a command whose call needs an Enclave.Sdk.Api change is Pending in it. A test whose
-    // command builds no call, such as one given an empty list, takes All, since the command meets
-    // it without the change.
-
-    /// <summary>
-    /// Every command as a test case, in the Pending category when its bulk call needs an
-    /// Enclave.Sdk.Api change.
-    /// </summary>
-    public static IEnumerable<TestCaseData> Cases => All.Select(command => new TestCaseData(command).PendingOn(command.Needs));
 
     /// <summary>
     /// The bulk call's full URL path for the test organisation.

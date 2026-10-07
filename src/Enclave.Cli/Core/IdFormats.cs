@@ -5,9 +5,10 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// The ID forms of proposed-cli-surface.md "ID checks". Every ID is checked against its form before
-/// any call, since Enclave.Sdk.Api 1.0.5 puts IDs into URL paths unescaped and .NET resolves ".."
-/// when it combines a path with the base address (UnapprovedSystemsClient.cs:95): a system ID of
-/// "../systems/ABCDE" given to decline would revoke system ABCDE.
+/// any call, so a malformed one exits 2 with an error that names it, and nothing is sent.
+/// Enclave.Sdk.Api 1.1.0 escapes the IDs it takes as text in URL paths (ClientBase.PathSegment) and
+/// takes the others as numbers or GUIDs, so an ID such as "../systems/ABCDE" cannot move a request
+/// to another route either.
 /// </summary>
 internal static partial class IdFormats
 {

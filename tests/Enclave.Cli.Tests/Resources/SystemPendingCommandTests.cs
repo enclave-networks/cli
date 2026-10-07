@@ -40,7 +40,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api 1.0.4
+    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api 1.1.0
     // UnapprovedSystemsClient.BuildQueryString). Example 3, first command.
     [Test]
     public async Task System_list_pending_key_id_sends_the_enrolment_key_parameter()
@@ -267,7 +267,7 @@ public class SystemPendingCommandTests
     }
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update").
-    // Enclave.Sdk.Api 1.0.4 keys the patch body by UnapprovedSystemPatchModel's property names
+    // Enclave.Sdk.Api 1.1.0 keys the patch body by UnapprovedSystemPatchModel's property names
     // (PatchClient.Set). The output is the model the API returned.
     [Test]
     public async Task System_update_pending_sends_the_description_notes_and_tags_to_the_waiting_system()
@@ -387,7 +387,7 @@ public class SystemPendingCommandTests
 
     // approve and decline act on waiting systems only (proposed-cli-surface.md "Commands"), in one
     // bulk call for any number of systems ("Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api 1.0.4 UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
+    // Enclave.Sdk.Api 1.1.0 UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
     // approve succeeds when some systems were not approved (portal UnapprovedSystemsController.cs:
     // 170-177), so the API counts one of the two and the output carries its count.
     [TestCase("approve", "PUT", "unapproved-systems/approve", "systemsApproved")]

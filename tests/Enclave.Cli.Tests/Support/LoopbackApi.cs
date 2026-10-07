@@ -12,7 +12,9 @@ using WireMock.Types;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// Starts fake APIs that listen on 127.0.0.1 only, and sets up their answers.
+/// Starts fake APIs that listen on 127.0.0.1 only, and sets up their answers. One fake serves the
+/// main API and the partner API alike: every partner route is under /partner/{partnerId}/, which
+/// no main API route shares, so a stub's path says which API it answers.
 /// </summary>
 internal static class LoopbackApi
 {
@@ -24,14 +26,15 @@ internal static class LoopbackApi
 
     internal const string JsonContentType = "application/json";
 
-    // Enclave.Sdk.Api 1.0.4 throws EnclaveApiException only for this media type
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:20); any other error body reaches the caller as
+    // Enclave.Sdk.Api 1.1.0 throws EnclaveApiException only for this media type
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29); any other error body reaches the caller as
     // HttpRequestException.
     internal const string ProblemContentType = "application/problem+json";
 
     /// <summary>
     /// Starts a fake API on a free loopback port and returns it with its URL,
-    /// http://127.0.0.1:{port} without a trailing slash.
+    /// http://127.0.0.1:{port} without a trailing slash. CliRun gives the CLI that URL as both the
+    /// API's and the partner API's.
     /// </summary>
     public static (WireMockServer Api, string Url) Start()
     {
@@ -45,7 +48,7 @@ internal static class LoopbackApi
             Urls = [url],
 
             // Enclave.Sdk.Api sends bulk revoke, decline and delete requests as DELETE with a JSON body
-            // (Enclave.Sdk.Api 1.0.4, SystemsClient.RevokeSystemsAsync), so every method's body
+            // (Enclave.Sdk.Api 1.1.0, SystemsClient.RevokeSystemsAsync), so every method's body
             // is read and recorded.
             AllowBodyForAllHttpMethods = true,
 
@@ -73,7 +76,7 @@ internal static class LoopbackApi
     /// for page 0.
     /// </summary>
     // The API reads a missing page parameter as page 0 (portal PaginatedRequestModel.Page), and
-    // Enclave.Sdk.Api 1.0.4 leaves the parameter out when it is given no page number
+    // Enclave.Sdk.Api 1.1.0 leaves the parameter out when it is given no page number
     // (SystemsClient.BuildQueryString and the other list clients). A parameter that is not a whole
     // number matches no page.
     internal static IRequestBuilder MatchingPage(string path, int page) =>

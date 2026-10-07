@@ -27,7 +27,7 @@ internal static class ApiErrors
                 return cli;
 
             // Enclave.Sdk.Api throws EnclaveApiException only for application/problem+json responses
-            // (Handlers/ProblemDetailsHttpMessageHandler.cs:20, version 1.0.5), so the API's own
+            // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0), so the API's own
             // status, title, detail and field errors are passed through.
             case EnclaveApiException api:
             {

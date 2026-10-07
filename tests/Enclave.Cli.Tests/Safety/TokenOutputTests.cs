@@ -13,7 +13,7 @@ namespace Enclave.Cli.Tests.Safety;
 public class TokenOutputTests
 {
     // The change request carrying the token shows the CLI held the token it left out.
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr_under_verbose(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -29,8 +29,7 @@ public class TokenOutputTests
         });
     }
 
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
-    [Category(TestCategory.Pending)]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Dry_run_of_a_command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();
@@ -49,7 +48,7 @@ public class TokenOutputTests
 
     // The token comes from ENCLAVE_TOKEN or from credentials.json (proposed-cli-surface.md "Options
     // on every command"), and either way stays out of the output.
-    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.Cases))]
+    [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Token_from_credentials_json_is_printed_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();

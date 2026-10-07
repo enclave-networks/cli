@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Resources;
 
 // policy update (proposed-cli-surface.md "Command options" and "Create and update"). An update
 // sends only the fields given, as a PolicyPatchModel; Enclave.Sdk.Api keys a PATCH body by the C#
-// property name (PatchClient.Set, version 1.0.4), so the keys are PascalCase. --set-acl and
+// property name (PatchClient.Set, version 1.1.0), so the keys are PascalCase. --set-acl and
 // --set-subnet-filter read the policy first so that entries which stay keep their labels ("Calls
 // per command"); the other flags make no read.
 
@@ -42,7 +42,6 @@ public partial class PolicyCommandTests
     // Example 11, checked first: the lookup is a read, and the PATCH is printed and not sent ("Dry
     // run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_dry_run_prints_the_patch_and_sends_only_the_lookup()
     {
         using var run = CliRun.Start();
@@ -186,10 +185,10 @@ public partial class PolicyCommandTests
         });
     }
 
-    // The CLI writes Ordered where Enclave.Sdk.Api.Data 304.48.0 names the value Prioritised ("Needs
-    // Enclave.Sdk.Api changes", item 9).
+    // The CLI writes Ordered where Enclave.Sdk.Api.Data 304.48.0 names the value Prioritised
+    // ("`Enclave.Sdk.Api` changes", item 9).
     [TestCase("balanced", "Balanced")]
-    [TestCase("ordered", "Ordered", Category = TestCategory.Pending)]
+    [TestCase("ordered", "Ordered")]
     [TestCase("geographic", "Geographic")]
     public async Task Policy_update_patches_the_gateway_mode(string mode, string expected)
     {
@@ -317,7 +316,6 @@ public partial class PolicyCommandTests
     // Example 80. The reads run, so the printed request shows the kept labels, and the PATCH is not
     // sent ("Dry run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_dry_run_prints_the_subnet_filters_with_their_kept_labels_and_sends_no_change()
     {
         using var run = CliRun.Start();
@@ -337,10 +335,9 @@ public partial class PolicyCommandTests
     }
 
     // Example 51. An empty value removes the restriction: the patch sets ActiveHours to null, which
-    // needs Enclave.Sdk.Api to accept null in a patch ("Needs Enclave.Sdk.Api changes", item 3).
+    // PatchClient.Set sends as JSON null ("`Enclave.Sdk.Api` changes", item 3).
     [TestCase(true)]
     [TestCase(false)]
-    [Category(TestCategory.Pending)]
     public async Task Policy_update_with_empty_active_hours_removes_the_restriction(bool byDescription)
     {
         using var run = CliRun.Start();

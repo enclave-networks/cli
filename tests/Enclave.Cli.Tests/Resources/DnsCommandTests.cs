@@ -274,7 +274,7 @@ public class DnsCommandTests
 
     // Example 62 in proposed-cli-surface.md. --zone takes the zone's name, looked up with one call,
     // and --zone-id its ID, which needs no lookup ("Names and IDs"); either way every page asks the
-    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api 1.0.4).
+    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api 1.1.0).
     [TestCase("dns list-hostnames --zone internal", true)]
     [TestCase("dns list-hostnames --zone-id 4", false)]
     public async Task Dns_list_hostnames_in_a_zone_asks_the_api_for_that_zone_only(string commandLine, bool lookup)
@@ -296,7 +296,7 @@ public class DnsCommandTests
     }
 
     // Example 16 in proposed-cli-surface.md. --filter is sent as typed, as the API's search
-    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api 1.0.4).
+    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api 1.1.0).
     [Test]
     public async Task Dns_list_hostnames_sends_the_filter_as_the_api_search()
     {
@@ -688,8 +688,8 @@ public class DnsCommandTests
         });
     }
 
-    // Zone and hostname IDs are integers, and every ID is checked before any call, because
-    // Enclave.Sdk.Api 1.0.4 puts IDs into URL paths unescaped (proposed-cli-surface.md "ID checks").
+    // Zone and hostname IDs are integers, and every ID is checked before any call, so a malformed
+    // one exits 2 naming it and sends nothing (proposed-cli-surface.md "ID checks").
     // The same command with integer IDs run next shows the rejection comes from the ID.
     [TestCase("dns show-zone --id ../records", "dns show-zone --id 4", "GET", "dns/zones/4")]
     [TestCase("dns update-zone --id 4a --notes Reviewed", "dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4")]
@@ -756,7 +756,6 @@ public class DnsCommandTests
     [TestCase("dns delete-zone --id 4 --dry-run", "DELETE", "dns/zones/4")]
     [TestCase("dns update-hostname --id 7 --notes Reviewed --dry-run", "PATCH", "dns/records/7")]
     [TestCase("dns delete-hostname --id 7,8 --dry-run", "DELETE", "dns/records")]
-    [Category(TestCategory.Pending)]
     public async Task Dns_changes_with_dry_run_print_the_requests_and_send_nothing(string commandLine, string method, string suffix)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -784,7 +783,6 @@ public class DnsCommandTests
     // (proposed-cli-surface.md "Dry run"). The printed body carries the zone the lookup found and the
     // record type.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Dns_create_hostname_with_dry_run_looks_the_zone_up_and_prints_the_post_without_sending_it()
     {
         using var run = CliRun.Start();

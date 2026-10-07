@@ -57,7 +57,7 @@ internal sealed class KeyTiming
     /// The expiry as a create sends it, or null when neither --for nor --until is given.
     /// </summary>
     // The API takes the expiry as ISO 8601 text (AutoExpireModel.ExpiryDateTime), which "o" writes
-    // with the instant's +00:00 offset, as Enclave.Sdk.Api 1.0.5 EnrolmentKeysClient.EnableUntilAsync
+    // with the instant's +00:00 offset, as Enclave.Sdk.Api 1.1.0 EnrolmentKeysClient.EnableUntilAsync
     // writes it. No time zone ID is sent: with one, the API moves the expiry when that zone's rules
     // change (AutoExpireModel.TimeZoneId), and the CLI sends an instant (proposed-cli-surface.md
     // "Details").

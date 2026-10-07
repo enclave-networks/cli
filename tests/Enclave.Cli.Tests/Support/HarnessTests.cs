@@ -7,10 +7,12 @@ using System.Text.Json.Serialization;
 using Enclave.Api.Modules.AccountManagement.PublicAccount.Models;
 using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Scaffolding.Pagination.Models;
+using Enclave.Cli.Context;
 using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 using Enclave.Sdk.Api;
 using Enclave.Sdk.Api.Clients.Interfaces;
+using Enclave.Sdk.Api.Data;
 using Enclave.Sdk.Api.Exceptions;
 using NUnit.Framework;
 using NUnit.Framework.Internal;
@@ -19,7 +21,7 @@ using static System.FormattableString;
 namespace Enclave.Cli.Tests.Support;
 
 // The tests in this project trust three things this fixture proves: that every ApiJson body is JSON
-// Enclave.Sdk.Api 1.0.4 reads into the model it names, field for field, that a CliRun confines the
+// Enclave.Sdk.Api 1.1.0 reads into the model it names, field for field, that a CliRun confines the
 // CLI to its own environment, home directory and fake API, and that the stubs, the request records
 // and the CliAssert checks behave as their documentation says. A check that passed everything would
 // let every test that relies on it pass, so each check is shown failing on the outputs it rejects.
@@ -29,15 +31,16 @@ public class HarnessTests
 
     private const int ResourceId = 7;
 
-    // The options Enclave.Sdk.Api 1.0.4 reads and writes JSON with (Constants.JsonSerializerOptions,
-    // which is internal to the package).
+    // The options Enclave.Sdk.Api 1.1.0 reads and writes JSON with (Constants.JsonSerializerOptions,
+    // which is internal to the package): the gateway priority converter goes ahead of the enum
+    // converter, since System.Text.Json uses the first converter that can convert a type.
     private static readonly JsonSerializerOptions SdkJsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
     };
 
-    // The options EnclaveClient.GetSettingsFile reads credentials.json with (Enclave.Sdk.Api 1.0.4).
+    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api 1.1.0).
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static IEnumerable<TestCaseData> ResourceBodies()
@@ -627,7 +630,7 @@ public class HarnessTests
 
     // A proxy in front of the API answers with its own error page, which Enclave.Sdk.Api passes on as
     // HttpRequestException with the status (it reads problem details from application/problem+json
-    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:20, version 1.0.4).
+    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0).
     [Test]
     public void StubRaw_reaches_the_sdk_as_an_http_error_without_problem_details()
     {
@@ -723,6 +726,33 @@ public class HarnessTests
         {
             Environment.SetEnvironmentVariable(ProbeName, null);
         }
+    }
+
+    // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). A run gives the
+    // CLI its fake API's URL as the partner API address too, so a partner call can never reach the
+    // live partner API, and the fake's request log holds partner calls beside main API calls. One
+    // fake serves both, since every partner route is under /partner/{partnerId}/ and no main API
+    // route is. The client is the one ApiAccess builds from the run's host, which every command's
+    // calls go through, so the call stands for any partner command's.
+    [Test]
+    public async Task Partner_api_calls_of_a_run_reach_its_fake_api_with_the_token()
+    {
+        using var run = CliRun.Start();
+        var customers = TestData.PartnerPath("customers");
+        run.Stub("GET", customers, json: ApiJson.Page());
+        var host = run.CreateHost();
+        using var network = new HttpClientHandler();
+
+        var partner = ApiAccess.Resolve(host).CreateClient(network).CreatePartnerClient(PartnerId.FromGuid(TestData.PartnerId));
+        await partner.Customers.GetCustomersAsync();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.DefaultPartnerApiUrl, Is.EqualTo(run.PartnerApiUrl));
+            Assert.That(run.PartnerApiUrl, Is.EqualTo(run.ApiUrl));
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {customers}" }));
+            Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
+        });
     }
 
     // A test fixes the clock by setting CliRun.Time, which reaches the CLI only if the host carries
@@ -980,35 +1010,6 @@ public class HarnessTests
         await ConnectOrganisation(run).EnrolledSystems.GetSystemsAsync();
 
         AssertFails(() => CliAssert.Rejected(run, result, "no_org"));
-    }
-
-    [Test]
-    public void NotImplemented_passes_exit_1_with_not_implemented_and_no_output_or_request()
-    {
-        using var run = CliRun.Start();
-
-        Assert.That(() => CliAssert.NotImplemented(run, ErrorOutput(1, "not_implemented")), Throws.Nothing);
-    }
-
-    [TestCase(1, "api_error", "")]
-    [TestCase(2, "invalid_argument", "")]
-    [TestCase(2, "not_implemented", "")]
-    [TestCase(1, "not_implemented", "{}")]
-    public void NotImplemented_fails_the_test_for_another_outcome(int exitCode, string code, string stdout)
-    {
-        using var run = CliRun.Start();
-
-        AssertFails(() => CliAssert.NotImplemented(run, ErrorOutput(exitCode, code, stdout)));
-    }
-
-    [Test]
-    public async Task NotImplemented_fails_the_test_when_the_fake_api_received_a_request()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
-        await ConnectOrganisation(run).EnrolledSystems.GetSystemsAsync();
-
-        AssertFails(() => CliAssert.NotImplemented(run, ErrorOutput(1, "not_implemented")));
     }
 
     // The ID field of each kind is stated here from the model a list of that kind prints, so a

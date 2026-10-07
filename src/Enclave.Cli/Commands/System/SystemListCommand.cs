@@ -46,7 +46,7 @@ internal static class SystemListCommand
 
         // The API keeps waiting systems apart, and their list takes no state, platform, type,
         // gateway, DNS or disabled filter (UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api
-        // 1.0.5), so those options exit 2 with --pending ("Details").
+        // 1.1.0), so those options exit 2 with --pending ("Details").
         Option[] enrolledOnly = [state, os, type, gateway, dnsName, notSeenFor, includeDisabled];
         verb.Check(context =>
         {

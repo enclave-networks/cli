@@ -85,9 +85,9 @@ public class OrgCommandTests
         });
     }
 
-    // The API returns the users in one body, with no pages (OrganisationClient.GetOrganisationUsersAsync,
-    // Enclave.Sdk.Api 1.0.4), and the CLI prints them as a user list (proposed-cli-surface.md
-    // "Output").
+    // The API returns the users in one body, with no pages
+    // (OrganisationScopedClient.GetOrganisationUsersAsync, Enclave.Sdk.Api 1.1.0), and the CLI prints
+    // them as a user list (proposed-cli-surface.md "Output").
     [Test]
     public async Task Org_list_users_prints_the_organisation_users_as_a_user_list()
     {
@@ -196,8 +196,8 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // An account ID is a GUID, checked before any call, because Enclave.Sdk.Api 1.0.4 puts it into
-    // the URL path unescaped (proposed-cli-surface.md "ID checks"). An email address after --id is
+    // An account ID is a GUID, checked before any call, so a malformed one exits 2 naming it and
+    // sends nothing (proposed-cli-surface.md "ID checks"). An email address after --id is
     // not read as one, since the option decides how a value is read ("Commands"). The removal with a
     // GUID run next shows the rejection comes from the ID.
     [TestCase(SamEmail)]
@@ -256,8 +256,8 @@ public class OrgCommandTests
     }
 
     // Example 64 in proposed-cli-surface.md, first command. The API takes the invite as
-    // { emailAddress } (OrganisationClient.InviteUserAsync, Enclave.Sdk.Api 1.0.4). The response has
-    // no body, which prints {} ("Several IDs").
+    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.1.0). The response
+    // has no body, which prints {} ("Several IDs").
     [Test]
     public async Task Org_invite_posts_the_email_address_and_prints_an_empty_object()
     {
@@ -279,9 +279,9 @@ public class OrgCommandTests
     }
 
     // Example 19 in proposed-cli-surface.md, second command. The main API cancels an invite by email
-    // address, in the body of a DELETE (OrganisationClient.CancelInviteAync, Enclave.Sdk.Api 1.0.4),
-    // so the CLI sends the address and makes no lookup ("Partner API"). The response has no body,
-    // which prints {} ("Several IDs").
+    // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api
+    // 1.1.0), so the CLI sends the address and makes no lookup ("Partner API"). The response has no
+    // body, which prints {} ("Several IDs").
     [Test]
     public async Task Org_cancel_invite_deletes_the_invite_by_email_address_without_a_lookup()
     {
@@ -344,8 +344,8 @@ public class OrgCommandTests
 
     // A change the API did not make must never be reported as made. A plain 502 from a proxy is a
     // failure without problem details, which the CLI maps to transient ("Errors and exit codes").
-    // These calls report it only since Enclave.Sdk.Api 1.1.0 checks their status
-    // (proposed-cli-surface.md "Enclave.Sdk.Api changes" 6).
+    // These calls report it because Enclave.Sdk.Api 1.1.0 checks their status
+    // (proposed-cli-surface.md "`Enclave.Sdk.Api` changes", item 6).
     [TestCase("org invite alex@example.com", "POST", "invites")]
     [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
     public async Task Org_invite_changes_report_a_proxy_error_as_transient(string commandLine, string method, string suffix)
@@ -389,7 +389,6 @@ public class OrgCommandTests
     [TestCase("org update --name Initech --dry-run", "PATCH", null, "Name", "Initech")]
     [TestCase("org invite alex@example.com --dry-run", "POST", "invites", "emailAddress", AlexEmail)]
     [TestCase("org cancel-invite sam@example.com --dry-run", "DELETE", "invites", "emailAddress", SamEmail)]
-    [Category(TestCategory.Pending)]
     public async Task Org_changes_with_dry_run_print_the_requests_and_send_nothing(string commandLine, string method, string? suffix, string field, string value)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -417,7 +416,6 @@ public class OrgCommandTests
     // The email lookup is a read the change depends on, so it runs, and only the DELETE it finds the
     // account for is withheld (proposed-cli-surface.md "Dry run").
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Org_remove_user_with_dry_run_looks_the_email_up_and_prints_the_removal_without_sending_it()
     {
         using var run = CliRun.Start();

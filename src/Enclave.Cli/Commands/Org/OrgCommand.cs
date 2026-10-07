@@ -89,7 +89,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetOrganisationUsersAsync returns every user in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.0.5), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so there are no pages to read.
             var users = await org.Client.GetOrganisationUsersAsync();
 
             await context.Output.WriteListAsync(ListKind.User, users, context.CancellationToken);
@@ -107,7 +107,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetPendingInvitesAsync returns every invite in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.0.5), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so there are no pages to read.
             var invites = await org.Client.GetPendingInvitesAsync();
 
             await context.Output.WriteListAsync(ListKind.Invite, invites, context.CancellationToken);
@@ -117,8 +117,8 @@ internal static class OrgCommand
     }
 
     // A failed invite or cancel-invite is reported, with or without problem details: Enclave.Sdk.Api
-    // 1.1.0 checks the status of these responses (proposed-cli-surface.md "Enclave.Sdk.Api changes",
-    // item 6), and CliAction maps its exception like any other.
+    // 1.1.0 checks the status of these responses (proposed-cli-surface.md "`Enclave.Sdk.Api`
+    // changes", item 6), and CliAction maps its exception like any other.
     private static CliVerb Invite()
     {
         var verb = new CliVerb("invite", "Invite someone to the organisation by email address.", CommandScope.Organisation, changes: true);

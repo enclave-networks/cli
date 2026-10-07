@@ -25,7 +25,7 @@ internal static partial class TestData
     public static readonly Guid PartnerId = new("9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48");
 
     // Enclave.Sdk.Api builds the path from OrganisationGuid.ToString(), which writes the GUID as 32
-    // hex digits without hyphens (OrganisationClient constructor, Enclave.Sdk.Api 1.0.4, with
+    // hex digits without hyphens (OrganisationScopedClient constructor, Enclave.Sdk.Api 1.1.0, with
     // Enclave.Sdk.Api.Data 304.48.0).
 
     /// <summary>

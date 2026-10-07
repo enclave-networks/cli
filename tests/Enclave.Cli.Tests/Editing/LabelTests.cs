@@ -103,7 +103,6 @@ public class LabelTests
     // and the reads the change depends on run ("Dry run"): the lookup and the read that keeps
     // the labels, so the printed body holds the kept label.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Dry_run_reads_the_policy_and_prints_the_entries_with_the_labels_kept_without_sending_the_change()
     {
         using var run = CliRun.Start();

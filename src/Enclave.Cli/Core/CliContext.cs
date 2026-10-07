@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Enclave.Cli.Context;
+using Enclave.Configuration.Data.Identifiers;
 using Enclave.Sdk.Api;
 
 namespace Enclave.Cli.Core;
@@ -8,18 +9,21 @@ namespace Enclave.Cli.Core;
 /// What a command's handler works with: its parsed command line, the host, the output, and the
 /// token, organisation and partner, each resolved when the handler first asks for it.
 /// </summary>
-internal sealed class CliContext
+internal sealed class CliContext : IDisposable
 {
     private ApiAccess? _access;
 
     private EnclaveClient? _client;
 
-    public CliContext(ParseResult parseResult, CliHost host, CliOutput output, CliVerb? verb, CancellationToken cancellationToken)
+    private ApiRequestHandler? _handler;
+
+    public CliContext(ParseResult parseResult, CliHost host, CliOutput output, CliVerb? verb, DryRun? dryRun, CancellationToken cancellationToken)
     {
         ParseResult = parseResult;
         Host = host;
         Output = output;
         Verb = verb;
+        DryRun = dryRun;
         CancellationToken = cancellationToken;
     }
 
@@ -34,12 +38,18 @@ internal sealed class CliContext
     /// </summary>
     public CliVerb? Verb { get; }
 
+    /// <summary>
+    /// Under --dry-run, the changes the command would send, which its clients capture in place of
+    /// sending; null without --dry-run.
+    /// </summary>
+    public DryRun? DryRun { get; }
+
     public CancellationToken CancellationToken { get; }
 
     /// <summary>
     /// Whether --dry-run was given.
     /// </summary>
-    public bool IsDryRun => Verb?.DryRunOption is { } option && Get(option);
+    public bool IsDryRun => DryRun is not null;
 
     /// <summary>
     /// The option's value, or its default (null, or false for a flag) when not given.
@@ -90,34 +100,59 @@ internal sealed class CliContext
     /// The Enclave.Sdk.Api client for calls outside an organisation, such as GetOrganisationsAsync.
     /// Exits 3 with token_missing when there is no token. It makes no call.
     /// </summary>
-    public EnclaveClient GetClient() => _client ??= Access.CreateClient();
+    public EnclaveClient GetClient() => _client ??= CreateClient(Access);
+
+    /// <summary>
+    /// An Enclave.Sdk.Api client for <paramref name="access"/> whose requests go through the CLI's
+    /// handler: logged under --verbose, and under --dry-run each change captured and not sent. login
+    /// uses it for the token it checks; every other command uses <see cref="GetClient"/>. It makes
+    /// no call.
+    /// </summary>
+    public EnclaveClient CreateClient(ApiAccess access)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+
+        return access.CreateClient(_handler ??= new ApiRequestHandler(Output, DryRun));
+    }
 
     /// <summary>
     /// The organisation the command acts in, with its client (proposed-cli-surface.md "Context").
     /// Call it after checking the command's own arguments: checks run in the order arguments, the
     /// token, the organisation, then the call ("Errors and exit codes"). It makes one lookup call
-    /// when the organisation is named or not chosen, and none when it is given by ID.
+    /// when the organisation is named or not chosen, and none when it is given by ID. Under
+    /// --dry-run the organisation goes into the report.
     /// </summary>
     public async Task<OrganisationInUse> GetOrganisationAsync()
     {
-        RefuseDryRun();
+        var organisation = await OrganisationResolver.ResolveAsync(this, GetClient());
 
-        var client = GetClient();
-        return await OrganisationResolver.ResolveAsync(this, client);
+        if (DryRun is { } dryRun)
+        {
+            dryRun.Organisation = organisation;
+        }
+
+        return organisation;
     }
 
     /// <summary>
-    /// The partner a partner command acts for. Like <see cref="GetOrganisationAsync"/>, call it
-    /// after checking the command's own arguments; it checks the token first, then the partner,
-    /// and makes no call.
+    /// The partner a partner command acts for, with its partner API client. Like
+    /// <see cref="GetOrganisationAsync"/>, call it after checking the command's own arguments; it
+    /// checks the token first, then the partner, and makes no call. Under --dry-run the partner goes
+    /// into the report.
     /// </summary>
     public Task<PartnerInUse> GetPartnerAsync()
     {
-        RefuseDryRun();
+        var client = GetClient();
+        var choice = PartnerResolver.Resolve(this);
+        Verbose($"Partner {choice.Id} from {choice.Source}.");
 
-        _ = Access;
-        var partner = PartnerResolver.Resolve(this);
-        Verbose($"Partner {partner.Id} from {partner.Source}.");
+        var partner = new PartnerInUse(choice.Id, choice.Source, client.CreatePartnerClient(PartnerId.FromGuid(choice.Id)));
+
+        if (DryRun is { } dryRun)
+        {
+            dryRun.Partner = partner;
+        }
+
         return Task.FromResult(partner);
     }
 
@@ -170,15 +205,8 @@ internal sealed class CliContext
             ?? throw CliErrors.InvalidArgument(option.Name, $"The time given to {option.Name} does not exist in the local time zone.");
     }
 
-    // Capturing the request a change would send needs an HTTP handler option on
-    // EnclaveClientOptions, which Enclave.Sdk.Api 1.0.5 lacks (proposed-cli-surface.md "Needs
-    // Enclave.Sdk.Api changes", item 2). Until then --dry-run sends nothing and reports
-    // not_implemented, after the command's own argument checks and before the token is read.
-    private void RefuseDryRun()
-    {
-        if (IsDryRun)
-        {
-            throw CliErrors.NotImplemented("--dry-run needs an Enclave.Sdk.Api change: an HTTP handler option on EnclaveClientOptions, so the CLI can capture the requests a change would send without sending them. Nothing was sent.");
-        }
-    }
+    // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions; the caller owns it
+    // (EnclaveClientOptions.HttpMessageHandler, Enclave.Sdk.Api 1.1.0). The clients built here live
+    // for one command, so the handler goes with the context.
+    public void Dispose() => _handler?.Dispose();
 }

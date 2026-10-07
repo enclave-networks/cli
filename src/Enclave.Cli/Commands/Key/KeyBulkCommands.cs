@@ -12,12 +12,6 @@ namespace Enclave.Cli.Commands.Key;
 /// </summary>
 internal static class KeyBulkCommands
 {
-    // proposed-cli-surface.md "Needs Enclave.Sdk.Api changes", item 4.
-    private const string DeleteNeedsSdkChange =
-        "`key delete` needs an Enclave.Sdk.Api change: IEnrolmentKeysClient in Enclave.Sdk.Api 1.0.5 has no enrolment key delete, " +
-        "neither a single DeleteAsync nor a bulk delete beside BulkEnableAsync and BulkDisableAsync, though the API has both routes " +
-        "(portal EnrolmentKeysController.cs:265,295). Nothing was sent.";
-
     public static CliVerb Enable()
     {
         var (verb, keys, ids) = Several("enable", "Enable keys; with --for or --until, enable one key until then.");
@@ -67,10 +61,9 @@ internal static class KeyBulkCommands
         return verb;
     }
 
-    // The arguments are checked, and the token and organisation resolved, as for every other change,
-    // so a bad argument, a missing token or no organisation fails as it does on every command; the
-    // delete itself reports not_implemented and sends nothing. Descriptions are not looked up, since
-    // no call would use the IDs found.
+    // One key makes the bulk call too, so the output is { requested, affected } however many keys
+    // are given ("Several IDs"); Enclave.Sdk.Api 1.1.0 IEnrolmentKeysClient.DeleteAsync, the
+    // single delete, is left unused.
     public static CliVerb Delete()
     {
         var (verb, keys, ids) = Several("delete", "Delete keys.");
@@ -78,14 +71,7 @@ internal static class KeyBulkCommands
         verb.SetHandler(async context =>
         {
             var selection = await Items.ReadAsync(context, keys, ids, ListKind.Key, IdFormats.Int32);
-
-            if (await WroteEmptyAsync(context, selection))
-            {
-                return;
-            }
-
-            _ = await context.GetOrganisationAsync();
-            throw CliErrors.NotImplemented(DeleteNeedsSdkChange);
+            await RunAsync(context, selection, keys, (org, batch) => org.Client.EnrolmentKeys.BulkDeleteAsync(batch));
         });
 
         return verb;

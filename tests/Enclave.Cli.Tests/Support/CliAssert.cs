@@ -86,16 +86,6 @@ internal static class CliAssert
     }
 
     /// <summary>
-    /// Asserts the command reported not_implemented: exit 1, nothing on stdout, and no request to
-    /// the fake API.
-    /// </summary>
-    // A command the CLI lists but cannot run makes no call (proposed-cli-surface.md "Errors and exit
-    // codes"). Partner customer commands exit not_implemented until Enclave.Sdk.Api has partner
-    // clients (src/Enclave.Cli/Commands/Partner/Customer/PartnerCustomerCommand.cs). CliRun gives
-    // the CLI no partner API URL, so the fake API's request log covers the main API only.
-    public static void NotImplemented(CliRun run, CliResult result) => Rejected(run, result, "not_implemented");
-
-    /// <summary>
     /// Asserts the run exited 0 and printed a list of this kind, exactly { "kind", "items", "total" }
     /// with total equal to the number of items, and returns the items array.
     /// </summary>

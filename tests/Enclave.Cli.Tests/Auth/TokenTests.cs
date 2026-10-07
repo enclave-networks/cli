@@ -1,4 +1,6 @@
+using Enclave.Cli.Context;
 using Enclave.Cli.Tests.Support;
+using Enclave.Configuration.Data.Identifiers;
 using NUnit.Framework;
 using WireMock;
 
@@ -119,6 +121,61 @@ public class TokenTests
             Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
             Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
         });
+    }
+
+    // credentials.json's partnerApiBaseUrl is the partner API address, read beside baseUrl, and
+    // ENCLAVE_TOKEN keeps it as it keeps baseUrl (proposed-cli-surface.md "Partner API"). A second
+    // fake API at another address shows where the partner call went; the run's own fake, which is
+    // the partner API address when the file names none, receives nothing. The client is the one
+    // ApiAccess builds from the run's host, which every command's calls go through, so the call
+    // stands for any partner command's.
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Credentials_json_partner_api_base_url_is_the_partner_api_address_whichever_source_supplies_the_token(bool tokenFromEnvironment)
+    {
+        using var run = CliRun.Start();
+        var (other, otherUrl) = LoopbackApi.Start();
+        using var otherApi = other;
+        var customers = TestData.PartnerPath("customers");
+        LoopbackApi.Stub(otherApi, "GET", customers, 200, ApiJson.Page());
+        run.SaveCredentials(FileToken, partnerApiBaseUrl: otherUrl);
+
+        if (!tokenFromEnvironment)
+        {
+            run.Environment.Remove("ENCLAVE_TOKEN");
+        }
+
+        using var network = new HttpClientHandler();
+        var partner = ApiAccess.Resolve(run.CreateHost()).CreateClient(network).CreatePartnerClient(PartnerId.FromGuid(TestData.PartnerId));
+        await partner.Customers.GetCustomersAsync();
+
+        var received = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
+        var expectedToken = tokenFromEnvironment ? TestData.Token : FileToken;
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Requests, Is.Empty, "The partner call went to the default partner API address.");
+            Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {customers}" }));
+            Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
+        });
+    }
+
+    // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made, from
+    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.1.0), so
+    // an address that is not a URL fails every command. The CLI reports it as a bad setting naming
+    // the file, as it does a bad baseUrl, before any call.
+    [TestCase("not a url")]
+    [TestCase("ftp://partner-api.example")]
+    public async Task A_partner_api_base_url_that_is_not_an_http_or_https_url_exits_2_naming_the_file(string partnerApiBaseUrl)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
+        run.SaveCredentials(FileToken, partnerApiBaseUrl: partnerApiBaseUrl);
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Rejected(run, result);
+        Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain(run.CredentialsPath).And.Contain("partnerApiBaseUrl"));
     }
 
     // With no token there is nothing to authenticate with, so the CLI reports token_missing (exit 3,

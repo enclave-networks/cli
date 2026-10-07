@@ -5,9 +5,10 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Context;
 
 /// <summary>
-/// ~/.enclave/credentials.json, which holds the token and the API's base URL. The file belongs to
-/// Enclave.Sdk.Api, which reads personalAccessToken and baseUrl from it, ignoring case
-/// (EnclaveClient.ReadCredentialsFile, version 1.0.5); the CLI keeps that format.
+/// ~/.enclave/credentials.json, which holds the token and the API's base URL, and the partner API's
+/// base URL where it is not production's. The file belongs to Enclave.Sdk.Api, which reads
+/// personalAccessToken, baseUrl and partnerApiBaseUrl from it, ignoring case
+/// (EnclaveClient.ReadCredentialsFile, version 1.1.0); the CLI keeps that format.
 /// </summary>
 internal static class CredentialsFile
 {
@@ -34,21 +35,22 @@ internal static class CredentialsFile
         {
             if (JsonNode.Parse(text) is not JsonObject file)
             {
-                return new StoredCredentials(null, null, IsValid: false);
+                return new StoredCredentials(null, null, null, IsValid: false);
             }
 
-            return new StoredCredentials(Text(file, "personalAccessToken"), Text(file, "baseUrl"), IsValid: true);
+            return new StoredCredentials(Text(file, "personalAccessToken"), Text(file, "baseUrl"), Text(file, "partnerApiBaseUrl"), IsValid: true);
         }
         catch (JsonException)
         {
-            return new StoredCredentials(null, null, IsValid: false);
+            return new StoredCredentials(null, null, null, IsValid: false);
         }
     }
 
     /// <summary>
-    /// Writes the file with the token and base URL, readable by the current user only.
+    /// Writes the file with the token and base URL, and the partner API's base URL when one is
+    /// given, readable by the current user only.
     /// </summary>
-    public static void Write(CliHost host, string token, string baseUrl)
+    public static void Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
     {
         ArgumentNullException.ThrowIfNull(host);
 
@@ -57,6 +59,11 @@ internal static class CredentialsFile
             ["personalAccessToken"] = token,
             ["baseUrl"] = baseUrl,
         };
+
+        if (partnerApiBaseUrl is not null)
+        {
+            file["partnerApiBaseUrl"] = partnerApiBaseUrl;
+        }
 
         host.Files.WriteText(PathFor(host), file.ToJsonString(CliJson.Output) + "\n", privateToUser: true);
     }

@@ -18,6 +18,12 @@ internal sealed class CliHost
     public required Uri DefaultApiUrl { get; init; }
 
     /// <summary>
+    /// The partner API address when credentials.json names none, or null to leave Enclave.Sdk.Api's
+    /// own default, production (EnclaveClientOptions.PartnerApiBaseUrl).
+    /// </summary>
+    public Uri? DefaultPartnerApiUrl { get; init; }
+
+    /// <summary>
     /// Every file the CLI reads or writes goes through this store.
     /// </summary>
     public required IFileStore Files { get; init; }

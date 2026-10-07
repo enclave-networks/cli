@@ -7,7 +7,7 @@ namespace Enclave.Cli.Core;
 internal enum CommandScope
 {
     /// <summary>
-    /// Neither an organisation nor a partner: login, logout, org list, commands.
+    /// Neither an organisation nor a partner: login, logout, org list.
     /// </summary>
     None = 0,
 

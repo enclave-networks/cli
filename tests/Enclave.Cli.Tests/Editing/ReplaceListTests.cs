@@ -119,7 +119,6 @@ public class ReplaceListTests
     // (proposed-cli-surface.md "Dry run"): the read gives the whole list, so the printed body holds
     // every tag the patch would send.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Add_tags_with_dry_run_reads_the_item_and_prints_the_whole_list_it_would_send()
     {
         using var run = CliRun.Start();

@@ -23,16 +23,22 @@ internal static class LoginCommand
             var token = await ReadTokenAsync(context, context.Get(tokenStdin));
 
             // credentials.json's baseUrl is kept, so a file pointing at another API address points
-            // there after login too, and the token is checked at that address.
+            // there after login too, and the token is checked at that address. Its partnerApiBaseUrl
+            // is kept as well, since staging means setting both (proposed-cli-surface.md "Partner
+            // API"), and is checked as every other command checks it.
             var stored = CredentialsFile.Read(host);
-            var access = new ApiAccess(token, context.Get(tokenStdin) ? "stdin" : ApiAccess.TokenVariable, ApiAccess.BaseUrlFrom(host, stored));
+            var access = new ApiAccess(
+                token,
+                context.Get(tokenStdin) ? "stdin" : ApiAccess.TokenVariable,
+                ApiAccess.BaseUrlFrom(host, stored),
+                ApiAccess.PartnerApiBaseUrlFrom(host, stored));
             context.Verbose($"Checking the token at {access.BaseUrl}.");
 
             // GetOrganisationsAsync needs the ReadOrgList scope. A token the API refuses throws here,
             // before anything is written, so a bad token never replaces a working one.
-            var organisations = await access.CreateClient().GetOrganisationsAsync();
+            var organisations = await context.CreateClient(access).GetOrganisationsAsync();
 
-            CredentialsFile.Write(host, token, stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri);
+            CredentialsFile.Write(host, token, stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri, stored?.PartnerApiBaseUrl);
             context.Verbose($"Saved the token in {CredentialsFile.PathFor(host)}.");
 
             // With one organisation there is one default to save; with several, the default the

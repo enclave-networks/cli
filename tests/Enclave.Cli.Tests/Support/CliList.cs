@@ -33,10 +33,11 @@ internal static class CliList
 
     // Each kind's ID is the property its model identifies an item by, and the value a command given
     // that list sends: systems by systemId, tags by name, invites by email address (the main API
-    // cancels an invite by email, OrganisationClient.CancelInviteAync), and organisations, users,
-    // customers and customer admins by their GUID (AccountOrganisationModel.OrgId,
-    // OrganisationUser.Id, and in the portal's partner API CustomerModel.Id and
-    // CustomerUserModel.Id). Log entries have no ID (LogEntryModel).
+    // cancels an invite by email, OrganisationClient.CancelInviteAync, and a partner customer's
+    // invite is looked up by its email address, proposed-cli-surface.md "Partner API"), and
+    // organisations, users, customers and customer admins by their GUID
+    // (AccountOrganisationModel.OrgId, OrganisationUser.Id, and Enclave.Sdk.Api 1.1.0's
+    // CustomerModel.Id and CustomerUserModel.Id). Log entries have no ID (LogEntryModel).
 
     /// <summary>
     /// The property that holds the ID of each item in a list of this kind. Throws for log, whose
@@ -81,12 +82,9 @@ internal static class CliList
     /// <summary>
     /// A list of this kind holding one item for each ID, in the order given. Each item is the
     /// ApiJson body for that kind with the ID in its <see cref="IdField"/>: a number for keys,
-    /// policies, zones, hostnames and trust requirements, and a string for the rest. Customer and
-    /// admin items hold the ID alone. Throws for log, whose entries have no ID.
+    /// policies, zones, hostnames and trust requirements, and a string for the rest. Throws for log,
+    /// whose entries have no ID.
     /// </summary>
-    // Enclave.Sdk.Api 1.0.4 has no partner API models, so there is no ApiJson body for a customer or
-    // a customer admin that HarnessTests could prove Enclave.Sdk.Api reads. A list of those kinds on stdin is
-    // read by its kind and IDs, which the ID-only items carry.
     public static string WithIds(string kind, params string[] ids) =>
         Of(kind, ids.Select(id => Item(kind, id)).ToArray());
 
@@ -103,7 +101,8 @@ internal static class CliList
         "org" => ApiJson.Org(Guid.Parse(id, CultureInfo.InvariantCulture), Invariant($"Org {id}")),
         "user" => ApiJson.User(Guid.Parse(id, CultureInfo.InvariantCulture), Invariant($"user-{id}@acme.example")),
         "invite" => ApiJson.Invite(id),
-        "customer" or "admin" => new JsonObject { ["id"] = Guid.Parse(id, CultureInfo.InvariantCulture).ToString("N") }.ToJsonString(),
+        "customer" => ApiJson.Customer(id, Invariant($"Customer {id}")),
+        "admin" => ApiJson.CustomerAdmin(id, Invariant($"admin-{id}@example.com")),
         "log" => throw new ArgumentException("Log entries have no ID.", nameof(kind)),
         _ => throw UnknownKind(kind),
     };

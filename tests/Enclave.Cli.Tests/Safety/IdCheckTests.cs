@@ -18,10 +18,12 @@ public class IdCheckTests
 
     private static readonly Guid CustomerOrgId = new("6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b");
 
-    // proposed-cli-surface.md "ID checks": Enclave.Sdk.Api 1.0.4 puts IDs into URL paths unescaped
-    // (UnapprovedSystemsClient.cs:95), and .NET resolves ".." when it combines the path with the
-    // base address, so this ID would send DELETE org/<id>/systems/ABCDE and revoke system ABCDE.
-    // Every route the ID could reach is answered, so any request it caused would be recorded.
+    // proposed-cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
+    // exits 2 naming it and sends nothing. Put into a URL path unescaped, this ID would send DELETE
+    // org/<id>/systems/ABCDE and revoke system ABCDE, since .NET resolves ".." when it combines the
+    // path with the base address; Enclave.Sdk.Api 1.1.0 escapes it (ClientBase.PathSegment), and the
+    // check does not depend on that. Every route the ID could reach is answered, so any request it
+    // caused would be recorded.
     [Test]
     public async Task System_decline_exits_2_for_a_path_traversal_id_and_sends_nothing()
     {
@@ -50,7 +52,7 @@ public class IdCheckTests
 
     // One malformed ID among several stops the whole command: sending the valid ones would leave the
     // caller to work out which items changed.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_given_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -69,7 +71,7 @@ public class IdCheckTests
 
     // A list on stdin is checked as arguments are: its IDs go into the same calls. The bad item sits
     // between two good ones, so a CLI that sent the good items would show a request.
-    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.Cases))]
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_in_a_list_on_stdin_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
@@ -173,13 +175,14 @@ public class IdCheckTests
     }
 
     // Partners and customers are given by GUID (proposed-cli-surface.md "ID checks"), and arguments
-    // are checked before anything else ("Errors and exit codes"), so a bad ID exits 2 although a
-    // partner customer command cannot run. The second run, with GUIDs, passes the check and reaches
-    // not_implemented, the outcome of every partner customer command without partner clients.
+    // are checked before anything else ("Errors and exit codes"), so a bad ID exits 2 and sends
+    // nothing. The second run, with GUIDs, passes the check and makes the command's one call, on the
+    // partner API route of the partner and customer it was given.
     [TestCaseSource(nameof(PartnerIdCases))]
-    public async Task Partner_customer_command_exits_2_for_a_partner_or_customer_id_that_is_not_a_guid(string[] rejectedArgs, string[] acceptedArgs)
+    public async Task Partner_customer_command_exits_2_for_a_partner_or_customer_id_that_is_not_a_guid(string[] rejectedArgs, string[] acceptedArgs, string call)
     {
         using var run = CliRun.Start();
+        PartnerApiFake.StubPartnerApi(run);
 
         var rejected = await run.RunAsync(rejectedArgs);
 
@@ -187,7 +190,8 @@ public class IdCheckTests
 
         var accepted = await run.RunAsync(acceptedArgs);
 
-        CliAssert.NotImplemented(run, accepted);
+        PartnerApiFake.AssertSentToThePartnerApi(run, accepted);
+        Assert.That(run.Calls(), Is.EqualTo(new[] { call }), accepted.ToString());
     }
 
     // "Every ID is checked before any call" includes the lookup --org <name> makes, so a malformed
@@ -233,7 +237,6 @@ public class IdCheckTests
 
     // A dry run prints the request the command would send, so it applies the same checks.
     [Test]
-    [Category(TestCategory.Pending)]
     public async Task Id_check_applies_under_dry_run()
     {
         using var run = CliRun.Start();
@@ -296,8 +299,8 @@ public class IdCheckTests
         yield return Case("trust update --id ../5", ["trust", "update", "--id", "../5", "--description", "uk only"], ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only"));
 
         // Organisations and accounts: GUIDs. RemoveUserAsync takes the account ID as a string
-        // (Enclave.Sdk.Api 1.0.4, OrganisationClient.cs:91), so the path carries whichever GUID form
-        // the CLI passes.
+        // (Enclave.Sdk.Api 1.1.0, OrganisationScopedClient.RemoveUserAsync), so the path carries
+        // whichever GUID form the CLI passes.
         yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, otherPathSuffix: $"users/{AccountId:D}");
@@ -328,14 +331,14 @@ public class IdCheckTests
         var partner = TestData.PartnerId.ToString();
         var customer = CustomerOrgId.ToString();
 
-        yield return PartnerCase("--partner-id not-a-guid", ["partner", "customer", "list", "--partner-id", "not-a-guid"], ["partner", "customer", "list", "--partner-id", partner]);
-        yield return PartnerCase("--partner-id ../customers", ["partner", "customer", "list", "--partner-id", "../customers"], ["partner", "customer", "list", "--partner-id", partner]);
-        yield return PartnerCase("partner customer show --org-id 12", ["partner", "customer", "show", "--org-id", "12", "--partner-id", partner], ["partner", "customer", "show", "--org-id", customer, "--partner-id", partner]);
-        yield return PartnerCase("partner customer convert --org-id ../admins", ["partner", "customer", "convert", "--org-id", "../admins", "--billing-months", "12", "--partner-id", partner], ["partner", "customer", "convert", "--org-id", customer, "--billing-months", "12", "--partner-id", partner]);
+        yield return PartnerCase("--partner-id not-a-guid", ["partner", "customer", "list", "--partner-id", "not-a-guid"], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");
+        yield return PartnerCase("--partner-id ../customers", ["partner", "customer", "list", "--partner-id", "../customers"], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");
+        yield return PartnerCase("partner customer show --org-id 12", ["partner", "customer", "show", "--org-id", "12", "--partner-id", partner], ["partner", "customer", "show", "--org-id", customer, "--partner-id", partner], $"GET {TestData.CustomerPath(customer)}");
+        yield return PartnerCase("partner customer convert --org-id ../admins", ["partner", "customer", "convert", "--org-id", "../admins", "--billing-months", "12", "--partner-id", partner], ["partner", "customer", "convert", "--org-id", customer, "--billing-months", "12", "--partner-id", partner], $"PUT {TestData.CustomerPath(customer, "convert")}");
     }
 
-    private static TestCaseData PartnerCase(string name, string[] rejectedArgs, string[] acceptedArgs) =>
-        new TestCaseData(rejectedArgs, acceptedArgs).SetArgDisplayNames(name);
+    private static TestCaseData PartnerCase(string name, string[] rejectedArgs, string[] acceptedArgs, string call) =>
+        new TestCaseData(rejectedArgs, acceptedArgs, call).SetArgDisplayNames(name);
 
     // A copy of the list's first item with its ID replaced by the malformed one, placed between the
     // two good items. The malformed ID is written as a JSON number where it reads as one, the type

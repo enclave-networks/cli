@@ -1,7 +1,6 @@
 using Enclave.Cli.Commands.Trust;
 using Enclave.Cli.Core;
 using Enclave.Configuration.Data.Identifiers;
-using Enclave.Sdk.Network.NetworkPolicy;
 
 namespace Enclave.Cli.Commands.Policy;
 
@@ -24,7 +23,7 @@ internal static class PolicyUpdateCommand
         var trust = verb.Add(CliOptions.List("--set-trust", "Replace the trust requirements, by description; \"\" removes them all.", "name,..."));
         var trustIds = verb.Add(CliOptions.IdList("--set-trust-id", "Replace the trust requirements, by ID.", IdFormats.Int32));
         var gateways = verb.Add(CliOptions.Repeated("--set-gateway", "Replace the gateways and their routes.", "systemId:route,..."));
-        var mode = verb.Add(CliOptions.ChoiceText("--mode", "Which of several gateways carries a system's traffic.", PolicyGateways.Modes));
+        var mode = verb.Add(CliOptions.Choice("--mode", "Which of several gateways carries a system's traffic.", PolicyGateways.Modes));
         var subnetFilter = verb.Add(CliOptions.Labelled("--set-subnet-filter", "Replace the subnet filter, keeping the labels of ranges that stay.", "range"));
         var activeHours = verb.Add(CliOptions.Text("--set-active-hours", "Replace the active hours; \"\" removes the restriction.", "hours"));
 
@@ -55,16 +54,6 @@ internal static class PolicyUpdateCommand
 
         verb.SetHandler(async context =>
         {
-            // Removing the restriction sets ActiveHours to null, and Enclave.Sdk.Api 1.0.5 refuses a
-            // null patch value (Data/PatchClient.cs:32, PatchClient.Set; "Needs Enclave.Sdk.Api
-            // changes", item 3).
-            if (context.Get(activeHours) is { Length: 0 })
-            {
-                throw CliErrors.NotImplemented("--set-active-hours \"\" removes the restriction by setting the policy's active hours to null, which needs an Enclave.Sdk.Api change: Enclave.Sdk.Api 1.0.5 refuses null in a patch (PatchClient.Set). Nothing was sent.");
-            }
-
-            GatewayPriorityType? priority = context.Get(mode) is { } given ? PolicyGateways.Priority(given) : null;
-
             var org = await context.GetOrganisationAsync();
             var policyId = PolicyId.FromInt(await PolicyLookup.IdAsync(context, org, context.Get(id), context.Get(policy), policy.Name));
 
@@ -117,7 +106,7 @@ internal static class PolicyUpdateCommand
                 patch.Set(model => model.Gateways, Clears(gatewayValues) ? [] : gatewayValues.Select(gateway => PolicyGateways.Parse(gateway)!).ToArray());
             }
 
-            if (priority is not null)
+            if (context.Get(mode) is { } priority)
             {
                 patch.Set(model => model.GatewayPriority, priority);
             }
@@ -127,9 +116,13 @@ internal static class PolicyUpdateCommand
                 patch.Set(model => model.GatewayAllowedIpRanges, Clears(rangeValues) ? [] : PolicyGateways.KeepRanges(rangeValues, current!.GatewayAllowedIpRanges));
             }
 
+            // "" removes the restriction ("Command options") by patching ActiveHours to null.
+            // Enclave.Sdk.Api 1.1.0 sends a null patch value as JSON null, and the API applies every
+            // field the body holds, a null one included (Data/PatchClient.cs, Set, citing portal
+            // Enclave.Api.Scaffolding PatchModel.WasSet).
             if (context.Get(activeHours) is { } hours)
             {
-                patch.Set(model => model.ActiveHours, PolicyActiveHours.Parse(hours)!);
+                patch.Set(model => model.ActiveHours, hours.Length == 0 ? null : PolicyActiveHours.Parse(hours)!);
             }
 
             // One policy named: a 404 means it does not exist, exit 5 ("Several IDs").

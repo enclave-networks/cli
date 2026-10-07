@@ -29,7 +29,7 @@ internal static class SystemEnableCommand
         verb.Requires(then, forOption, until);
 
         // The API's timed enable takes one system, PUT systems/{systemId}/enable-until
-        // (SystemsClient.EnableUntilAsync, Enclave.Sdk.Api 1.0.5), and has no bulk form, so --for
+        // (SystemsClient.EnableUntilAsync, Enclave.Sdk.Api 1.1.0), and has no bulk form, so --for
         // and --until take one system given by its ID ("Several IDs").
         verb.Check(context =>
         {

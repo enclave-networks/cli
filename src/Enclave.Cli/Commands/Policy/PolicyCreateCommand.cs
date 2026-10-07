@@ -27,7 +27,7 @@ internal static class PolicyCreateCommand
         var trust = verb.Add(CliOptions.List("--trust", "Trust requirements the senders must meet, by description.", "name,..."));
         var trustIds = verb.Add(CliOptions.IdList("--trust-id", "Trust requirements the senders must meet, by ID.", IdFormats.Int32));
         var gateways = verb.Add(CliOptions.Repeated("--gateway", "Make a gateway policy: the senders reach these routes through this system.", "systemId:route,..."));
-        var mode = verb.Add(CliOptions.ChoiceText("--mode", "With --gateway: which of several gateways carries a system's traffic; balanced when left out.", PolicyGateways.Modes));
+        var mode = verb.Add(CliOptions.Choice("--mode", "With --gateway: which of several gateways carries a system's traffic; balanced when left out.", PolicyGateways.Modes));
         var subnetFilter = verb.Add(CliOptions.Labelled("--subnet-filter", "With --gateway: narrow the addresses the senders may reach through the gateway.", "range"));
         var activeHours = verb.Add(CliOptions.Text("--active-hours", "Days, times and an IANA time zone when the policy applies: \"mon-fri 08:00-18:00 Europe/London\".", "hours"));
         var forOption = verb.Add(CliOptions.Duration("--for", "Keep the policy for this long."));
@@ -73,7 +73,7 @@ internal static class PolicyCreateCommand
         {
             var expiry = context.ExpiryFrom(forOption, untilOption);
             var gatewayList = context.Get(gateways)?.Select(gateway => PolicyGateways.Parse(gateway)!).ToArray();
-            GatewayPriorityType? priority = gatewayList is null ? null : PolicyGateways.Priority(context.Get(mode) ?? PolicyGateways.Modes[0].Result);
+            GatewayPriorityType? priority = gatewayList is null ? null : context.Get(mode) ?? GatewayPriorityType.Balanced;
 
             var org = await context.GetOrganisationAsync();
             var trustRequirements = context.Get(trustIds) ?? await TrustLookup.IdsAsync(context, org, context.Get(trust) ?? [], trust.Name);

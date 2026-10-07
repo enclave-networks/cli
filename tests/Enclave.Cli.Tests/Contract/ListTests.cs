@@ -59,8 +59,8 @@ public class ListTests
     }
 
     // The organisation lists come back whole from the API (EnclaveClient.GetOrganisationsAsync, and
-    // OrganisationClient GetOrganisationUsersAsync and GetPendingInvitesAsync, in Enclave.Sdk.Api
-    // 1.0.4), and log reads only the pages it needs; every list prints the same envelope ("Output":
+    // OrganisationScopedClient GetOrganisationUsersAsync and GetPendingInvitesAsync, in
+    // Enclave.Sdk.Api 1.1.0), and log reads only the pages it needs; every list prints the same envelope ("Output":
     // `log` included), with the kinds "Output" names: org for `org list`, user for `org list-users`
     // and invite for `org list-invites`.
     public static IEnumerable<TestCaseData> WholeLists()
@@ -223,7 +223,7 @@ public class ListTests
     }
 
     // Example 38. The CLI takes the lower-case, hyphenated name and sends the API's own,
-    // RecentlyConnected, which Enclave.Sdk.Api 1.0.4 writes into the sort parameter
+    // RecentlyConnected, which Enclave.Sdk.Api 1.1.0 writes into the sort parameter
     // (SystemsClient.BuildQueryString). Each page is a separate request, so each carries the sort.
     [Test]
     public async Task System_list_sort_recently_connected_asks_for_every_page_sorted_by_RecentlyConnected()

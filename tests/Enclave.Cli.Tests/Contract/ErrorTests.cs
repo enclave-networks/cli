@@ -26,8 +26,8 @@ public class ErrorTests
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
 
     // The items are given by ID, or are an invite's email address, which the API cancels by
-    // (OrganisationClient.CancelInviteAync, Enclave.Sdk.Api 1.0.4), so no lookup comes first and the
-    // request that fails is the command's own ("Several IDs": single-ID commands are show, update,
+    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api 1.1.0), so no lookup comes first
+    // and the request that fails is the command's own ("Several IDs": single-ID commands are show, update,
     // --for and --until, dns delete-zone, org remove-user and org cancel-invite).
     public static IEnumerable<TestCaseData> SingleIdCommands()
     {
@@ -55,7 +55,7 @@ public class ErrorTests
     }
 
     // Enclave.Sdk.Api throws EnclaveApiException for application/problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:20, version 1.0.4). The error carries the
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0). The error carries the
     // problem's status, title and detail through, so the caller sees what the API said. A list is
     // not a single-ID command, so a 404 on one is an API error like any other status the table does
     // not name.
@@ -111,7 +111,7 @@ public class ErrorTests
     }
 
     // Validation failures list the offending fields in the problem's "errors" (an RFC 9457
-    // extension member, which Enclave.Sdk.Api 1.0.4 reads into ProblemDetails.Errors). The CLI
+    // extension member, which Enclave.Sdk.Api 1.1.0 reads into ProblemDetails.Errors). The CLI
     // passes them through with their keys unchanged, so an agent can fix the named field.
     [Test]
     public async Task A_validation_problem_exits_1_with_api_error_carrying_the_errors_through()
@@ -144,8 +144,8 @@ public class ErrorTests
     }
 
     // A response that is not problem+json reaches the CLI as HttpRequestException with the status
-    // code (Enclave.Sdk.Api 1.0.4 throws EnclaveApiException only for problem+json,
-    // ProblemDetailsHttpMessageHandler.cs:20). A proxy in front of the API answers this way, and the
+    // code (Enclave.Sdk.Api 1.1.0 throws EnclaveApiException only for problem+json,
+    // ProblemDetailsHttpMessageHandler.cs:29). A proxy in front of the API answers this way, and the
     // CLI maps these statuses to the same codes ("Errors and exit codes").
     [TestCase(401, "text/plain", "Unauthorized", "token_invalid")]
     [TestCase(401, "application/json", """{ "message": "Unauthorized" }""", "token_invalid")]
@@ -228,8 +228,8 @@ public class ErrorTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // A partner customer command reports not_implemented when it reaches the call ("Errors and exit
-    // codes"), so token_missing and no_partner show the checks before it ran first.
+    // A partner customer command calls the partner API once its checks pass ("Errors and exit
+    // codes"), so token_missing and no_partner with no request sent show those checks ran first.
     [Test]
     public async Task A_missing_token_is_reported_before_the_partner_is_chosen()
     {

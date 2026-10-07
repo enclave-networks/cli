@@ -19,8 +19,9 @@ public class LoginTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    // The format Enclave.Sdk.Api reads (EnclaveClient.GetSettingsFile, version 1.0.4), which the CLI
-    // must not change (AGENTS.md "CLI contract").
+    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.1.0), which the
+    // CLI must not change (AGENTS.md "CLI contract"). The file can also hold partnerApiBaseUrl, which
+    // login keeps when it is there and never adds.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
 
     private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
@@ -124,6 +125,31 @@ public class LoginTests
             Assert.That(run.Requests, Is.Empty, "The token was checked against the default API address.");
             Assert.That(checks, Is.EqualTo(OrgLookupOnly));
             Assert.That(new Uri(JsonAssert.Property(credentials, "baseUrl").GetString()!), Is.EqualTo(new Uri(otherUrl)));
+            Assert.That(JsonAssert.Property(credentials, "personalAccessToken").GetString(), Is.EqualTo(TestData.Token));
+        });
+    }
+
+    // credentials.json can hold partnerApiBaseUrl beside baseUrl, and staging means setting both
+    // there (proposed-cli-surface.md "Partner API"), so login keeps it as it keeps baseUrl: a login
+    // that rewrote the file without it would send the next partner command to production. The
+    // address is staging's, which no test calls.
+    [Test]
+    public async Task Login_keeps_the_partner_api_base_url_already_in_credentials_json()
+    {
+        const string StagingPartnerApi = "https://staging-partner-api.enclave.io";
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", json: OneOrg());
+        run.SaveCredentials(OldToken, partnerApiBaseUrl: StagingPartnerApi);
+
+        var result = await run.RunAsync("login");
+
+        CliAssert.Succeeded(result);
+        var credentials = SavedCredentials(run);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
+            Assert.That(JsonAssert.Property(credentials, "partnerApiBaseUrl").GetString(), Is.EqualTo(StagingPartnerApi));
+            Assert.That(new Uri(JsonAssert.Property(credentials, "baseUrl").GetString()!), Is.EqualTo(run.ApiUrl));
             Assert.That(JsonAssert.Property(credentials, "personalAccessToken").GetString(), Is.EqualTo(TestData.Token));
         });
     }
@@ -249,7 +275,7 @@ public class LoginTests
     // login writes credentials.json after its check passes, so a token the API refuses is never
     // saved: a saved bad token makes every later command fail. Enclave.Sdk.Api raises
     // EnclaveApiException only for problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:20, version 1.0.4), so the plain cases, a proxy
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0), so the plain cases, a proxy
     // or server answering without problem details, reach the CLI as HttpRequestException, which
     // the CLI maps to the same codes ("Errors and exit codes"). 403 means the token lacks
     // ReadOrgList, which the check needs.
