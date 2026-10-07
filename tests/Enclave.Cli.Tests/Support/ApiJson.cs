@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
@@ -10,12 +11,16 @@ namespace Enclave.Cli.Tests.Support;
 // digits without hyphens, the only form their JSON converters read and the form they write. Each
 // body carries every property of the model it represents, with DateTime values ending in Z and
 // DateTimeOffset values ending in +00:00, so a model read from a body and written back with the
-// SDK's options gives the same JSON. HarnessTests checks both.
+// Enclave.Sdk.Api's options gives the same JSON. HarnessTests checks both.
+//
+// The class is partial so that tests for one area of the API can add their bodies in their own
+// file, Support/ApiJson.<Area>.cs, without editing a file other tests share. StyleCop SA1601
+// requires a <summary> on every part.
 
 /// <summary>
 /// Response bodies in the Enclave API's JSON, for the fake API to serve.
 /// </summary>
-internal static class ApiJson
+internal static partial class ApiJson
 {
     private const string Created = "2026-01-01T00:00:00Z";
 
@@ -28,21 +33,40 @@ internal static class ApiJson
     private const string LastSeenOffset = "2026-01-02T09:30:00+00:00";
 
     /// <summary>
-    /// A PaginatedResponseModel holding the given items, with metadata.total equal to the item count.
+    /// A PaginatedResponseModel holding the given items as the only page, with metadata.total equal
+    /// to the item count.
     /// </summary>
-    public static string Page(params string[] items) => PageOf(items.Length, items);
+    public static string Page(params string[] items) => PageAt(0, items.Length, items.Length, items);
 
     /// <summary>
     /// A PaginatedResponseModel for the first page of a list of <paramref name="total"/> items, the
-    /// page size being the number of items given. Pagination metadata and links follow
-    /// PaginatedQueryHandler.GetResponseAsync in the portal (Enclave.Api.Scaffolding).
+    /// page size being the number of items given.
     /// </summary>
-    public static string PageOf(int total, params string[] items)
+    public static string PageOf(int total, params string[] items) => PageAt(0, items.Length, total, items);
+
+    /// <summary>
+    /// A PaginatedResponseModel for page <paramref name="page"/> (numbered from 0) of a list of
+    /// <paramref name="total"/> items read <paramref name="perPage"/> at a time, holding the given
+    /// items. The metadata is what PaginatedQueryHandler.GetResponseAsync in the portal
+    /// (Enclave.Api.Scaffolding) writes for that request: the first page has no prevPage, the last
+    /// has no nextPage, and a page after the last has no items and no nextPage.
+    /// </summary>
+    public static string PageAt(int page, int perPage, int total, params string[] items)
     {
-        var lastPage = items.Length > 0 && total > items.Length
-            ? (int)Math.Ceiling(total / (double)items.Length) - 1
+        ArgumentOutOfRangeException.ThrowIfNegative(page);
+        ArgumentOutOfRangeException.ThrowIfNegative(perPage);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(items.Length, perPage);
+
+        if (items.Length > 0)
+        {
+            ArgumentOutOfRangeException.ThrowIfGreaterThan((page * perPage) + items.Length, total);
+        }
+
+        var lastPage = perPage > 0 && total > 0
+            ? (int)Math.Ceiling(total / (double)perPage) - 1
             : 0;
-        int? nextPage = lastPage > 0 ? 1 : null;
+        int? prevPage = page > 0 ? page - 1 : null;
+        int? nextPage = page < lastPage ? page + 1 : null;
 
         var array = new JsonArray();
         foreach (var item in items)
@@ -50,26 +74,41 @@ internal static class ApiJson
             array.Add(JsonNode.Parse(item));
         }
 
+        // The API writes each link as an absolute URL repeating the request's query
+        // (PaginatedQueryHandler.CreatePageLinkUri). Enclave.Sdk.Api reads links as Uri, which also takes a
+        // relative reference, and a list is read by following metadata.nextPage, so a link here
+        // carries the page number alone.
         return new JsonObject
         {
             ["metadata"] = new JsonObject
             {
                 ["total"] = total,
                 ["firstPage"] = 0,
-                ["prevPage"] = null,
+                ["prevPage"] = prevPage,
                 ["lastPage"] = lastPage,
                 ["nextPage"] = nextPage,
             },
             ["links"] = new JsonObject
             {
                 ["first"] = "?page=0",
-                ["prev"] = null,
-                ["next"] = nextPage is null ? null : "?page=1",
-                ["last"] = $"?page={lastPage}",
+                ["prev"] = prevPage is null ? null : Invariant($"?page={prevPage}"),
+                ["next"] = nextPage is null ? null : Invariant($"?page={nextPage}"),
+                ["last"] = Invariant($"?page={lastPage}"),
             },
             ["items"] = array,
         }.ToJsonString();
     }
+
+    /// <summary>
+    /// An RFC 9457 problem details body, the form the Enclave API reports errors in.
+    /// </summary>
+    public static string Problem(int status, string title, string? detail = null) => new JsonObject
+    {
+        ["type"] = "about:blank",
+        ["title"] = title,
+        ["status"] = status,
+        ["detail"] = detail,
+    }.ToJsonString();
 
     /// <summary>
     /// A QueryAccountOrgsResponseModel, the GET /account/orgs body, whose orgs are
@@ -80,17 +119,23 @@ internal static class ApiJson
         var array = new JsonArray();
         foreach (var (id, name) in orgs)
         {
-            array.Add(new JsonObject
-            {
-                ["orgId"] = id.ToString("N"),
-                ["orgName"] = name,
-                ["role"] = "Owner",
-                ["partnerAccess"] = false,
-            });
+            array.Add(JsonNode.Parse(Org(id, name)));
         }
 
         return new JsonObject { ["orgs"] = array }.ToJsonString();
     }
+
+    /// <summary>
+    /// One item of <see cref="Orgs"/>: an AccountOrganisationModel with role Owner and partnerAccess
+    /// false.
+    /// </summary>
+    public static string Org(Guid id, string name) => new JsonObject
+    {
+        ["orgId"] = id.ToString("N"),
+        ["orgName"] = name,
+        ["role"] = "Owner",
+        ["partnerAccess"] = false,
+    }.ToJsonString();
 
     /// <summary>
     /// A bulk action result, such as BulkSystemUpdateResult: one integer property.
@@ -330,18 +375,23 @@ internal static class ApiJson
         var array = new JsonArray();
         foreach (var (id, email) in users)
         {
-            array.Add(new JsonObject
-            {
-                ["id"] = id.ToString("N"),
-                ["emailAddress"] = email,
-                ["fullName"] = email.Split('@')[0],
-                ["joinDate"] = Created,
-                ["role"] = "Admin",
-            });
+            array.Add(JsonNode.Parse(User(id, email)));
         }
 
         return new JsonObject { ["users"] = array }.ToJsonString();
     }
+
+    /// <summary>
+    /// One item of <see cref="Users"/>: an OrganisationUser with role Admin.
+    /// </summary>
+    public static string User(Guid id, string email) => new JsonObject
+    {
+        ["id"] = id.ToString("N"),
+        ["emailAddress"] = email,
+        ["fullName"] = email.Split('@')[0],
+        ["joinDate"] = Created,
+        ["role"] = "Admin",
+    }.ToJsonString();
 
     /// <summary>
     /// An OrganisationPendingInvitesModel, the GET /org/{orgId}/invites body, whose invites are
@@ -352,11 +402,16 @@ internal static class ApiJson
         var array = new JsonArray();
         foreach (var email in emails)
         {
-            array.Add(new JsonObject { ["emailAddress"] = email });
+            array.Add(JsonNode.Parse(Invite(email)));
         }
 
         return new JsonObject { ["invites"] = array }.ToJsonString();
     }
+
+    /// <summary>
+    /// One item of <see cref="Invites"/>: an OrganisationInviteModel.
+    /// </summary>
+    public static string Invite(string email) => new JsonObject { ["emailAddress"] = email }.ToJsonString();
 
     /// <summary>
     /// A DnsSummaryModel, the GET /org/{orgId}/dns body.

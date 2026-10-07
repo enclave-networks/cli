@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using WireMock.Logging;
@@ -6,6 +7,7 @@ using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
 using WireMock.Settings;
+using WireMock.Types;
 
 namespace Enclave.Cli.Tests.Support;
 
@@ -19,6 +21,13 @@ internal static class LoopbackApi
     internal const int SpecificPriority = 1;
 
     internal const int GeneralPriority = 10;
+
+    internal const string JsonContentType = "application/json";
+
+    // Enclave.Sdk.Api 1.0.4 throws EnclaveApiException only for this media type
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:20); any other error body reaches the caller as
+    // HttpRequestException.
+    internal const string ProblemContentType = "application/problem+json";
 
     /// <summary>
     /// Starts a fake API on a free loopback port and returns it with its URL,
@@ -35,7 +44,7 @@ internal static class LoopbackApi
             // need loopback only.
             Urls = [url],
 
-            // The SDK sends bulk revoke, decline and delete requests as DELETE with a JSON body
+            // Enclave.Sdk.Api sends bulk revoke, decline and delete requests as DELETE with a JSON body
             // (Enclave.Sdk.Api 1.0.4, SystemsClient.RevokeSystemsAsync), so every method's body
             // is read and recorded.
             AllowBodyForAllHttpMethods = true,
@@ -54,10 +63,21 @@ internal static class LoopbackApi
     /// </summary>
     public static void Stub(WireMockServer api, string method, string path, int status = 200, string? json = null) =>
         api.Given(Matching(method, path)).AtPriority(GeneralPriority)
-            .RespondWith(Respond(status, json, "application/json"));
+            .RespondWith(Respond(status, json, JsonContentType));
 
     internal static IRequestBuilder Matching(string method, string path) =>
         Request.Create().UsingMethod(method).WithPath(new ExactMatcher(path));
+
+    /// <summary>
+    /// Matches a request for this page of a list: page=<paramref name="page"/>, or no page parameter
+    /// for page 0.
+    /// </summary>
+    // The API reads a missing page parameter as page 0 (portal PaginatedRequestModel.Page), and
+    // Enclave.Sdk.Api 1.0.4 leaves the parameter out when it is given no page number
+    // (SystemsClient.BuildQueryString and the other list clients). A parameter that is not a whole
+    // number matches no page.
+    internal static IRequestBuilder MatchingPage(string path, int page) =>
+        Matching("GET", path).WithParam(query => RequestedPage(query) == page);
 
     internal static IResponseBuilder Respond(int status, string? json, string contentType)
     {
@@ -66,6 +86,18 @@ internal static class LoopbackApi
         return json is null
             ? response
             : response.WithHeader("Content-Type", contentType).WithBody(json);
+    }
+
+    private static int? RequestedPage(IDictionary<string, WireMockList<string>>? query)
+    {
+        if (query is null || !query.TryGetValue("page", out var values) || values.Count == 0)
+        {
+            return 0;
+        }
+
+        return values.Count == 1 && int.TryParse(values[0], NumberStyles.None, CultureInfo.InvariantCulture, out var page)
+            ? page
+            : null;
     }
 
     // Binding port 0 makes the OS choose a free port. The listener is stopped before WireMock.Net

@@ -44,34 +44,41 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 ## Architecture
 - Every API call goes through the `Enclave.Sdk.Api` package. NEVER use `HttpClient` or build requests in this repository.
 - An endpoint or field `Enclave.Sdk.Api` lacks: stop and report it. It is added to enclave-networks/enclave.sdk.api first, with tests there, then the `Enclave.Sdk.Api` version is bumped here. NEVER work around a gap locally.
-- One command makes one `Enclave.Sdk.Api` call; when given several IDs, it makes the bulk call.
-- Command shape: `enclave-cli <resource> <action> [args] [options]`. Resources map one-to-one to `Enclave.Sdk.Api` clients: `org`, `systems`, `pending` (unapproved systems), `keys` (enrolment keys), `policies`, `tags`, `dns zones`, `dns records`, `trust` (trust requirements), `logs`.
-- Out of scope: enrolling a system (the agent does that), account password/2FA/accepting invites (browser flows), payment.
+- The API and `Enclave.Sdk.Api.Data` (built from the portal repository) do not change. Use only routes and fields the API has; a model `Enclave.Sdk.Api.Data` lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
+- One command makes one `Enclave.Sdk.Api` call, with the exceptions listed in `proposed-cli-surface.md` "Calls per command": paging, name lookups, reads that keep tags, labels and conditions, and bulk calls of 200 IDs.
+- Command shape: `enclave-cli <noun> <verb> [args] [options]`. A noun's own parts take hyphenated verbs (`dns create-hostname`, `org remove-user`). Nouns are singular, with a hidden plural alias: `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
+- `proposed-cli-surface.md` is the reference for every command, flag, default and example. A command or flag it does not list is not added without changing it first.
+- Out of scope: enrolling a system (the agent does that), account password/2FA/accepting invites (browser flows), payment, and the partner's own properties, users and invites (personal access tokens cannot carry those scopes).
 
 ## CLI contract (agent-facing; any change to it is a breaking change)
-- stdout: JSON by default. Emit `Enclave.Sdk.Api` models unchanged, so field names match the API. `-o table` is for humans; `-o id` prints one ID per line.
-- Lists: `{ "items": [...], "total": <n>, "truncated": <bool> }`. `--limit <n>` and `--all`.
-- stderr: one JSON object per error, `{ "error": { "code", "status", "title", "detail" } }`, carrying the API's problem details through. Nothing else goes to stderr unless `--verbose` is set.
-- Exit codes: 0 success; 1 other API error; 2 bad arguments; 3 token missing or invalid; 4 token lacks the scope (HTTP 403); 5 not found (HTTP 404); 6 confirmation required.
-- NEVER prompt, and NEVER wait on interactive input. delete, revoke, decline and remove without `--yes` exit 6 with an error naming `--yes`.
+- stdout: JSON, always. Emit `Enclave.Sdk.Api` models unchanged, so field names match the API. There is no output-format option.
+- Lists: `{ "kind": "<noun>", "items": [...], "total": <n> }`. A list reads every page and prints once all are read; a failed page read prints nothing. `log` is the exception: the newest 100 entries, `--limit <n>` or `--since <when>` for more.
+- stderr: one JSON object per error, `{ "error": { "code", "status", "title", "detail", "errors" } }`, carrying the API's problem details through. `code` comes from a fixed set that `commands` lists. Nothing else goes to stderr unless `--verbose` is set.
+- Exit codes: 0 success; 1 `api_error`, `not_implemented`; 2 `invalid_argument`, `no_org`, `no_partner`; 3 `token_missing`, `token_invalid`; 4 `forbidden` (HTTP 403); 5 `not_found` (HTTP 404, single-item commands); 6 `transient` (network failure, timeout, HTTP 429 or 5xx).
+- NEVER prompt, and NEVER wait on interactive input. Changes run when given; there is no confirmation option.
 - Every command that changes something supports `--dry-run`: print the request it would send, send nothing, exit 0.
-- `create` and `update` accept `--from-file <path|->` holding the `Enclave.Sdk.Api` create or patch model as JSON; `--template` prints a blank one.
-- An ID argument of `-` reads newline-separated IDs from stdin.
-- Times in output: ISO 8601, UTC. `--until` accepts ISO 8601 or a relative time (`2h`, `7d`).
-- Token source, highest first: `--token`, `ENCLAVE_TOKEN`, `~/.enclave/credentials.json`. That file belongs to `Enclave.Sdk.Api`; NEVER change its format. CLI settings (default organisation) go in `~/.enclave/cli.json`.
-- `enclave-cli commands --json` describes every command, option and type, and MUST stay complete.
+- Every field is set with a flag; there is no file or JSON input. A create sends every setting that changes behaviour, with the value `proposed-cli-surface.md` gives when a flag is left out.
+- An ID is never a positional argument. `--id` gives the command's own item; other items have `--<item>` for a name and `--<item>-id` for an ID. The option decides how a value is parsed; NEVER inspect a value to guess its type.
+- `-` in place of the arguments reads a list printed by an `enclave-cli` list command; its `kind` must match the command. A command that takes several items takes any number, sends them in bulk calls of 200, and prints `{ "requested": n, "affected": m }`.
+- Ranges, ACLs, gateway subnets and countries take an optional `=label`; an update keeps the labels of entries that stay.
+- Times in output: ISO 8601, UTC. Input: a duration (`8h`), RFC 3339 with a zone, or a time without a zone read in the system's time zone. Formats never follow the system locale.
+- Token source, highest first: `ENCLAVE_TOKEN`, `~/.enclave/credentials.json`. There is no token option. That file belongs to `Enclave.Sdk.Api`; NEVER change its format. CLI settings (default organisation and partner) go in `~/.enclave/cli.json`.
+- Organisation: `--org` or `--org-id`, then `ENCLAVE_ORG` or `ENCLAVE_ORG_ID`, then the saved default. Partner: `--partner-id`, then `ENCLAVE_PARTNER_ID`, then the saved default.
+- `enclave-cli commands [<command words>...]` describes every command, option, allowed value and error code as JSON, and MUST stay complete.
 
 ## Code
 - .NET 10, nullable enabled, file-scoped namespaces, `_camelCase` private fields. Rules: `.editorconfig` (matches enclave.sdk.api).
 - Analyzers: `AnalysisMode=AllEnabledByDefault` plus StyleCop; `TreatWarningsAsErrors=true`. Fix the cause. Suppress only with a comment at the suppression giving the reason.
 - Package versions live only in `Directory.Packages.props`. Restore uses nuget.org only (`NuGet.config`). NEVER add a private feed: forks and CI build without credentials.
 - `InvariantGlobalization` is on. Format and parse with `CultureInfo.InvariantCulture`.
+- Read the clock and the local time zone only through `CliHost` (a `TimeProvider`), so tests can fix both. NEVER call `DateTime.Now`, `DateTimeOffset.Now` or `TimeZoneInfo.Local` from command code.
 - Read and write files only through `CliHost.Files` (`Storage/IFileStore.cs`). NEVER call `File`, `Directory` or `FileStream` from command code: tests swap in an in-memory store, and only `DiskFileStore` touches the disk. Write the credentials file with `privateToUser: true`.
 - Releases are self-contained single-file executables.
 - Tests run the CLI as an ordinary .NET assembly, so they cannot catch a failure that exists only in the published binary. CI's smoke test (`.github/scripts/smoke-test.sh`) runs every published binary; extend it when a command depends on something the published form can break.
 
 ## Comments and documentation
 Applies to code comments, AGENTS.md, README and every other document in this repository.
+- Name packages and repositories exactly: `Enclave.Sdk.Api`, `Enclave.Sdk.Api.Data`, the sdk repository. NEVER call `Enclave.Sdk.Api` "the SDK".
 - Plain, factual register; no intensifiers ("critically", "truly", "real").
 - State things as they are. NEVER frame a statement as a contrast ("X, not Y", "rather than", "instead of") unless the alternative is the point of the sentence.
 - Behaviour that depends on an external system (OS, API, library) cites its primary source: URL, spec section, or file and function, with the version it applies to.

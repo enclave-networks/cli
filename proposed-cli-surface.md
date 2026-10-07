@@ -1,6 +1,6 @@
 # Proposed CLI surface
 
-`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api` 1.0.4. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
+`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api` 1.0.5. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
 
 ## Shape and naming
 
@@ -34,7 +34,7 @@ enclave-cli
 │   ├── list-invites
 │   ├── invite <email>
 │   └── cancel-invite <email>
-├── partner                                     every partner command needs Enclave.Sdk.Api partner clients
+├── partner                                     partner customer commands need Enclave.Sdk.Api partner clients
 │   ├── use --id <partnerId>
 │   └── customer
 │       ├── list
@@ -99,7 +99,7 @@ enclave-cli
 │   ├── update <trust>
 │   └── delete <trust...>
 ├── log                                         the organisation's activity log
-└── commands [<noun> [<verb>]]                  every command, option, value and error code, as JSON
+└── commands [<command words>...]               every command, option, value and error code, as JSON
 ```
 
 - A customer is an organisation. `<customer>` is its name, or `--org-id <orgId>` gives its organisation ID, the only ID a customer has (portal `CustomersController.cs:69` reads the customer ID as an `OrganisationGuid`). Anything else a partner customer command needs is a named option (`--user`, `--user-id`, `--email`).
@@ -113,7 +113,7 @@ enclave-cli
 | Command | Options |
 |---|---|
 | `org update` | `--name`, `--website`, `--phone` |
-| `system list` | `--filter <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
+| `system list` | `--filter <text>`, `--tag a,b`, `--state connected\|disconnected`, `--os windows\|linux\|mac`, `--type general\|ephemeral`, `--gateway`, `--key <name>`, `--key-id <id>`, `--dns-name <name>`, `--not-seen-for <duration>`, `--include-disabled`, `--sort` |
 | `system update` | `--description`, `--notes`, `--set-tags a,b`, `--add-tags a,b`, `--remove-tags a,b`, `--enable-gateway-for <subnet>[=<label>]` (repeatable), `--disable-gateway` |
 | `system enable` | `--for <duration>` or `--until <time>`, `--then disable\|revoke` |
 | `key enable`, `policy enable` | `--for <duration>` or `--until <time>`, `--then disable\|delete` |
@@ -126,7 +126,7 @@ enclave-cli
 | `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>][=<label>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--subnet-filter <range>[=<label>]` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
 | `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>][=<label>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--set-subnet-filter <range>[=<label>]` (repeatable), `--set-active-hours <hours>` |
 | `trust list` | `--filter <text>`, `--type user-auth\|public-ip`, `--sort` |
-| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` (oidc), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>[=<label>]`, `--block-ip <range>[=<label>]`, `--allow-country <code>[=<label>]`, `--block-country <code>[=<label>]` (each repeatable) |
+| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` and `--client-id <id>` (okta, jumpcloud, duo, oidc; both required), `--audience <value>` (same four), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>[=<label>]`, `--block-ip <range>[=<label>]`, `--allow-country <code>[=<label>]`, `--block-country <code>[=<label>]` (each repeatable) |
 | `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...). Each replaces only the conditions of its own kind: `--set-allow-country` replaces the allowed countries and leaves the IP ranges and blocked countries as they are |
 | `tag list` | `--filter <text>`, `--sort` |
 | `tag set` | `--name <new>`, `--colour`, `--trust <name>,...`, `--trust-id <id>,...`, `--notes` |
@@ -151,7 +151,7 @@ enclave-cli
   | `geographic` | the one closest to the system |
 
   Without the flag the CLI sends `balanced`. `--mode` applies to gateway policies only: on `policy create` without `--gateway` it exits 2.
-- `--enable-gateway-for 10.0.0.0/16 --enable-gateway-for 10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one.
+- `--enable-gateway-for 10.0.0.0/16 --enable-gateway-for 10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one. As in the portal, it replaces the routes a user entered and keeps the subnets the system found itself (`userEntered: false`). It sends new routes with `userEntered: true` and weight 0, and a route that stays keeps its weight (portal-spa `redux/reducers/app/detailTab/systems.ts:44-83`). The two flags together exit 2.
 - `--subnet-filter`, `--allow-ip`, `--block-ip`, `--allow-country`, `--block-country`, `--acl` and `--enable-gateway-for` take an optional label after `=`, which the API stores with each entry: `--subnet-filter "104.47.0.0/17=Exchange Online"`. The label is sent as the entry's `description` (`gatewayAllowedIpRanges`, `ipConstraints`, `acls`, trust requirement `conditions`) or `name` (`gatewayRoutes`). The CLI splits at the first `=`, which no range, country code, ACL or subnet contains, so a label can itself contain `=`. These flags are repeated, never comma lists, since a label can contain a comma.
 - A flag that replaces a list keeps the label of every entry that stays: `--set-subnet-filter 104.47.0.0/17` on a policy that already has that range labelled "Exchange Online" keeps the label. A label given with the flag replaces it, and an empty one, `104.47.0.0/17=`, removes it. New entries without a label have none. Labels set in the portal survive an update from the CLI.
 - `--active-hours "mon-fri 08:00-18:00 Europe/London"` takes days, a start and end time, and an IANA time zone (UTC when left out). `--set-active-hours ""` removes the restriction.
@@ -176,7 +176,8 @@ enclave-cli
   | countries | the address's country is not blocked, and is allowed when any `--allow-country` is given |
 
   The ranges are checked first, and a failed range check is not overridden by an allowed country.
-- `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes.
+- `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes, matched ignoring case.
+- Each authority takes only its own settings, as the API does (portal `TrustRequirementSettingsUserAuthValidator.cs:34-48`): `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2.
 - `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs:356-370, 432-437`).
 - `partner customer create` sends every field of the API's `CustomerCreateModel`, with the partner portal's values when a flag is left out (portal `Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345`, `Shared/AdminTable.razor:171`):
@@ -239,7 +240,9 @@ Partner:
 - `-` given an empty list prints `{ "requested": 0, "affected": 0 }`, makes no call and exits 0, so a pipeline fed by an empty list succeeds.
 - `-` when stdin is a terminal exits 2. The CLI never waits for input.
 - `--for` and `--until` take one item and print the updated model; the API's timed enable has no bulk form. `dns delete-zone` takes one zone; the API has no bulk zone delete (portal `DnsController.cs:145`).
-- Single-ID commands (`show`, `update`, `--for` and `--until`, `dns delete-zone`, and the partner and customer commands) print the model and exit 5 for an unknown ID.
+- Single-ID commands (`show`, `update`, `--for` and `--until`, `dns delete-zone`, `org remove-user`, `org cancel-invite`, and the partner customer commands) print the model and exit 5 for an unknown ID. A call whose API response has no body prints `{}`.
+- IDs are sent in the order given, and each bulk call takes the next 200. Duplicate IDs are removed, whether given as arguments, with `--id` or through `-`.
+- When a bulk call fails after earlier calls succeeded, the error object carries `requested` and `affected` for the calls that succeeded, beside `code`.
 
 Example, approving every system enrolled with key 12:
 
@@ -249,9 +252,26 @@ enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 
 ## Filters
 
-`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type`, `--gateway` and `--key`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). The API's `key:` search matches part of a key's name, so for `--key` and `--key-id` the CLI also keeps only systems whose `enrolmentKeyId` is that key's. `--state disabled` lists disabled items without `--include-disabled`.
+`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type` and `--gateway`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). `--key-id` uses the API's `enrolment_key` parameter, which takes one key's ID (portal `SystemsRequestModel.cs:16-18`); `--key` looks the key up by name first, then does the same. `--dns-name` uses the API's `dns` parameter (`SystemsRequestModel.cs:43-45`). `Enclave.Sdk.Api` 1.0.5 passes both (`ISystemsClient.GetSystemsAsync`). On `key list` and `policy list`, `--state disabled` lists disabled items without `--include-disabled`.
 
-`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI keeps the matches from the items it reads; `total` counts the matches.
+Flag values are written as the API's search values, which are not always the CLI's (portal `*SearchKeyService.cs`):
+
+| Flag | Search text |
+|---|---|
+| `--tag a,b` | `tags:a,b` (every tag given) |
+| `--state connected`, `disconnected`, `enabled`, `disabled` | `state:` and the same word |
+| `--state no-uses` (keys) | `state:nouses` |
+| `--os windows`, `linux`, `mac` | `os:Windows`, `os:Linux`, `os:Mac` (an exact match in the API) |
+| `--type general`, `ephemeral` (systems) | `type:general`, `type:ephemeral` |
+| `--gateway` | `gateway:true` |
+| `--approval automatic`, `manual` (keys) | `approval:automatic`, `approval:gated` |
+| `--type user-auth`, `public-ip` (trust) | `type:UserAuthentication`, `type:PublicIp` |
+
+A value with a space is quoted (`key:"build agents"`).
+
+`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI keeps the matches from the items it reads; `total` counts the matches. `--not-seen-for` reads `lastSeen`, and a system never seen counts from when it enrolled (`enrolledAt`), so a system that has just enrolled is not removed. `--waiting-for` reads `enrolledAt`.
+
+Name lookups ask for disabled items too (`include_disabled`), since `enable` takes a disabled item by name.
 
 ## Names and IDs
 
@@ -259,7 +279,7 @@ Keys, policies, DNS zones, hostnames and trust requirements are given as argumen
 
 ## ID checks
 
-Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1.0.4 puts IDs into URL paths unescaped (for example `UnapprovedSystemsClient.cs:95`), and .NET resolves `..` when it combines the path with the base address. `system decline ../systems/ABCDE` would send `DELETE org/<id>/systems/ABCDE`, which revokes system ABCDE.
+Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` 1.0.5 puts IDs into URL paths unescaped (for example `UnapprovedSystemsClient.cs:95`), and .NET resolves `..` when it combines the path with the base address. `system decline ../systems/ABCDE` would send `DELETE org/<id>/systems/ABCDE`, which revokes system ABCDE.
 
 | ID | Format |
 |---|---|
@@ -275,11 +295,17 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 
 ## Dry run
 
-`--dry-run` prints the request `Enclave.Sdk.Api` builds, with the organisation or partner, and sends nothing. The Authorization header is left out.
+`--dry-run` prints the requests `Enclave.Sdk.Api` builds for the change, with the organisation, and sends none of them. The Authorization header is left out.
 
 ```
-{ "dryRun": true, "org": { "id": "…", "name": "…" }, "request": { "method": "PUT", "url": "https://api.enclave.io/org/…/systems/disable", "body": { … } } }
+{ "dryRun": true, "org": { "id": "…", "name": "…" }, "requests": [ { "method": "PUT", "url": "https://api.enclave.io/org/…/systems/disable", "body": { … } } ] }
 ```
+
+- `requests` is a list: a bulk command over 200 IDs shows each call, and an empty `-` list shows none.
+- The reads a change depends on still run: name lookups, the read that keeps tags, labels and conditions, and the read `tag set` makes to choose between update and create. Only the change is withheld.
+- `org.name` is null when the organisation was given by ID, since then no lookup is made. A request without a body shows `"body": null`.
+- Partner customer commands exit with `not_implemented` under `--dry-run` too, since there is no partner client to build the request.
+- `login`, `logout`, `org use` and `partner use` change only local files and do not take `--dry-run`.
 
 Capturing the request needs an `Enclave.Sdk.Api` change (see below). Printing the captured request keeps URL building in one place and shows exactly what would be sent.
 
@@ -290,10 +316,32 @@ Capturing the request needs an `Enclave.Sdk.Api` change (see below). Printing th
 - `--set-tags` and `--set-systems` replace the whole list, and `--set-tags ""` clears it. Tags decide policy membership, so the flag's name says it replaces.
 - `--add-tags` and `--remove-tags` change the list in place: the CLI reads the item, then patches the whole list. A change someone else makes between the two calls is overwritten; `--set-tags` gives an exact list.
 
+## Details
+
+- Options that contradict each other exit 2:
+  - `--for` with `--until`, or `--then` without either;
+  - `--auto-approve` with `--require-approval`;
+  - `--industry-discount` with `--no-industry-discount`, and `--hard-limit` with `--no-hard-limit`;
+  - `--enable-gateway-for` with `--disable-gateway`;
+  - a name with its ID option: `--org` with `--org-id`, `--user` with `--user-id`, a name argument with `--id`, or `ENCLAVE_ORG` with `ENCLAVE_ORG_ID`.
+- An option a command does not take, such as `--dry-run` on a read or `--partner-id` on an organisation command, is unknown to it and exits 2.
+- `--pending` with options only enrolled systems have (`--state`, `--os`, `--type`, `--gateway`, `--dns-name`, `--include-disabled`, `--not-seen-for`, the gateway flags) exits 2, and so does `--waiting-for` without `--pending`. With `--pending`, `--sort` takes the waiting-systems sort values.
+- An update with no change flag exits 2, `tag set` included.
+- Any `--set-` list flag given `""` clears the list (`--set-tags ""`, `--set-trust ""`, `--set-systems ""`, `--set-auto-dns-tags ""`). A create sends an empty list for a list flag left out.
+- An empty label (`range=`) is sent as a null `description` or `name`.
+- A context source lower in the precedence is not read when a higher one is given, so a malformed lower source does not fail the command.
+- `--until` in the past exits 2. The CLI sends the expiry as a UTC instant.
+- Integer IDs are 32-bit, and a larger number exits 2. Stdin with no bytes after `-` is not a list and exits 2.
+- ACL ports are a port from 1 to 65535 or a range `low-high` with low no greater than high; anything else exits 2.
+- `--active-hours` takes `<days> <start>-<end> [<zone>]`. Days are `mon` to `sun`, a range (`mon-fri`, `sat-sun`) or a comma list (`mon,wed,fri`); times are 24-hour `HH:MM`. Anything else exits 2.
+- A hostname's zone is the longest zone name it ends in, at a label boundary: with zones `internal` and `eu.internal`, `db.eu.internal` is in `eu.internal`. The record name is the rest and may contain dots. A hostname with no zone, or equal to a zone's name, exits 2. `dns update-hostname --name` takes a full hostname in the same zone; another zone exits 2, since the API cannot move a record between zones.
+- `log` asks for pages of 200, or of `--limit` when that is smaller; with neither `--limit` nor `--since`, it asks for one page of 100. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case.
+- `commands` takes a command's words, `commands partner customer create` included, and prints `{ "commands": [ { "command", "description", "arguments": [ { "name" } ], "options": [ { "name", "values" } ] } ], "errors": [ { "code", "exitCode" } ] }`.
+
 ## Output
 
 - JSON, using the `Enclave.Sdk.Api` models unchanged. There is one output format. Agents read JSON, and a format for people alone is not worth a flag on every command.
-- Lists: `{ "kind": "system", "items": [...], "total": <n> }`. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, and the `org` and `partner` lists), so a command reading the list from stdin can check it.
+- Lists: `{ "kind": "system", "items": [...], "total": <n> }`. `total` is the number of items printed, `log` included. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, `org` for `org list` and `login`, `user` for `org list-users`, `invite` for `org list-invites` and `partner customer list-invites`, `customer`, `admin`), so a command reading the list from stdin can check it.
 - A list is printed once every page has been read. If a page read fails, the command exits with that error and prints nothing, so stdout never holds part of a list.
 - Enrolment key output includes the key's secret, `key` (`EnrolmentKeyModel.Key`).
 - `commands system list` describes one command, its options and their allowed values.
@@ -306,25 +354,30 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | Exit | `code` | Meaning |
 |---|---|---|
 | 0 | | success |
-| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run, which is every `partner` command until `Enclave.Sdk.Api` has partner clients. It makes no call |
+| 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists but cannot run, which is every `partner customer` command until `Enclave.Sdk.Api` has partner clients. It makes no call |
 | 2 | `invalid_argument`, `no_org`, `no_partner` | bad arguments, bad ID, no organisation or partner chosen |
 | 3 | `token_missing`, `token_invalid` | no token, or HTTP 401 |
 | 4 | `forbidden` | HTTP 403: the token lacks the scope |
 | 5 | `not_found` | HTTP 404 on a single-ID command |
 | 6 | `transient` | network failure, timeout, HTTP 429 or 5xx: retrying can succeed |
 
-Parse errors (unknown option, missing argument) follow the same rules: JSON on stderr, nothing on stdout, exit 2, with any suggestion in `detail`. System.CommandLine's default writes plain text and help and exits 1, so the CLI replaces its parse-error action.
+Parse errors (unknown option, missing argument) follow the same rules: JSON on stderr, nothing on stdout, exit 2, with any suggestion in `detail`. System.CommandLine's default writes plain text and help and exits 1, so the CLI replaces its parse-error action. A command line with several problems gives one error object: `detail` names the first, and `errors` lists them all in the API's shape, an object keyed by the option or argument name with a list of messages each (`{ "--bogus": [ "…" ] }`), so `errors` has one shape whether it came from the API or the CLI. An error never repeats the value given to an unknown option, since that value could be a token passed by mistake.
+
+- A name that matches nothing, or several items, exits 2 `invalid_argument`. The error carries `candidates`: the items that matched, or an empty list for no match. `no_org` is for an organisation that was not chosen at all, and also carries `candidates`, the token's organisations as `{ id, name }`.
+- Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2), then the call. A command with bad arguments fails the same way with or without a token.
+- `--help` and `--version` print text for people, and are the only output that is not JSON. `enclave-cli` with no arguments prints the help and exits 0.
 
 `Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:20`). The CLI maps `HttpRequestException` status codes to the same exit codes, so a plain 401 or a proxy's 502 still gets 3 or 6.
 
 ## Login, logout and status
 
-- `login --token-stdin` reads the token from stdin; with `ENCLAVE_TOKEN` set, `login` saves that token. It never prompts.
-- `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see.
+- `login --token-stdin` reads the token from stdin, without a trailing newline; with `ENCLAVE_TOKEN` set, `login` saves that token. `--token-stdin` wins over `ENCLAVE_TOKEN`. It never prompts: `--token-stdin` with stdin a terminal exits 2, and no token, or empty stdin, exits 3 `token_missing`. An empty `ENCLAVE_TOKEN` counts as unset, as does any empty environment variable the CLI reads.
+- `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
 - `credentials.json` holds `personalAccessToken` and `baseUrl`, the format `Enclave.Sdk.Api` reads (`EnclaveClient.cs:97-114`). `login` keeps an existing `baseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
 - The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and `ENCLAVE_TOKEN` keeps the file's `baseUrl`.
-- `logout` deletes `credentials.json`, prints its path, and says the token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
-- `status` makes one `GetOrganisationsAsync` call and prints where the token came from, the organisation and partner in use and where each choice came from, and your role in the organisation.
+- `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
+- `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
+- `org use` saves `{ "org": { "id", "name" } }` in `~/.enclave/cli.json` and prints the organisation's model; `org use --id` makes one lookup call for the name, and an ID the token does not see exits 2. `partner use --id` saves `{ "partner": { "id" } }` beside it, makes no call, and prints `{ "id" }`. Each leaves the other's default as it is.
 - No command prints the token, including under `--verbose` and `--dry-run`. A test runs every command that changes something with a known token and checks the token appears on neither stdout nor stderr.
 
 ## Calls per command
@@ -372,12 +425,11 @@ Each is added in enclave-networks/enclave.sdk.api first, with tests there, then 
 2. An HTTP handler option on `EnclaveClientOptions`, for `--dry-run`.
 3. Allow `null` in a patch, so an update flag given an empty value (`--set-active-hours ""`) can clear a field; `PatchClient.Set` rejects null (`Data/PatchClient.cs:32`).
 4. Enrolment key delete, single and bulk, for `key delete`. The API has both (portal `EnrolmentKeysController.cs:265,295`).
-5. `CreateOrganisationClient(OrganisationGuid)`. `CreateOrganisationClient` takes an `AccountOrganisationModel` and uses only its `OrgId` (`OrganisationClient.cs:25`), so building one from a saved ID means filling the role and partner-access fields with placeholders.
+5. Done in `Enclave.Sdk.Api` 1.0.5: `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, which has `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
 6. Status checks on calls that pass a failure through as success when the response is not problem+json: `RemoveUserAsync`, `InviteUserAsync`, `CancelInviteAync` (`OrganisationClient.cs:91-133`) and the single create, enable and disable calls.
-7. The `hostname` filter on DNS record list. The API accepts it (portal `DnsRecordsRequestModel.cs:18`).
-8. The `meta/search-keys` endpoints, so `commands` can describe the keys `--filter` accepts.
-9. Partner API clients for the customer routes (customers, customer admins, customer invites, auto-sync), and a partner API base URL.
-10. `GatewayPriorityType` in `Enclave.Sdk.Api.Data` 304.48.0, the version `Enclave.Sdk.Api` 1.0.4 uses, has `Prioritised` where the API has `Ordered`. The package compiles its own copy of the enum (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the SDK's (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `Enclave.Sdk.Api` writes and reads enums by name (`Constants.cs:17`, `JsonStringEnumConverter`), so it would send `Prioritised`, which the API does not accept, and reading a policy set to `Ordered` would fail. `Enclave.Sdk.Api` maps the value itself, writing and reading `Ordered`.
+7. The `meta/search-keys` endpoints, so `commands` can describe the keys `--filter` accepts.
+8. Partner API clients for the customer routes (customers, customer admins, customer invites, auto-sync), and a partner API base URL.
+9. `GatewayPriorityType` in `Enclave.Sdk.Api.Data` 304.48.0, the version `Enclave.Sdk.Api` 1.0.4 and 1.0.5 use, has `Prioritised` where the API has `Ordered`. The package compiles its own copy of the enum (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the enum from the sdk repository's `Enclave.Sdk.Network` package (sdk `Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `Enclave.Sdk.Api` writes and reads enums by name (`Constants.cs:17`, `JsonStringEnumConverter`), so it would send `Prioritised`, which the API does not accept, and reading a policy set to `Ordered` would fail. `Enclave.Sdk.Api` maps the value itself, writing and reading `Ordered`.
 
 ## Changes to AGENTS.md
 
@@ -605,7 +657,7 @@ enclave-cli tag set web --name frontend --colour "#2f80ed"
 enclave-cli trust create "portal login" --authority portal
 
 # 57. Require a sign-in through a generic OIDC provider, from the example.com domain
-enclave-cli trust create "sso" --authority oidc --authority-uri https://sso.example.com --claim hd=example.com
+enclave-cli trust create "sso" --authority oidc --authority-uri https://sso.example.com --client-id enclave-portal --claim hd=example.com
 
 # 58. Allow Ireland as well as the UK; the blocked range is left as it is
 enclave-cli trust update "uk only" --set-allow-country GB --set-allow-country IE
@@ -702,4 +754,7 @@ enclave-cli partner customer create "Initech" --owner it@initech.example --domai
 # 86. Move a customer from trial to paid, billed yearly
 enclave-cli partner customer convert "Initech" --billing-months 12
 enclave-cli partner customer convert --org-id 8d2e4f6a-1b3c-4d5e-9f70-a1b2c3d4e5f6 --billing-months 12
+
+# 87. Find the systems that answer to db.internal
+enclave-cli system list --dns-name db.internal
 ```

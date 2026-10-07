@@ -4,83 +4,94 @@ using WireMock;
 
 namespace Enclave.Cli.Tests.Auth;
 
+// Where the token comes from, when it is checked, and that no command of this area prints it
+// (proposed-cli-surface.md "Options on every command", "Errors and exit codes" and "Login, logout
+// and status").
 [Category(TestCategory.Pending)]
 public class TokenTests
 {
     private const string FileToken = "file-token-2b8e61";
 
-    private const string SystemId = "ABC12";
+    private static readonly string OrgSystems = TestData.OrgPath("systems");
 
-    private const string Email = "new.user@acme.example";
+    private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
 
-    private const string InviteId = "inv1";
-
-    private static readonly Guid AccountId = new("5f1e2d3c-4b5a-4968-8776-a5b4c3d2e1f0");
-
-    private static readonly Guid CustomerId = new("0d9c8b7a-6f5e-4d3c-b2a1-9f8e7d6c5b4a");
-
-    // Commands that change something through the API. Each is run with --verbose, and again with
-    // --verbose --dry-run. The names are looked up in Arrange.
-    private static readonly string[] ApiChanges =
+    // Commands of this area, each run with --verbose to the point where the CLI holds the token:
+    // every request it sends carries the token, and the failures are ones the CLI reports after
+    // the API received it, or after resolving the organisation. Arrange sets each one up.
+    private static readonly string[] VerboseRuns =
     [
-        "org update", "org user remove", "org invite send", "org invite cancel",
-        "system update", "system enable", "system disable", "system revoke",
-        "pending update", "pending approve", "pending decline",
-        "key create", "key update", "key enable", "key disable", "key delete",
-        "policy create", "policy update", "policy enable", "policy disable", "policy delete",
-        "tag create", "tag update", "tag delete",
-        "dns zone create", "dns zone update", "dns zone delete",
-        "dns record create", "dns record update", "dns record delete",
-        "trust create", "trust update", "trust delete",
-        "partner user remove", "partner invite send", "partner invite cancel",
-        "partner customer convert", "partner customer admin add", "partner customer admin remove",
-        "partner customer invite send", "partner customer invite cancel",
-        "partner customer auto-sync enable", "partner customer auto-sync disable",
+        "login",
+        "login --token-stdin",
+        "login with a refused token",
+        "logout",
+        "status with ENCLAVE_TOKEN",
+        "status with credentials.json",
+        "status with no organisation chosen",
+        "status with a refused token",
+        "org list",
+        "org use by name",
+        "org use --id",
+        "an organisation looked up by name",
+        "several organisations and none chosen",
     ];
 
-    // Commands that change local state only. They have no --dry-run, so each runs with --verbose.
-    private static readonly string[] LocalChanges = ["login", "login --token-stdin", "logout", "org use"];
-
+    // The token comes from ENCLAVE_TOKEN, then credentials.json ("Options on every command"), so an
+    // agent session can use its own token without replacing the one saved for the user.
     [Test]
     public async Task ENCLAVE_TOKEN_takes_precedence_over_credentials_json()
     {
         using var run = CliRun.Start();
         run.SaveCredentials(FileToken);
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
-        var result = await run.RunAsync("system", "list");
+        var request = await CliAssert.AcceptedAsync(run, "GET", OrgSystems, "system", "list");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
-        });
+        Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
     }
 
-    // A CI job whose secret is missing often gets ENCLAVE_TOKEN set to an empty string. An empty
-    // value names no token, so the saved file supplies it, the same as when the variable is unset.
-    [TestCase(null)]
-    [TestCase("")]
-    [TestCase("  ")]
-    public async Task Credentials_json_supplies_the_token_when_ENCLAVE_TOKEN_is_unset_or_empty(string? environmentToken)
+    // An empty ENCLAVE_TOKEN counts as unset ("Login, logout and status"), the value a CI job gets
+    // when its secret is missing, so the saved file supplies the token then too.
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Credentials_json_supplies_the_token_when_ENCLAVE_TOKEN_is_unset_or_empty(bool empty)
     {
         using var run = CliRun.Start();
-        run.Environment["ENCLAVE_TOKEN"] = environmentToken;
+
+        if (empty)
+        {
+            run.Environment["ENCLAVE_TOKEN"] = string.Empty;
+        }
+        else
+        {
+            run.Environment.Remove("ENCLAVE_TOKEN");
+        }
+
         run.SaveCredentials(FileToken);
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
+
+        var request = await CliAssert.AcceptedAsync(run, "GET", OrgSystems, "system", "list");
+
+        Assert.That(request.Authorization, Is.EqualTo($"Bearer {FileToken}"));
+    }
+
+    // An empty ENCLAVE_TOKEN with no saved file leaves no token, so the CLI reports token_missing
+    // before any call. Sending "Bearer " would turn a missing secret into a 401 and token_invalid.
+    [Test]
+    public async Task An_empty_ENCLAVE_TOKEN_with_no_credentials_file_exits_3_with_token_missing()
+    {
+        using var run = CliRun.Start();
+        run.Environment["ENCLAVE_TOKEN"] = string.Empty;
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
         var result = await run.RunAsync("system", "list");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {FileToken}"));
-        });
+        CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // credentials.json's baseUrl is the API address (proposal "Login, logout and status": the CLI
-    // reads the file and passes EnclaveClientOptions to Enclave.Sdk.Api), and ENCLAVE_TOKEN keeps it.
-    // A second fake API at another address shows where the request went; the default API receives
+    // credentials.json's baseUrl is the API address, and ENCLAVE_TOKEN keeps it ("Login, logout and
+    // status": the CLI reads the file itself and passes EnclaveClientOptions to Enclave.Sdk.Api). A
+    // second fake API at another address shows where the request went; the default API receives
     // nothing.
     [TestCase(false)]
     [TestCase(true)]
@@ -89,7 +100,7 @@ public class TokenTests
         using var run = CliRun.Start();
         var (other, otherUrl) = LoopbackApi.Start();
         using var otherApi = other;
-        LoopbackApi.Stub(otherApi, "GET", TestData.OrgPath("systems"), 200, ApiJson.Page());
+        LoopbackApi.Stub(otherApi, "GET", OrgSystems, 200, ApiJson.Page());
         run.SaveCredentials(FileToken, otherUrl);
 
         if (!tokenFromEnvironment)
@@ -102,277 +113,224 @@ public class TokenTests
         var received = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
         var expectedToken = tokenFromEnvironment ? TestData.Token : FileToken;
 
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
             Assert.That(run.Requests, Is.Empty, "The request went to the default API address.");
-            Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {TestData.OrgPath("systems")}" }));
-            Assert.That(received.Select(request => Authorization(request)), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
+            Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
+            Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
         });
     }
 
-    // With no token there is nothing to authenticate with, so the CLI reports it before any call.
-    // The commands cover one that acts within an organisation and two that do not.
+    // With no token there is nothing to authenticate with, so the CLI reports token_missing (exit 3,
+    // "Errors and exit codes") before any call, including the lookup a name or no choice of
+    // organisation makes. The commands cover the organisation commands and status, and a command
+    // that acts in an organisation given by ID and by name.
     [TestCase("system", "list")]
+    [TestCase("system", "list", "--org", TestData.OrgName)]
     [TestCase("org", "list")]
+    [TestCase("org", "use", TestData.OrgName)]
     [TestCase("status")]
     public async Task A_command_exits_3_with_token_missing_and_sends_nothing_when_there_is_no_token(params string[] args)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
         var result = await run.RunAsync(args);
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(3), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("token_missing"));
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
-        });
+        CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // There is no --token option (proposal "Options on every command"): a token given as an
-    // argument ends up in shell history, process listings, CI logs and agent transcripts, and
-    // personal access tokens never expire. A parse error exits 2 before anything is sent or saved.
+    // Checks run in this order: arguments, the token, the organisation, then the call ("Errors and
+    // exit codes"). With no token and an organisation choice that would end in no_org (none chosen,
+    // several organisations) or a lookup (a name in ENCLAVE_ORG), the CLI reports token_missing and
+    // makes no lookup.
+    [TestCase("none chosen")]
+    [TestCase("ENCLAVE_ORG")]
+    public async Task The_token_is_checked_before_the_organisation(string choice)
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
+
+        if (choice == "ENCLAVE_ORG")
+        {
+            run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
+        }
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Rejected(run, result, "token_missing");
+    }
+
+    // Arguments are checked before the token, so a command with bad arguments fails the same way
+    // with or without a token ("Errors and exit codes"): the caller fixes the command line first,
+    // and the error does not depend on the machine's credentials. Each case is run with the token
+    // and without one, and both runs must give the same error and send nothing.
+    [TestCaseSource(nameof(BadArgumentRuns))]
+    public async Task A_command_with_bad_arguments_fails_the_same_way_with_or_without_a_token(string[] args)
+    {
+        using var withToken = CliRun.Start();
+        using var withoutToken = CliRun.Start();
+        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+
+        foreach (var run in new[] { withToken, withoutToken })
+        {
+            run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+            run.Stub("GET", OrgSystems, json: ApiJson.Page());
+            run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
+        }
+
+        var first = await withToken.RunAsync(args);
+        var second = await withoutToken.RunAsync(args);
+
+        CliAssert.Rejected(withToken, first);
+        CliAssert.Rejected(withoutToken, second);
+        Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
+    }
+
+    // There is no --token option ("Options on every command"): a token given as an argument ends up
+    // in shell history, process listings, CI logs and agent transcripts, and personal access tokens
+    // do not expire (portal Enclave.Accounts/Controllers/Api/TokensApiController.cs:105). The option
+    // is a parse error, exit 2, and the error never repeats the value given to an unknown option,
+    // since that value can be a token ("Errors and exit codes"). ENCLAVE_TOKEN is unset and no file
+    // is saved, so a CLI that took the option as a token source runs the command.
     [TestCase("login", "--token", TestData.Token)]
     [TestCase("status", "--token", TestData.Token)]
+    [TestCase("org", "list", "--token", TestData.Token)]
     [TestCase("system", "list", "--token", TestData.Token)]
-    public async Task Token_is_not_an_option(params string[] args)
+    public async Task Token_is_not_an_option_and_the_error_does_not_repeat_its_value(params string[] args)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
         var result = await run.RunAsync(args);
 
+        CliAssert.Rejected(run, result);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
+            Assert.That(result.Stderr, Does.Not.Contain(TestData.Token));
             Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
-    // No command prints the token, under --verbose or --dry-run either (proposal "Login, logout and
-    // status"); a printed token lands in CI logs and agent transcripts and never expires. Each
-    // command gets valid arguments and --yes where it needs one, so it runs to the point where a
-    // token could be printed: the API commands send their request with the token, a dry run
-    // prints the request it would send, and a partner command reports not_implemented after
-    // resolving its context.
-    [TestCaseSource(nameof(ChangingCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_command_that_changes_something(string command, bool dryRun)
+    // No command prints the token, under --verbose either ("Login, logout and status"); a printed
+    // token lands in CI logs and agent transcripts, and personal access tokens do not expire. The
+    // token is the same in every case, whether it comes from ENCLAVE_TOKEN, stdin or the file, so
+    // one check covers every source.
+    [TestCaseSource(nameof(VerboseRuns))]
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_under_verbose(string name)
     {
         using var run = CliRun.Start();
-        var change = Arrange(run, command);
-        string[] args = dryRun ? [.. change.Args, "--verbose", "--dry-run"] : [.. change.Args, "--verbose"];
+        var command = Arrange(run, name);
 
-        var result = await run.RunAsync(args);
+        var result = await run.RunAsync([.. command.Args, "--verbose"]);
 
         var requests = run.Requests;
 
         Assert.Multiple(() =>
         {
+            Assert.That(result.ExitCode, Is.EqualTo(command.ExitCode), result.ToString());
             Assert.That(result.Stdout, Does.Not.Contain(TestData.Token));
             Assert.That(result.Stderr, Does.Not.Contain(TestData.Token));
 
-            if (change.Partner)
+            if (command.SendsRequests)
             {
-                Assert.That(result.ExitCode, Is.EqualTo(1), result.ToString());
-                Assert.That(result.Stderr, Does.Contain("not_implemented"));
-                Assert.That(requests, Is.Empty);
-            }
-            else if (dryRun || !change.SendsRequest)
-            {
-                Assert.That(result.ExitCode, Is.Zero, result.ToString());
-                Assert.That(requests, Is.Empty);
+                Assert.That(requests, Is.Not.Empty);
+                Assert.That(requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
             }
             else
             {
-                Assert.That(result.ExitCode, Is.Zero, result.ToString());
-                Assert.That(requests, Is.Not.Empty);
-                Assert.That(requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
+                Assert.That(requests, Is.Empty);
             }
         });
     }
 
-    private static IEnumerable<TestCaseData> ChangingCommandRuns()
+    // Bad arguments of each kind this area has: an ID that is not a GUID, a name with its ID option,
+    // an unknown option, a missing argument, and an option the command does not take ("Details").
+    private static IEnumerable<TestCaseData> BadArgumentRuns()
     {
-        foreach (var command in ApiChanges)
-        {
-            yield return new TestCaseData(command, false).SetArgDisplayNames(command, "--verbose");
-            yield return new TestCaseData(command, true).SetArgDisplayNames(command, "--verbose --dry-run");
-        }
-
-        foreach (var command in LocalChanges)
-        {
-            yield return new TestCaseData(command, false).SetArgDisplayNames(command, "--verbose");
-        }
+        yield return BadArguments("system", "list", "--org-id", "12");
+        yield return BadArguments("system", "list", "--org", TestData.OtherOrgName, "--org-id", TestData.OtherOrgId.ToString());
+        yield return BadArguments("system", "list", "--no-such-option");
+        yield return BadArguments("status", "--org-id", TestData.OrgName);
+        yield return BadArguments("org", "use");
+        yield return BadArguments("org", "use", "--id", "12");
+        yield return BadArguments("org", "list", "--dry-run");
+        yield return BadArguments("login", "--dry-run");
     }
 
-    // Stubs the responses a command needs to succeed and returns its arguments. ENCLAVE_TOKEN and
-    // ENCLAVE_ORG keep the harness defaults unless a case says otherwise.
-    private static Change Arrange(CliRun run, string command)
-    {
-        var account = AccountId.ToString();
-        var customer = CustomerId.ToString();
+    private static TestCaseData BadArguments(params string[] args) =>
+        new TestCaseData((object)args).SetArgDisplayNames(string.Join(" ", args));
 
-        switch (command)
+    // Stubs what each command needs to reach its outcome, and returns its arguments and exit code.
+    private static CommandRun Arrange(CliRun run, string name)
+    {
+        var oneOrg = ApiJson.Orgs((TestData.OrgId, TestData.OrgName));
+        var bothOrgs = ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName));
+
+        switch (name)
         {
-            case "org update":
-                run.Stub("PATCH", TestData.OrgPath(), json: ApiJson.OrgProperties(TestData.OrgName));
-                return Api("org", "update", "--name", TestData.OrgName);
-            case "org user remove":
-                // RemoveUserAsync takes the account ID as a string (Enclave.Sdk.Api 1.0.4), so the
-                // path carries whichever GUID form the CLI passes; this test is about the token, so
-                // both forms are answered.
-                run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:D}"));
-                run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:N}"));
-                return Api("org", "user", "remove", account, "--yes");
-            case "org invite send":
-                run.Stub("POST", TestData.OrgPath("invites"));
-                return Api("org", "invite", "send", Email, "--yes");
-            case "org invite cancel":
-                run.Stub("DELETE", TestData.OrgPath("invites"));
-                return Api("org", "invite", "cancel", Email);
-            case "system update":
-                run.Stub("PATCH", TestData.OrgPath($"systems/{SystemId}"), json: ApiJson.System(SystemId));
-                return Api("system", "update", SystemId, "--description", "web");
-            case "system enable":
-                run.Stub("PUT", TestData.OrgPath("systems/enable"), json: ApiJson.Bulk("systemsUpdated", 1));
-                return Api("system", "enable", SystemId);
-            case "system disable":
-                run.Stub("PUT", TestData.OrgPath("systems/disable"), json: ApiJson.Bulk("systemsUpdated", 1));
-                return Api("system", "disable", SystemId);
-            case "system revoke":
-                run.Stub("DELETE", TestData.OrgPath("systems"), json: ApiJson.Bulk("systemsRevoked", 1));
-                return Api("system", "revoke", SystemId, "--yes");
-            case "pending update":
-                run.Stub("PATCH", TestData.OrgPath($"unapproved-systems/{SystemId}"), json: ApiJson.PendingSystem(SystemId));
-                return Api("pending", "update", SystemId, "--description", "web");
-            case "pending approve":
-                run.Stub("PUT", TestData.OrgPath("unapproved-systems/approve"), json: ApiJson.Bulk("systemsApproved", 1));
-                return Api("pending", "approve", SystemId, "--yes");
-            case "pending decline":
-                run.Stub("DELETE", TestData.OrgPath("unapproved-systems"), json: ApiJson.Bulk("systemsDeclined", 1));
-                return Api("pending", "decline", SystemId, "--yes");
-            case "key create":
-                run.Stub("POST", TestData.OrgPath("enrolment-keys"), json: ApiJson.Key(1, "laptops"));
-                return Api("key", "create", "--description", "laptops");
-            case "key update":
-                run.Stub("PATCH", TestData.OrgPath("enrolment-keys/1"), json: ApiJson.Key(1, "laptops"));
-                return Api("key", "update", "1", "--description", "laptops");
-            case "key enable":
-                run.Stub("PUT", TestData.OrgPath("enrolment-keys/enable"), json: ApiJson.Bulk("keysModified", 1));
-                return Api("key", "enable", "1");
-            case "key disable":
-                run.Stub("PUT", TestData.OrgPath("enrolment-keys/disable"), json: ApiJson.Bulk("keysModified", 1));
-                return Api("key", "disable", "1");
-            case "key delete":
-                run.Stub("DELETE", TestData.OrgPath("enrolment-keys"), json: ApiJson.Bulk("keysDeleted", 1));
-                return Api("key", "delete", "1", "--yes");
-            case "policy create":
-                run.Stub("POST", TestData.OrgPath("policies"), json: ApiJson.Policy(1, "web"));
-                return Api("policy", "create", "--from-file", run.WriteFile("policy.json", """{"description":"web"}"""));
-            case "policy update":
-                run.Stub("PATCH", TestData.OrgPath("policies/1"), json: ApiJson.Policy(1, "web"));
-                return Api("policy", "update", "1", "--description", "web");
-            case "policy enable":
-                run.Stub("PUT", TestData.OrgPath("policies/enable"), json: ApiJson.Bulk("policiesUpdated", 1));
-                return Api("policy", "enable", "1");
-            case "policy disable":
-                run.Stub("PUT", TestData.OrgPath("policies/disable"), json: ApiJson.Bulk("policiesUpdated", 1));
-                return Api("policy", "disable", "1");
-            case "policy delete":
-                run.Stub("DELETE", TestData.OrgPath("policies"), json: ApiJson.Bulk("policiesDeleted", 1));
-                return Api("policy", "delete", "1", "--yes");
-            case "tag create":
-                run.Stub("POST", TestData.OrgPath("tags"), json: ApiJson.Tag("web"));
-                return Api("tag", "create", "web");
-            case "tag update":
-                run.Stub("PATCH", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
-                return Api("tag", "update", "web", "--notes", "front end");
-            case "tag delete":
-                run.Stub("DELETE", TestData.OrgPath("tags"), json: ApiJson.Bulk("tagsDeleted", 1));
-                return Api("tag", "delete", "web", "--yes");
-            case "dns zone create":
-                run.Stub("POST", TestData.OrgPath("dns/zones"), json: ApiJson.Zone(1, "internal.example"));
-                return Api("dns", "zone", "create", "internal.example");
-            case "dns zone update":
-                run.Stub("PATCH", TestData.OrgPath("dns/zones/1"), json: ApiJson.Zone(1, "internal.example"));
-                return Api("dns", "zone", "update", "1", "--notes", "office");
-            case "dns zone delete":
-                run.Stub("DELETE", TestData.OrgPath("dns/zones/1"), json: ApiJson.Zone(1, "internal.example"));
-                return Api("dns", "zone", "delete", "1", "--yes");
-            case "dns record create":
-                run.Stub("POST", TestData.OrgPath("dns/records"), json: ApiJson.Record(1, "www"));
-                return Api("dns", "record", "create", "www", "--zone", "1");
-            case "dns record update":
-                run.Stub("PATCH", TestData.OrgPath("dns/records/1"), json: ApiJson.Record(1, "www"));
-                return Api("dns", "record", "update", "1", "--notes", "office");
-            case "dns record delete":
-                run.Stub("DELETE", TestData.OrgPath("dns/records"), json: ApiJson.Bulk("dnsRecordsDeleted", 1));
-                return Api("dns", "record", "delete", "1", "--yes");
-            case "trust create":
-                run.Stub("POST", TestData.OrgPath("trust-requirements"), json: ApiJson.Trust(1, "vpn"));
-                var trust = run.WriteFile("trust.json", """{"description":"vpn","type":"PublicIp","settings":{"configuration":{},"conditions":[]}}""");
-                return Api("trust", "create", "--from-file", trust);
-            case "trust update":
-                run.Stub("PATCH", TestData.OrgPath("trust-requirements/1"), json: ApiJson.Trust(1, "vpn"));
-                return Api("trust", "update", "1", "--description", "vpn");
-            case "trust delete":
-                run.Stub("DELETE", TestData.OrgPath("trust-requirements"), json: ApiJson.Bulk("requirementsDeleted", 1));
-                return Api("trust", "delete", "1", "--yes");
-            case "partner user remove":
-                return Partner("partner", "user", "remove", account, "--yes");
-            case "partner invite send":
-                return Partner("partner", "invite", "send", Email, "--yes");
-            case "partner invite cancel":
-                return Partner("partner", "invite", "cancel", InviteId);
-            case "partner customer convert":
-                return Partner("partner", "customer", "convert", customer, "--yes");
-            case "partner customer admin add":
-                return Partner("partner", "customer", "admin", "add", customer, account, "--yes");
-            case "partner customer admin remove":
-                return Partner("partner", "customer", "admin", "remove", customer, account, "--yes");
-            case "partner customer invite send":
-                return Partner("partner", "customer", "invite", "send", customer, Email, "--yes");
-            case "partner customer invite cancel":
-                return Partner("partner", "customer", "invite", "cancel", customer, InviteId);
-            case "partner customer auto-sync enable":
-                return Partner("partner", "customer", "auto-sync", "enable", customer);
-            case "partner customer auto-sync disable":
-                return Partner("partner", "customer", "auto-sync", "disable", customer);
             case "login":
-                run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-                return Api("login");
+                run.Stub("GET", "/account/orgs", json: oneOrg);
+                return Command(0, "login");
             case "login --token-stdin":
                 run.Environment.Remove("ENCLAVE_TOKEN");
                 run.StdinText = TestData.Token + "\n";
-                run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-                return Api("login", "--token-stdin");
+                run.Stub("GET", "/account/orgs", json: oneOrg);
+                return Command(0, "login", "--token-stdin");
+            case "login with a refused token":
+                run.StubProblem("GET", "/account/orgs", 401, "Unauthorized");
+                return Command(3, "login");
             case "logout":
                 run.SaveCredentials(TestData.Token);
-                return new Change(["logout"], Partner: false, SendsRequest: false);
-            case "org use":
-                run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
-                return Api("org", "use", TestData.OtherOrgName);
+                return LocalCommand("logout");
+            case "status with ENCLAVE_TOKEN":
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "status");
+            case "status with credentials.json":
+                run.Environment.Remove("ENCLAVE_TOKEN");
+                run.SaveCredentials(TestData.Token);
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "status");
+            case "status with no organisation chosen":
+                run.Environment.Remove("ENCLAVE_ORG_ID");
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "status");
+            case "status with a refused token":
+                run.StubProblem("GET", "/account/orgs", 401, "Unauthorized");
+                return Command(3, "status");
+            case "org list":
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "org", "list");
+            case "org use by name":
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "org", "use", TestData.OtherOrgName);
+            case "org use --id":
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(0, "org", "use", "--id", TestData.OtherOrgId.ToString());
+            case "an organisation looked up by name":
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
+                return Command(0, "system", "list", "--org", TestData.OtherOrgName);
+            case "several organisations and none chosen":
+                run.Environment.Remove("ENCLAVE_ORG_ID");
+                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                return Command(2, "system", "list");
             default:
-                throw new ArgumentOutOfRangeException(nameof(command), command, "No arrangement for this command.");
+                throw new ArgumentOutOfRangeException(nameof(name), name, "No arrangement for this command.");
         }
     }
 
-    private static Change Api(params string[] args) => new(args, Partner: false, SendsRequest: true);
+    private static CommandRun Command(int exitCode, params string[] args) => new(args, exitCode, SendsRequests: true);
 
-    // A partner must be chosen, or the command exits 2 with no_partner before it reaches the
-    // missing partner client.
-    private static Change Partner(params string[] args) =>
-        new([.. args, "--partner", TestData.PartnerId.ToString()], Partner: true, SendsRequest: false);
+    private static CommandRun LocalCommand(params string[] args) => new(args, 0, SendsRequests: false);
 
     private static string? Authorization(IRequestMessage request) =>
         request.Headers?
@@ -380,5 +338,5 @@ public class TokenTests
             .Select(header => string.Join(", ", header.Value))
             .FirstOrDefault();
 
-    private sealed record Change(string[] Args, bool Partner, bool SendsRequest);
+    private sealed record CommandRun(string[] Args, int ExitCode, bool SendsRequests);
 }

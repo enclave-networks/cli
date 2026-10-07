@@ -1,13 +1,14 @@
-using System.Text.Json;
+using System.Globalization;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
-/// Every ID is checked against its format before any call, and one malformed ID stops the command
-/// with exit 2 (proposal, "ID checks"). An unknown command also exits 2, so each test also runs the
-/// command with a valid ID and checks it sends the request.
+/// Every ID is checked against its format before any call, and one bad ID stops the command with
+/// exit 2 (proposed-cli-surface.md "ID checks"). A parse error also exits 2, so each test runs the
+/// command again with valid IDs and checks it then sends its request.
 /// </summary>
 [Category(TestCategory.Pending)]
 public class IdCheckTests
@@ -16,258 +17,352 @@ public class IdCheckTests
 
     private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
 
-    private static readonly string[] OneSystem = ["ABCDE"];
+    private static readonly Guid CustomerOrgId = new("6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b");
 
-    private static readonly string[] LookupOnly = ["GET /account/orgs"];
-
-    // Enclave.Sdk.Api 1.0.4 puts IDs into URL paths unescaped, and .NET resolves ".." when it
-    // combines the path with the base address, so the bulk decline's single counterpart
-    // (UnapprovedSystemsClient.cs:95, DeclineAsync) would send DELETE org/<id>/systems/ABCDE and
-    // revoke system ABCDE. This is the proposal's own example. The CLI rejects the ID before any
-    // call, so neither the decline nor a revoke reaches the API.
+    // proposed-cli-surface.md "ID checks": Enclave.Sdk.Api 1.0.4 puts IDs into URL paths unescaped
+    // (UnapprovedSystemsClient.cs:95), and .NET resolves ".." when it combines the path with the
+    // base address, so this ID would send DELETE org/<id>/systems/ABCDE and revoke system ABCDE.
+    // Every route the ID could reach is answered, so any request it caused would be recorded.
     [Test]
-    public async Task Pending_decline_exits_2_for_a_path_traversal_id_and_sends_no_request()
+    public async Task System_decline_exits_2_for_a_path_traversal_id_and_sends_nothing()
     {
         using var run = CliRun.Start();
-        run.Stub("DELETE", TestData.OrgPath("unapproved-systems"), 200, ApiJson.Bulk("systemsDeclined", 1));
+        var decline = TestData.OrgPath("unapproved-systems");
+        run.StubBulk("DELETE", decline, "systemsDeclined", 1);
         run.Stub("DELETE", TestData.OrgPath("systems"), 200, ApiJson.Bulk("systemsRevoked", 1));
         run.Stub("DELETE", TestData.OrgPath("systems/ABCDE"), 200, ApiJson.System("ABCDE"));
+        run.Stub("DELETE", TestData.OrgPath("unapproved-systems/ABCDE"), 200, ApiJson.PendingSystem("ABCDE"));
 
-        var rejected = await run.RunAsync("pending", "decline", "../systems/ABCDE", "--yes");
+        var rejected = await run.RunAsync("system", "decline", "../systems/ABCDE");
 
-        AssertRejected(rejected, "../systems/ABCDE");
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
-        var accepted = await run.RunAsync("pending", "decline", "ABCDE", "--yes");
+        var accepted = await run.RunAsync("system", "decline", "ABCDE");
 
-        CliAssert.Succeeded(accepted);
+        CliAssert.Bulk(accepted, requested: 1, affected: 1);
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("unapproved-systems")));
-            Assert.That(JsonAssert.Strings(JsonAssert.Property(request.BodyJson, "systemIds")), Is.EqualTo(OneSystem));
-        });
-    }
-
-    // TagsClient.Update puts the tag into the PATCH path unescaped (Enclave.Sdk.Api 1.0.4,
-    // TagsClient.cs, Update(string tag)), so "../systems/ABCDE" would resolve to
-    // org/<id>/systems/ABCDE and set the notes of system ABCDE.
-    [Test]
-    public async Task Tag_update_exits_2_for_a_path_traversal_tag_and_sends_no_request()
-    {
-        using var run = CliRun.Start();
-        run.Stub("PATCH", TestData.OrgPath("tags/web"), 200, ApiJson.Tag("web"));
-        run.Stub("PATCH", TestData.OrgPath("systems/ABCDE"), 200, ApiJson.System("ABCDE"));
-
-        var rejected = await run.RunAsync("tag", "update", "../systems/ABCDE", "--notes", "x");
-
-        AssertRejected(rejected, "../systems/ABCDE");
-        Assert.That(run.Requests, Is.Empty);
-
-        var accepted = await run.RunAsync("tag", "update", "web", "--notes", "x");
-
-        CliAssert.Succeeded(accepted);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("PATCH"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags/web")));
-        });
-    }
-
-    // Formats from the proposal's "ID checks" table: system IDs are letters and digits; tags follow
-    // the API's rule ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal TagValidationExtensions.cs:13); account
-    // IDs are GUIDs; key, policy, zone, record and trust requirement IDs are integers (portal
-    // Enclave.Configuration.Data/Identifiers, IdBackingType.Int, so 99999999999 is out of range).
-    // IDs given through options (--key, --zone, --set-systems) are checked the same way.
-    [TestCaseSource(nameof(MalformedIdCases))]
-    public async Task Command_exits_2_for_a_malformed_id_and_sends_no_request(
-        string[] rejectedArgs,
-        string malformedId,
-        string[] acceptedArgs,
-        string method,
-        string path,
-        string? response)
-    {
-        using var run = CliRun.Start();
-        run.Stub(method, path, 200, response);
-
-        var rejected = await run.RunAsync(rejectedArgs);
-
-        AssertRejected(rejected, malformedId);
-        Assert.That(run.Requests, Is.Empty);
-
-        var accepted = await run.RunAsync(acceptedArgs);
-
-        CliAssert.Succeeded(accepted);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
+            Assert.That(request.Path, Is.EqualTo(decline));
+            Assert.That(string.Join(",", request.BodyIds("systemIds")), Is.EqualTo("ABCDE"));
         });
     }
 
     // One malformed ID among several stops the whole command: sending the valid ones would leave the
-    // caller to work out which IDs were changed.
+    // caller to work out which items changed.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
-    public async Task Bulk_command_exits_2_when_one_id_argument_is_malformed_and_sends_none(BulkCommand command)
+    public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_given_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
-        command.StubBulk(run, affected: 2);
+        command.StubBulk(run, 2);
+        var ids = command.Ids(2);
 
-        var rejected = await run.RunAsync(command.Args(command.Id(1), command.MalformedId, command.Id(2)));
+        var rejected = await run.RunAsync(command.Args(ids[0], command.MalformedId, ids[1]));
 
-        AssertRejected(rejected, command.MalformedId);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
-        var accepted = await run.RunAsync(command.Args(command.Id(1), command.Id(2)));
+        var accepted = await run.RunAsync(command.Args(ids));
 
-        CliAssert.Succeeded(accepted);
+        CliAssert.Bulk(accepted, requested: 2, affected: 2);
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
-    // IDs piped from another command are checked in the same way as IDs on the command line, and
-    // all of them are checked before the bulk call.
+    // A list on stdin is checked as arguments are: its IDs go into the same calls. The bad item sits
+    // between two good ones, so a CLI that sent the good items would show a request.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
-    public async Task Bulk_command_exits_2_when_one_id_on_stdin_is_malformed_and_sends_none(BulkCommand command)
+    public async Task Bulk_command_exits_2_and_sends_nothing_when_one_id_in_a_list_on_stdin_is_malformed(BulkCommand command)
     {
         using var run = CliRun.Start();
-        command.StubBulk(run, affected: 2);
-        run.StdinText = BulkCommand.Lines([command.Id(1), command.MalformedId, command.Id(2)]);
+        command.StubBulk(run, 2);
+        var ids = command.Ids(2);
+        run.StdinText = ListWithMalformedItem(command, ids);
 
-        var rejected = await run.RunAsync(command.Args("-"));
+        var rejected = await run.RunAsync(command.StdinArgs());
 
-        AssertRejected(rejected, command.MalformedId);
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
-        run.StdinText = BulkCommand.Lines([command.Id(1), command.Id(2)]);
-        var accepted = await run.RunAsync(command.Args("-"));
+        run.StdinText = command.List(ids);
+        var accepted = await run.RunAsync(command.StdinArgs());
 
-        CliAssert.Succeeded(accepted);
-        Assert.That(command.BodyIds(run.SingleRequest().BodyJson), Is.EquivalentTo(command.Ids(2)));
+        CliAssert.Bulk(accepted, requested: 2, affected: 2);
+        Assert.That(string.Join(",", run.SingleRequest().BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
     }
 
-    // "Every ID is checked before any call" includes the organisation lookup that --org <name>
-    // makes, so a malformed ID costs no API call at all.
+    // The formats are those of the "ID checks" table, wherever the ID is given: as the command's own
+    // item, after an option naming another item, or in a list of systems a hostname points at.
+    [TestCaseSource(nameof(MalformedIdCases))]
+    public async Task Command_exits_2_and_sends_nothing_for_a_malformed_id(
+        string[] rejectedArgs,
+        string[] acceptedArgs,
+        string method,
+        string path,
+        string? otherPath,
+        string? response,
+        string? readPath,
+        string? readResponse)
+    {
+        using var run = CliRun.Start();
+        run.Stub(method, path, 200, response);
+
+        if (otherPath is not null)
+        {
+            run.Stub(method, otherPath, 200, response);
+        }
+
+        if (readPath is not null)
+        {
+            run.Stub("GET", readPath, 200, readResponse);
+        }
+
+        var rejected = await run.RunAsync(rejectedArgs);
+
+        CliAssert.Rejected(run, rejected);
+
+        var accepted = await run.RunAsync(acceptedArgs);
+
+        CliAssert.Succeeded(accepted);
+        var requests = run.Requests;
+        var calls = string.Join(", ", run.Calls());
+        Assert.Multiple(() =>
+        {
+            Assert.That(requests.Count(request => request.Method == method && (request.Path == path || request.Path == otherPath)), Is.EqualTo(1), calls);
+            Assert.That(requests.Count(request => request.Method != "GET"), Is.EqualTo(method == "GET" ? 0 : 1), calls);
+        });
+    }
+
+    // org use saves the organisation as the default for later commands, so an ID that is not a GUID
+    // is refused before anything is saved.
+    [Test]
+    public async Task Org_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+
+        var rejected = await run.RunAsync("org", "use", "--id", "not-a-guid");
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
+
+        var accepted = await run.RunAsync("org", "use", "--id", TestData.OtherOrgId.ToString());
+
+        CliAssert.Succeeded(accepted);
+        Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
+    }
+
+    // partner use saves the partner as the default for later commands, and partners are given by
+    // GUID (proposed-cli-surface.md "ID checks"), so an ID that is not a GUID is refused before
+    // anything is saved. partner use makes no call either way ("Login, logout and status").
+    [Test]
+    public async Task Partner_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
+    {
+        using var run = CliRun.Start();
+
+        var rejected = await run.RunAsync("partner", "use", "--id", "12");
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
+
+        var accepted = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
+
+        CliAssert.Succeeded(accepted);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
+            Assert.That(run.Requests, Is.Empty);
+        });
+    }
+
+    // Partners and customers are given by GUID (proposed-cli-surface.md "ID checks"), and arguments
+    // are checked before anything else ("Errors and exit codes"), so a bad ID exits 2 although a
+    // partner customer command cannot run. The second run, with GUIDs, passes the check and reaches
+    // not_implemented, the outcome of every partner customer command without partner clients.
+    [TestCaseSource(nameof(PartnerIdCases))]
+    public async Task Partner_customer_command_exits_2_for_a_partner_or_customer_id_that_is_not_a_guid(string[] rejectedArgs, string[] acceptedArgs)
+    {
+        using var run = CliRun.Start();
+
+        var rejected = await run.RunAsync(rejectedArgs);
+
+        CliAssert.Rejected(run, rejected);
+
+        var accepted = await run.RunAsync(acceptedArgs);
+
+        CliAssert.NotImplemented(run, accepted);
+    }
+
+    // "Every ID is checked before any call" includes the lookup --org <name> makes, so a malformed
+    // ID costs no call at all.
     [Test]
     public async Task Id_check_runs_before_the_organisation_lookup()
     {
         using var run = CliRun.Start();
+        var path = TestData.OrgPath("systems/disable");
         run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
-        run.Stub("PUT", TestData.OrgPath("systems/disable"), 200, ApiJson.Bulk("systemsUpdated", 1));
+        run.StubBulk("PUT", path, "systemsUpdated", 1);
 
         var rejected = await run.RunAsync("system", "disable", "ABCDE", "AB/CD", "--org", TestData.OrgName);
 
-        AssertRejected(rejected, "AB/CD");
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OrgName);
 
-        CliAssert.Succeeded(accepted);
-        string[] expected = ["GET /account/orgs", $"PUT {TestData.OrgPath("systems/disable")}"];
-        Assert.That(run.Calls(), Is.EqualTo(expected));
+        CliAssert.Bulk(accepted, requested: 1, affected: 1);
+        Assert.That(string.Join(",", run.Calls()), Is.EqualTo($"GET /account/orgs,PUT {path}"));
     }
 
-    // A dry run prints the request a command would send, so a command that would be rejected is
-    // rejected under --dry-run too, before the dry run's own organisation lookup.
+    // The same holds for the lookup a name needs: the hostname's systems are checked before the
+    // hostname is looked up.
+    [Test]
+    public async Task Id_check_runs_before_a_name_lookup()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("dns/records/7");
+        run.Stub("GET", TestData.OrgPath("dns/zones"), 200, ApiJson.Page(ApiJson.Zone(1, "enclave")));
+        run.Stub("GET", TestData.OrgPath("dns/records"), 200, ApiJson.Page(ApiJson.Record(7, "db")));
+        run.Stub("PATCH", path, 200, ApiJson.Record(7, "db"));
+
+        var rejected = await run.RunAsync("dns", "update-hostname", "db.enclave", "--set-systems", "ABCDE,AB/CD");
+
+        CliAssert.Rejected(run, rejected);
+
+        var accepted = await run.RunAsync("dns", "update-hostname", "db.enclave", "--set-systems", "ABCDE,FGHIJ");
+
+        CliAssert.Succeeded(accepted);
+        Assert.That(run.RequestsTo("PATCH", path), Has.Count.EqualTo(1));
+    }
+
+    // A dry run prints the request the command would send, so it applies the same checks.
     [Test]
     public async Task Id_check_applies_under_dry_run()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        var path = TestData.OrgPath("systems/disable");
+        run.StubBulk("PUT", path, "systemsUpdated", 1);
 
         var rejected = await run.RunAsync("system", "disable", "AB/CD", "--dry-run");
 
-        AssertRejected(rejected, "AB/CD");
-        Assert.That(run.Requests, Is.Empty);
+        CliAssert.Rejected(run, rejected);
 
         var accepted = await run.RunAsync("system", "disable", "ABCDE", "--dry-run");
 
         CliAssert.Succeeded(accepted);
-        Assert.That(JsonAssert.Property(accepted.StdoutJson, "dryRun").GetBoolean(), Is.True);
-    }
-
-    // --org takes an organisation ID or name. A value that is not a GUID is a name, and only the
-    // GUID of a matching organisation from the lookup goes into a URL path. A name that matches no
-    // organisation exits 2 with no_org after the lookup, with no other request; the error lists the
-    // organisations the token sees, as Auth/OrgContextTests requires.
-    [Test]
-    public async Task Org_option_that_is_neither_a_guid_nor_a_known_name_exits_2_after_the_lookup_alone()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
-        run.Stub("PUT", TestData.OrgPath("systems/disable"), 200, ApiJson.Bulk("systemsUpdated", 1));
-
-        var rejected = await run.RunAsync("system", "disable", "ABCDE", "--org", "../systems");
-
-        CliAssert.Failed(rejected, 2, "no_org");
-        Assert.That(run.Calls(), Is.EqualTo(LookupOnly));
-
-        var accepted = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OrgName);
-
-        CliAssert.Succeeded(accepted);
-        Assert.That(run.Requests.Count(request => request.Method == "PUT"), Is.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(accepted.StdoutJson, "dryRun").GetBoolean(), Is.True);
+            Assert.That(run.RequestsTo("PUT", path), Is.Empty);
+        });
     }
 
     private static IEnumerable<TestCaseData> MalformedIdCases()
     {
-        var accountPath = TestData.OrgPath($"users/{AccountId}");
+        var otherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
 
-        yield return Case("system show ../policies/3", "../policies/3", ["system", "show", "../policies/3"], ["system", "show", "ABCDE"], "GET", "systems/ABCDE", ApiJson.System("ABCDE"));
-        yield return Case("system update ABC-DE", "ABC-DE", ["system", "update", "ABC-DE", "--description", "x"], ["system", "update", "ABCDE", "--description", "x"], "PATCH", "systems/ABCDE", ApiJson.System("ABCDE", "x"));
-        yield return Case("system enable --until ../systems/ABCDE", "../systems/ABCDE", ["system", "enable", "../systems/ABCDE", "--until", Until, "--expiry-action", "Disable"], ["system", "enable", "ABCDE", "--until", Until, "--expiry-action", "Disable"], "PUT", "systems/ABCDE/enable-until", ApiJson.System("ABCDE"));
-        yield return Case("pending show AB CD", "AB CD", ["pending", "show", "AB CD"], ["pending", "show", "ABCDE"], "GET", "unapproved-systems/ABCDE", ApiJson.PendingSystem("ABCDE"));
-        yield return Case("pending update ../systems/ABCDE", "../systems/ABCDE", ["pending", "update", "../systems/ABCDE", "--description", "x"], ["pending", "update", "ABCDE", "--description", "x"], "PATCH", "unapproved-systems/ABCDE", ApiJson.PendingSystem("ABCDE", "x"));
+        // Systems: letters and digits.
+        yield return Case("system show ../policies/3", ["system", "show", "../policies/3"], ["system", "show", "ABCDE"], "GET", "systems/ABCDE", ApiJson.System("ABCDE"));
+        yield return Case("system update ABC-DE", ["system", "update", "ABC-DE", "--description", "web server"], ["system", "update", "ABCDE", "--description", "web server"], "PATCH", "systems/ABCDE", ApiJson.System("ABCDE", "web server"));
+        yield return Case("system update --pending ../systems/ABCDE", ["system", "update", "../systems/ABCDE", "--pending", "--description", "kiosk"], ["system", "update", "ABCDE", "--pending", "--description", "kiosk"], "PATCH", "unapproved-systems/ABCDE", ApiJson.PendingSystem("ABCDE", "kiosk"));
+        yield return Case("system enable --for ../systems/ABCDE", ["system", "enable", "../systems/ABCDE", "--for", "8h"], ["system", "enable", "ABCDE", "--for", "8h"], "PUT", "systems/ABCDE/enable-until", ApiJson.System("ABCDE"));
+        yield return Case("dns create-hostname --systems ../systems/ABCDE", ["dns", "create-hostname", "db.internal", "--systems", "FGHIJ,../systems/ABCDE"], ["dns", "create-hostname", "db.internal", "--systems", "FGHIJ,ABCDE"], "POST", "dns/records", ApiJson.Record(7, "db"), readPathSuffix: "dns/zones", readResponse: ApiJson.Page(ApiJson.Zone(4, "internal")));
+        yield return Case("dns update-hostname --set-systems AB/CD", ["dns", "update-hostname", "--id", "7", "--set-systems", "ABCDE,AB/CD"], ["dns", "update-hostname", "--id", "7", "--set-systems", "ABCDE,FGHIJ"], "PATCH", "dns/records/7", ApiJson.Record(7, "db"));
 
-        yield return Case("tag show Web", "Web", ["tag", "show", "Web"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
-        yield return Case("tag show web/db", "web/db", ["tag", "show", "web/db"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
-        yield return Case("tag show web..db", "web..db", ["tag", "show", "web..db"], ["tag", "show", "web.db"], "GET", "tags/web.db", ApiJson.Tag("web.db"));
-        yield return Case("tag show web-", "web-", ["tag", "show", "web-"], ["tag", "show", "web-1"], "GET", "tags/web-1", ApiJson.Tag("web-1"));
+        // Tags: the API's tag rule (portal TagValidationExtensions.cs:13).
+        yield return Case("tag show Web", ["tag", "show", "Web"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
+        yield return Case("tag show web/db", ["tag", "show", "web/db"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
+        yield return Case("tag show web..db", ["tag", "show", "web..db"], ["tag", "show", "web.db"], "GET", "tags/web.db", ApiJson.Tag("web.db"));
+        yield return Case("tag show web-", ["tag", "show", "web-"], ["tag", "show", "web-1"], "GET", "tags/web-1", ApiJson.Tag("web-1"));
+        yield return Case("tag set ../systems/ABCDE", ["tag", "set", "../systems/ABCDE", "--notes", "front end"], ["tag", "set", "web", "--notes", "front end"], "PATCH", "tags/web", ApiJson.Tag("web"), readPathSuffix: "tags/web", readResponse: ApiJson.Tag("web"));
 
-        yield return Case("org user remove not-a-guid", "not-a-guid", ["org", "user", "remove", "not-a-guid", "--yes"], ["org", "user", "remove", AccountId.ToString(), "--yes"], "DELETE", accountPath, null);
-        yield return Case("org user remove ../invites", "../invites", ["org", "user", "remove", "../invites", "--yes"], ["org", "user", "remove", AccountId.ToString(), "--yes"], "DELETE", accountPath, null);
+        // Keys, policies, zones, hostnames and trust requirements: integers after --id or an option
+        // naming the item. Integer IDs are 32-bit (proposed-cli-surface.md "Details"; portal
+        // Enclave.Configuration.Data/Identifiers, IdBackingType.Int), so 99999999999 is refused.
+        yield return Case("key show --id 12a", ["key", "show", "--id", "12a"], ["key", "show", "--id", "12"], "GET", "enrolment-keys/12", ApiJson.Key(12));
+        yield return Case("key update --id ../policies/3", ["key", "update", "--id", "../policies/3", "--description", "build agents"], ["key", "update", "--id", "12", "--description", "build agents"], "PATCH", "enrolment-keys/12", ApiJson.Key(12, "build agents"));
+        yield return Case("key enable --for --id 1.5", ["key", "enable", "--id", "1.5", "--for", "8h"], ["key", "enable", "--id", "12", "--for", "8h"], "PUT", "enrolment-keys/12/enable-until", ApiJson.Key(12));
+        yield return Case("system list --key-id 12a", ["system", "list", "--key-id", "12a"], ["system", "list", "--key-id", "12"], "GET", "systems", ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return Case("system list --pending --key-id ../3", ["system", "list", "--pending", "--key-id", "../3"], ["system", "list", "--pending", "--key-id", "3"], "GET", "unapproved-systems", ApiJson.Page(ApiJson.PendingSystem("XYZ12")));
+        yield return Case("policy show --id 0x1F", ["policy", "show", "--id", "0x1F"], ["policy", "show", "--id", "31"], "GET", "policies/31", ApiJson.Policy(31));
+        yield return Case("policy update --id ../3", ["policy", "update", "--id", "../3", "--description", "web to db"], ["policy", "update", "--id", "3", "--description", "web to db"], "PATCH", "policies/3", ApiJson.Policy(3, "web to db"));
+        yield return Case("policy enable --until --id three", ["policy", "enable", "--id", "three", "--until", Until], ["policy", "enable", "--id", "3", "--until", Until], "PUT", "policies/3/enable-until", ApiJson.Policy(3));
+        yield return Case("policy create --trust-id 3a", ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432", "--trust-id", "3a"], ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432", "--trust-id", "3"], "POST", "policies", ApiJson.Policy(42, "web to db"));
+        yield return Case("tag set --trust-id ../5", ["tag", "set", "prod", "--trust-id", "../5"], ["tag", "set", "prod", "--trust-id", "5"], "PATCH", "tags/prod", ApiJson.Tag("prod"), readPathSuffix: "tags/prod", readResponse: ApiJson.Tag("prod"));
+        yield return Case("dns show-zone --id ../records/7", ["dns", "show-zone", "--id", "../records/7"], ["dns", "show-zone", "--id", "4"], "GET", "dns/zones/4", ApiJson.Zone(4, "internal"));
+        yield return Case("dns update-zone --id 4a", ["dns", "update-zone", "--id", "4a", "--notes", "office"], ["dns", "update-zone", "--id", "4", "--notes", "office"], "PATCH", "dns/zones/4", ApiJson.Zone(4, "internal"));
+        yield return Case("dns delete-zone --id 99999999999", ["dns", "delete-zone", "--id", "99999999999"], ["dns", "delete-zone", "--id", "4"], "DELETE", "dns/zones/4", ApiJson.Zone(4, "internal"));
+        yield return Case("dns list-hostnames --zone-id 4a", ["dns", "list-hostnames", "--zone-id", "4a"], ["dns", "list-hostnames", "--zone-id", "4"], "GET", "dns/records", ApiJson.Page(ApiJson.Record(7, "db")));
+        yield return Case("dns show-hostname --id 7a", ["dns", "show-hostname", "--id", "7a"], ["dns", "show-hostname", "--id", "7"], "GET", "dns/records/7", ApiJson.Record(7, "db"));
+        yield return Case("dns update-hostname --id ../zones/4", ["dns", "update-hostname", "--id", "../zones/4", "--notes", "office"], ["dns", "update-hostname", "--id", "7", "--notes", "office"], "PATCH", "dns/records/7", ApiJson.Record(7, "db"));
+        yield return Case("trust show --id five", ["trust", "show", "--id", "five"], ["trust", "show", "--id", "5"], "GET", "trust-requirements/5", ApiJson.Trust(5));
+        yield return Case("trust update --id ../5", ["trust", "update", "--id", "../5", "--description", "uk only"], ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only"));
 
-        yield return Case("key show 12a", "12a", ["key", "show", "12a"], ["key", "show", "12"], "GET", "enrolment-keys/12", ApiJson.Key(12));
-        yield return Case("key update ../policies/3", "../policies/3", ["key", "update", "../policies/3", "--description", "x"], ["key", "update", "12", "--description", "x"], "PATCH", "enrolment-keys/12", ApiJson.Key(12, "x"));
-        yield return Case("key enable --until 1.5", "1.5", ["key", "enable", "1.5", "--until", Until, "--expiry-action", "Disable"], ["key", "enable", "12", "--until", Until, "--expiry-action", "Disable"], "PUT", "enrolment-keys/12/enable-until", ApiJson.Key(12));
-        yield return Case("policy show 0x1F", "0x1F", ["policy", "show", "0x1F"], ["policy", "show", "3"], "GET", "policies/3", ApiJson.Policy(3));
-        yield return Case("policy update ../3", "../3", ["policy", "update", "../3", "--description", "x"], ["policy", "update", "3", "--description", "x"], "PATCH", "policies/3", ApiJson.Policy(3, "x"));
-        yield return Case("policy enable --until three", "three", ["policy", "enable", "three", "--until", Until, "--expiry-action", "Disable"], ["policy", "enable", "3", "--until", Until, "--expiry-action", "Disable"], "PUT", "policies/3/enable-until", ApiJson.Policy(3));
-        yield return Case("dns zone show ../records/7", "../records/7", ["dns", "zone", "show", "../records/7"], ["dns", "zone", "show", "4"], "GET", "dns/zones/4", ApiJson.Zone(4, "example"));
-        yield return Case("dns zone update 4a", "4a", ["dns", "zone", "update", "4a", "--notes", "x"], ["dns", "zone", "update", "4", "--notes", "x"], "PATCH", "dns/zones/4", ApiJson.Zone(4, "example"));
-        yield return Case("dns zone delete 99999999999", "99999999999", ["dns", "zone", "delete", "99999999999", "--yes"], ["dns", "zone", "delete", "4", "--yes"], "DELETE", "dns/zones/4", ApiJson.Zone(4, "example"));
-        yield return Case("dns record show 7a", "7a", ["dns", "record", "show", "7a"], ["dns", "record", "show", "7"], "GET", "dns/records/7", ApiJson.Record(7, "www"));
-        yield return Case("dns record update ../zones/4", "../zones/4", ["dns", "record", "update", "../zones/4", "--notes", "x"], ["dns", "record", "update", "7", "--notes", "x"], "PATCH", "dns/records/7", ApiJson.Record(7, "www"));
-        yield return Case("trust show five", "five", ["trust", "show", "five"], ["trust", "show", "5"], "GET", "trust-requirements/5", ApiJson.Trust(5));
-        yield return Case("trust update ../5", "../5", ["trust", "update", "../5", "--description", "x"], ["trust", "update", "5", "--description", "x"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "x"));
-
-        yield return Case("system list --key 12a", "12a", ["system", "list", "--key", "12a"], ["system", "list", "--key", "12"], "GET", "systems", ApiJson.Page());
-        yield return Case("pending list --key ../3", "../3", ["pending", "list", "--key", "../3"], ["pending", "list", "--key", "3"], "GET", "unapproved-systems", ApiJson.Page());
-        yield return Case("dns record list --zone 4a", "4a", ["dns", "record", "list", "--zone", "4a"], ["dns", "record", "list", "--zone", "4"], "GET", "dns/records", ApiJson.Page());
-        yield return Case("dns record create --zone ../4", "../4", ["dns", "record", "create", "www", "--zone", "../4"], ["dns", "record", "create", "www", "--zone", "4"], "POST", "dns/records", ApiJson.Record(7, "www"));
-        yield return Case("dns record update --set-systems AB/CD", "AB/CD", ["dns", "record", "update", "7", "--set-systems", "ABCDE,AB/CD"], ["dns", "record", "update", "7", "--set-systems", "ABCDE,FGHIJ"], "PATCH", "dns/records/7", ApiJson.Record(7, "www"));
+        // Organisations and accounts: GUIDs. RemoveUserAsync takes the account ID as a string
+        // (Enclave.Sdk.Api 1.0.4, OrganisationClient.cs:91), so the path carries whichever GUID form
+        // the CLI passes.
+        yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, otherPathSuffix: $"users/{AccountId:D}");
+        yield return Case("org remove-user --id ../invites", ["org", "remove-user", "--id", "../invites"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, otherPathSuffix: $"users/{AccountId:D}");
     }
 
-    // pathOrSuffix is a full path when it starts with "/", otherwise a suffix of the test
-    // organisation's path.
-    private static TestCaseData Case(string name, string malformedId, string[] rejectedArgs, string[] acceptedArgs, string method, string pathOrSuffix, string? response)
+    // A path starting with "/" is a full path; any other is below the test organisation's path.
+    private static TestCaseData Case(
+        string name,
+        string[] rejectedArgs,
+        string[] acceptedArgs,
+        string method,
+        string pathOrSuffix,
+        string? response,
+        string? readPathSuffix = null,
+        string? readResponse = null,
+        string? otherPathSuffix = null)
     {
         var path = pathOrSuffix.StartsWith('/') ? pathOrSuffix : TestData.OrgPath(pathOrSuffix);
+        var otherPath = otherPathSuffix is null ? null : TestData.OrgPath(otherPathSuffix);
+        var readPath = readPathSuffix is null ? null : TestData.OrgPath(readPathSuffix);
 
-        return new TestCaseData(rejectedArgs, malformedId, acceptedArgs, method, path, response).SetArgDisplayNames(name);
+        return new TestCaseData(rejectedArgs, acceptedArgs, method, path, otherPath, response, readPath, readResponse).SetArgDisplayNames(name);
     }
 
-    // The error names the malformed ID, so a caller who passed 200 IDs can find the one at fault.
-    private static void AssertRejected(CliResult result, string malformedId)
+    private static IEnumerable<TestCaseData> PartnerIdCases()
     {
-        var error = CliAssert.Failed(result, 2, "invalid_argument");
-        Assert.That(DetailOf(error), Does.Contain(malformedId));
+        var partner = TestData.PartnerId.ToString();
+        var customer = CustomerOrgId.ToString();
+
+        yield return PartnerCase("--partner-id not-a-guid", ["partner", "customer", "list", "--partner-id", "not-a-guid"], ["partner", "customer", "list", "--partner-id", partner]);
+        yield return PartnerCase("--partner-id ../customers", ["partner", "customer", "list", "--partner-id", "../customers"], ["partner", "customer", "list", "--partner-id", partner]);
+        yield return PartnerCase("partner customer show --org-id 12", ["partner", "customer", "show", "--org-id", "12", "--partner-id", partner], ["partner", "customer", "show", "--org-id", customer, "--partner-id", partner]);
+        yield return PartnerCase("partner customer convert --org-id ../admins", ["partner", "customer", "convert", "--org-id", "../admins", "--billing-months", "12", "--partner-id", partner], ["partner", "customer", "convert", "--org-id", customer, "--billing-months", "12", "--partner-id", partner]);
     }
 
-    private static string DetailOf(JsonElement error) =>
-        error.TryGetProperty("detail", out var detail) && detail.ValueKind == JsonValueKind.String
-            ? detail.GetString()!
-            : string.Empty;
+    private static TestCaseData PartnerCase(string name, string[] rejectedArgs, string[] acceptedArgs) =>
+        new TestCaseData(rejectedArgs, acceptedArgs).SetArgDisplayNames(name);
+
+    // A copy of the list's first item with its ID replaced by the malformed one, placed between the
+    // two good items. The malformed ID is written as a JSON number where it reads as one, the type
+    // an integer ID has in a list, and as text otherwise.
+    private static string ListWithMalformedItem(BulkCommand command, string[] ids)
+    {
+        var items = JsonNode.Parse(command.List(ids))!["items"]!.AsArray();
+        var first = items[0]!.ToJsonString();
+        var second = items[1]!.ToJsonString();
+        var malformed = JsonNode.Parse(first)!;
+        malformed[CliList.IdField(command.Kind)] = IdValue(command.MalformedId);
+
+        return CliList.Of(command.Kind, first, malformed.ToJsonString(), second);
+    }
+
+    private static JsonValue? IdValue(string id)
+    {
+        if (long.TryParse(id, NumberStyles.None, CultureInfo.InvariantCulture, out var whole))
+        {
+            return JsonValue.Create(whole);
+        }
+
+        if (decimal.TryParse(id, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var fraction))
+        {
+            return JsonValue.Create(fraction);
+        }
+
+        return JsonValue.Create(id);
+    }
 }

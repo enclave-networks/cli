@@ -1,356 +1,533 @@
+using System.Globalization;
+using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
+// The tag commands (proposed-cli-surface.md "Commands", "Command options", "Names and IDs", "ID
+// checks", "Details"). Tags are given by name only, and a tag name goes into the URL path of show
+// and set, so each is checked against the API's tag rule, ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal
+// TagValidationExtensions.cs:13), before any call. An argument starting "ref:" is not a tag
+// reference; it fails that rule like any other name.
+//
+// tag set updates a tag that exists and creates one that does not; the API has separate calls
+// ("Command options"). It may read the tag to choose ("Dry run" names that read), so the tag set
+// tests serve the tag's GET as well as its PATCH, and require exactly one change whatever reads
+// come first.
+
+/// <summary>
+/// Tests for the tag commands: list, show, set and delete.
+/// </summary>
 [Category(TestCategory.Pending)]
 public class TagCommandTests
 {
+    private const string TagRefText = "ref:0123456789abcdef0123456789abcdef";
+
+    private static readonly string TagsPath = TestData.OrgPath("tags");
+
+    private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");
+
+    private static readonly string[] WebFilter = ["web"];
+
     [Test]
-    public async Task Tag_list_gets_one_page_of_tags_and_prints_the_list_envelope()
+    public async Task Tag_list_reads_every_page_and_prints_a_tag_list()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web"), ApiJson.Tag("db")));
+        run.StubPages(TagsPath, 2, ApiJson.Tag("web"), ApiJson.Tag("db"), ApiJson.Tag("api"));
 
         var result = await run.RunAsync("tag", "list");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        var output = result.StdoutJson;
+        var items = CliAssert.List(result, "tag");
         Assert.Multiple(() =>
         {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(request.QueryValue("per_page"), Is.EqualTo("100"));
-            Assert.That(request.QueryValue("search"), Is.Null);
-            Assert.That(request.QueryValue("sort"), Is.Null);
-            Assert.That(JsonRead.StringFieldList(JsonAssert.Property(output, "items"), "tag"), Is.EqualTo("web,db"));
-            Assert.That(JsonAssert.Property(output, "total").GetInt32(), Is.EqualTo(2));
-            Assert.That(JsonAssert.Property(output, "truncated").GetBoolean(), Is.False);
+            Assert.That(JsonRead.StringFieldList(items, "tag"), Is.EqualTo("web,db,api"));
+            Assert.That(run.PagesRequested(TagsPath), Is.EqualTo("0,1"));
+            Assert.That(run.RequestsTo("GET", TagsPath)[0].QueryValue("search"), Is.Null);
         });
     }
 
+    // --filter is sent as typed ("Filters").
     [Test]
-    public async Task Tag_list_sends_the_search_option_as_the_search_query_parameter()
+    public async Task Tag_list_sends_the_filter_text_as_the_search()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web")));
+        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
 
-        var result = await run.RunAsync("tag", "list", "--search", "we");
+        var result = await run.RunAsync("tag", "list", "--filter", "web");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(request.QueryValue("search"), Is.EqualTo("we"));
-        });
+        CliAssert.List(result, "tag");
+        Assert.That(run.SingleRequest().QueryValue("search")?.Split(' ', StringSplitOptions.RemoveEmptyEntries), Is.EqualTo(WebFilter));
     }
 
-    // Enum option values take the API's names, matched ignoring case, and the API receives its
-    // own spelling (proposal, "Options on every command"). TagQuerySortOrder has the values
-    // Alphabetical, RecentlyUsed and ReferencedSystems (Enclave.Configuration.Data,
-    // Modules/Tags/Enums).
-    [TestCase("Alphabetical", "Alphabetical")]
+    // TagQuerySortOrder has Alphabetical, RecentlyUsed and ReferencedSystems (portal
+    // Enclave.Configuration.Data/Modules/Tags/Enums/TagQuerySortOrder.cs), and option values are
+    // lower-case and hyphenated, matched ignoring case ("Options on every command").
     [TestCase("alphabetical", "Alphabetical")]
-    [TestCase("RecentlyUsed", "RecentlyUsed")]
-    [TestCase("recentlyused", "RecentlyUsed")]
-    [TestCase("ReferencedSystems", "ReferencedSystems")]
-    [TestCase("REFERENCEDSYSTEMS", "ReferencedSystems")]
-    public async Task Tag_list_sends_the_sort_order_named_by_the_sort_option_matched_ignoring_case(string value, string expected)
+    [TestCase("recently-used", "RecentlyUsed")]
+    [TestCase("referenced-systems", "ReferencedSystems")]
+    [TestCase("Recently-Used", "RecentlyUsed")]
+    public async Task Tag_list_sends_the_sort_order_the_sort_option_names(string value, string expected)
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web")));
+        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
 
         var result = await run.RunAsync("tag", "list", "--sort", value);
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
-        });
+        CliAssert.List(result, "tag");
+        Assert.That(run.SingleRequest().QueryValue("sort"), Is.EqualTo(expected));
     }
 
-    // RecentlyCreated is a sort order of policies and trust requirements; the tag list does not
+    // recently-created is a sort order of policies and trust requirements; the tag list does not
     // have it.
     [Test]
-    public async Task Tag_list_rejects_a_sort_order_the_api_does_not_have_without_sending_a_request()
+    public async Task Tag_list_rejects_a_sort_order_the_tag_list_does_not_have()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web")));
+        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
 
-        var result = await run.RunAsync("tag", "list", "--sort", "RecentlyCreated");
-
-        CliAssert.Rejected(run, result);
-        var request = await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath("tags"), "tag", "list", "--sort", "RecentlyUsed");
-        Assert.That(request.QueryValue("sort"), Is.EqualTo("RecentlyUsed"));
+        await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "list", "--sort", "recently-created"], ["tag", "list", "--sort", "recently-used"], "GET", TagsPath);
     }
 
-    // A tag is identified by its name, which is what tag show, update and delete take, so -o id
-    // prints names and `tag list -o id | tag delete - --yes` works.
-    [Test]
-    public async Task Tag_list_with_output_id_prints_one_tag_name_per_line()
+    // An option a command does not take is unknown to it and exits 2 ("Details"); --dry-run belongs
+    // to commands that change something.
+    [TestCase("list")]
+    [TestCase("show")]
+    public async Task Tag_read_commands_reject_dry_run(string verb)
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web"), ApiJson.Tag("db")));
+        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
+        run.Stub("GET", TagPath("web"), json: ApiJson.Tag("web"));
+        string[] corrected = verb == "list" ? ["tag", "list"] : ["tag", "show", "web"];
 
-        var result = await run.RunAsync("tag", "list", "-o", "id");
-
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(string.Join(",", result.StdoutLines), Is.EqualTo("web,db"));
-        });
+        await CliAssert.RejectedThenAcceptedAsync(run, [.. corrected, "--dry-run"], corrected, "GET", verb == "list" ? TagsPath : TagPath("web"));
     }
 
     [Test]
     public async Task Tag_show_gets_the_tag_by_name_and_prints_its_model()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags/web-servers"), json: ApiJson.Tag("web-servers"));
+        run.Stub("GET", TagPath("web-servers"), json: ApiJson.Tag("web-servers"));
 
         var result = await run.RunAsync("tag", "show", "web-servers");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags/web-servers")));
+            Assert.That(run.SingleRequest().Path, Is.EqualTo(TagPath("web-servers")));
             Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web-servers"));
         });
     }
 
-    // The flags set the TagCreateModel fields of the same name (proposal, "Shape and naming").
+    // Single-item commands exit 5 for an unknown name ("Several IDs").
     [Test]
-    public async Task Tag_create_posts_the_tag_colour_and_notes_and_prints_the_created_tag()
+    public async Task Tag_show_with_an_unknown_tag_exits_5()
     {
         using var run = CliRun.Start();
-        run.Stub("POST", TestData.OrgPath("tags"), json: ApiJson.Tag("web"));
+        run.StubProblem("GET", TagPath("web"), 404, "Not Found", "Tag web does not exist.");
 
-        var result = await run.RunAsync("tag", "create", "web", "--colour", "#3a7bd5", "--notes", "Web servers");
+        var result = await run.RunAsync("tag", "show", "web");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        var body = request.BodyJson;
+        CliAssert.Failed(result, "not_found");
+        Assert.That(run.SingleRequest().Path, Is.EqualTo(TagPath("web")));
+    }
+
+    // Enclave.Sdk.Api 1.0.4 puts the tag into the URL path unescaped (TagsClient.GetAsync and
+    // Update), so a name outside the tag rule never reaches it ("ID checks").
+    [TestCase("Web", "web")]
+    [TestCase("web_servers", "web-servers")]
+    [TestCase("../systems", "web")]
+    [TestCase(TagRefText, "web")]
+    public async Task Tag_show_rejects_a_name_outside_the_tag_rule(string badName, string goodName)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TagPath(goodName), json: ApiJson.Tag(goodName));
+
+        await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "show", badName], ["tag", "show", goodName], "GET", TagPath(goodName));
+    }
+
+    // The patch holds only the fields given ("Create and update"). Enclave.Sdk.Api keys a PATCH
+    // body by the C# property name (PatchClient.Set, version 1.0.4).
+    [Test]
+    public async Task Tag_set_on_a_tag_that_exists_patches_only_the_fields_given_and_prints_the_tag()
+    {
+        using var run = CliRun.Start();
+        StubExistingTag(run, "web");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
+
+        var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--notes", "Web servers, all regions");
+
+        CliAssert.Succeeded(result);
+        var patch = SingleChange(run, "PATCH", TagPath("web"));
         Assert.Multiple(() =>
         {
-            Assert.That(request.Method, Is.EqualTo("POST"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(JsonAssert.Property(body, "tag").GetString(), Is.EqualTo("web"));
-            Assert.That(JsonAssert.Property(body, "colour").GetString(), Is.EqualTo("#3a7bd5"));
-            Assert.That(JsonAssert.Property(body, "notes").GetString(), Is.EqualTo("Web servers"));
+            Assert.That(Keys(patch.BodyJson), Is.EqualTo("Colour; Notes").IgnoreCase);
+            Assert.That(JsonAssert.Property(patch.BodyJson, "Colour").GetString(), Is.EqualTo("#2f80ed"));
+            Assert.That(JsonAssert.Property(patch.BodyJson, "Notes").GetString(), Is.EqualTo("Web servers, all regions"));
             Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web"));
         });
     }
 
-    // --name renames the tag: TagPatchModel.Tag holds the new name (portal
-    // Enclave.Api/Modules/SystemManagement/Tags/Models/TagPatchModel.cs), and the flag is called
-    // --name because the positional argument names the tag being changed.
+    // Example 55. --name renames the tag: TagPatchModel.Tag holds the new name (portal
+    // Enclave.Api/Modules/SystemManagement/Tags/Models/TagPatchModel.cs).
     [Test]
-    public async Task Tag_update_patches_the_new_name_colour_and_notes_on_the_named_tag()
+    public async Task Tag_set_with_name_renames_the_tag_and_sets_its_colour()
     {
         using var run = CliRun.Start();
-        run.Stub("PATCH", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web-servers"));
+        StubExistingTag(run, "web", ApiJson.Tag("frontend"));
 
-        var result = await run.RunAsync("tag", "update", "web", "--name", "web-servers", "--colour", "#000000", "--notes", "Renamed");
+        var result = await run.RunAsync("tag", "set", "web", "--name", "frontend", "--colour", "#2f80ed");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        var body = request.BodyJson;
+        CliAssert.Succeeded(result);
+        var patch = SingleChange(run, "PATCH", TagPath("web"));
         Assert.Multiple(() =>
         {
-            Assert.That(request.Method, Is.EqualTo("PATCH"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags/web")));
-            Assert.That(JsonAssert.Property(body, "Tag").GetString(), Is.EqualTo("web-servers"));
-            Assert.That(JsonAssert.Property(body, "Colour").GetString(), Is.EqualTo("#000000"));
-            Assert.That(JsonAssert.Property(body, "Notes").GetString(), Is.EqualTo("Renamed"));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web-servers"));
+            Assert.That(Keys(patch.BodyJson), Is.EqualTo("Colour; Tag").IgnoreCase);
+            Assert.That(JsonAssert.Property(patch.BodyJson, "Tag").GetString(), Is.EqualTo("frontend"));
+            Assert.That(JsonAssert.Property(patch.BodyJson, "Colour").GetString(), Is.EqualTo("#2f80ed"));
         });
     }
 
-    // A patch sets the fields present and leaves absent fields as they are (proposal, "Create and
-    // update"). A Tag field the caller did not ask for would rename the tag.
+    // The update answers 404 for a tag the API does not hold (portal
+    // TagModifyHandler.GetResponseAsync:58), so tag set creates it ("Command options", "Calls per
+    // command"). A create sends an empty list for a list flag left out, so the trust requirements go
+    // as [] ("Details").
     [Test]
-    public async Task Tag_update_sends_only_the_fields_whose_options_are_given()
+    public async Task Tag_set_on_a_tag_that_does_not_exist_creates_it_and_prints_it()
     {
         using var run = CliRun.Start();
-        run.Stub("PATCH", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
+        StubMissingTag(run, "web");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
 
-        var result = await run.RunAsync("tag", "update", "web", "--colour", "#000000");
+        var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--notes", "Web servers, all regions");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        Assert.That(JsonRead.PropertyNameList(request.BodyJson), Is.EqualTo("Colour").IgnoreCase);
+        CliAssert.Succeeded(result);
+        var create = SingleChange(run, "POST", TagsPath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(create.BodyJson, "tag").GetString(), Is.EqualTo("web"));
+            Assert.That(JsonAssert.Property(create.BodyJson, "colour").GetString(), Is.EqualTo("#2f80ed"));
+            Assert.That(JsonAssert.Property(create.BodyJson, "notes").GetString(), Is.EqualTo("Web servers, all regions"));
+            Assert.That(create.BodyIds("trustRequirements"), Is.Empty);
+            Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web"));
+        });
     }
 
-    // tag update takes --name, --colour and --notes (proposal, "Command options"); an update with
-    // none of them has nothing to send.
+    // --name renames, so the tag must exist ("Command options"): a rename of an unknown tag is the
+    // single-item not found, and creating a tag under either name would not be what was asked.
     [Test]
-    public async Task Tag_update_without_any_field_option_exits_2_without_sending_a_request()
+    public async Task Tag_set_with_name_on_a_tag_that_does_not_exist_exits_5_without_creating_a_tag()
     {
         using var run = CliRun.Start();
-        run.Stub("PATCH", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
+        StubMissingTag(run, "web");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("frontend"));
 
-        var result = await run.RunAsync("tag", "update", "web");
+        var result = await run.RunAsync("tag", "set", "web", "--name", "frontend");
 
-        CliAssert.Rejected(run, result);
-        await CliAssert.AcceptedAsync(run, "PATCH", TestData.OrgPath("tags/web"), "tag", "update", "web", "--notes", "Reviewed");
+        CliAssert.Failed(result, "not_found");
+        Assert.That(run.RequestsTo("POST", TagsPath), Is.Empty);
     }
 
-    // A command that accepts several IDs always makes the bulk call, also for one ID (proposal,
-    // "Several IDs"). The tag bulk delete takes names in a "tags" array (Enclave.Sdk.Api 1.0.4,
-    // TagsClient.DeleteTagsAsync).
+    // Only a tag that does not exist is created; any other failure of the update is reported as it
+    // is (here 403, exit 4, "Errors and exit codes").
     [Test]
-    public async Task Tag_delete_with_yes_sends_one_name_to_the_bulk_delete()
+    public async Task Tag_set_does_not_create_the_tag_when_the_update_fails_for_another_reason()
     {
         using var run = CliRun.Start();
-        run.Stub("DELETE", TestData.OrgPath("tags"), json: ApiJson.Bulk("tagsDeleted", 1));
+        run.Stub("GET", TagPath("web"), json: ApiJson.Tag("web"));
+        run.StubProblem("PATCH", TagPath("web"), 403, "Forbidden", "The token lacks the WriteTags scope.");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
 
-        var result = await run.RunAsync("tag", "delete", "web", "--yes");
+        var result = await run.RunAsync("tag", "set", "web", "--notes", "Web servers");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
+        CliAssert.Failed(result, "forbidden");
+        Assert.That(run.RequestsTo("POST", TagsPath), Is.Empty);
+    }
+
+    // An update with no change flag exits 2, tag set included ("Details").
+    [Test]
+    public async Task Tag_set_without_a_change_flag_exits_2()
+    {
+        using var run = CliRun.Start();
+        StubExistingTag(run, "web");
+
+        CliAssert.Rejected(run, await run.RunAsync("tag", "set", "web"), "invalid_argument");
+
+        CliAssert.Succeeded(await run.RunAsync("tag", "set", "web", "--notes", "Web servers"));
+        Assert.That(Keys(SingleChange(run, "PATCH", TagPath("web")).BodyJson), Is.EqualTo("Notes").IgnoreCase);
+    }
+
+    // Example 28. --trust takes trust requirement descriptions, looked up like any name ("Names and
+    // IDs"), and replaces the tag's trust requirements. "uk only (old)" contains the name and is
+    // not a match.
+    [Test]
+    public async Task Tag_set_with_trust_looks_up_the_requirement_and_patches_its_id()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(4, "uk only (old)"), ApiJson.Trust(5, "uk only")));
+        StubExistingTag(run, "prod");
+
+        var result = await run.RunAsync("tag", "set", "prod", "--trust", "uk only");
+
+        CliAssert.Succeeded(result);
+        var patch = SingleChange(run, "PATCH", TagPath("prod"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(Keys(patch.BodyJson), Is.EqualTo("TrustRequirements").IgnoreCase);
+            Assert.That(string.Join(",", patch.BodyIds("TrustRequirements")), Is.EqualTo("5"));
+        });
+    }
+
+    // Example 28, by ID: --trust-id makes no lookup ("Names and IDs").
+    [Test]
+    public async Task Tag_set_with_trust_ids_patches_them_without_a_lookup()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(5, "uk only")));
+        StubExistingTag(run, "prod");
+
+        var result = await run.RunAsync("tag", "set", "prod", "--trust-id", "5,9");
+
+        CliAssert.Succeeded(result);
+        var patch = SingleChange(run, "PATCH", TagPath("prod"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(Keys(patch.BodyJson), Is.EqualTo("TrustRequirements").IgnoreCase);
+            Assert.That(string.Join(",", patch.BodyIds("TrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo("5,9"));
+            Assert.That(run.RequestsTo("GET", TrustsPath), Is.Empty);
+        });
+    }
+
+    // Trust requirement IDs are 32-bit integers, and every ID is checked before any call ("ID
+    // checks", "Details").
+    [TestCase("5,five")]
+    [TestCase("2147483648")]
+    public async Task Tag_set_rejects_a_trust_id_that_is_not_a_32_bit_integer(string badIds)
+    {
+        using var run = CliRun.Start();
+        StubExistingTag(run, "prod");
+
+        CliAssert.Rejected(run, await run.RunAsync("tag", "set", "prod", "--trust-id", badIds), "invalid_argument");
+
+        CliAssert.Succeeded(await run.RunAsync("tag", "set", "prod", "--trust-id", "5"));
+        Assert.That(string.Join(",", SingleChange(run, "PATCH", TagPath("prod")).BodyIds("TrustRequirements")), Is.EqualTo("5"));
+    }
+
+    [Test]
+    public async Task Tag_set_creates_a_tag_that_does_not_exist_with_the_trust_requirements_given()
+    {
+        using var run = CliRun.Start();
+        StubMissingTag(run, "prod");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("prod"));
+
+        var result = await run.RunAsync("tag", "set", "prod", "--trust-id", "5");
+
+        CliAssert.Succeeded(result);
+        var create = SingleChange(run, "POST", TagsPath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(create.BodyJson, "tag").GetString(), Is.EqualTo("prod"));
+            Assert.That(string.Join(",", create.BodyIds("trustRequirements")), Is.EqualTo("5"));
+        });
+    }
+
+    // No match exits 2 invalid_argument, and the error's candidates hold nothing ("Errors and exit
+    // codes").
+    [Test]
+    public async Task Tag_set_with_a_trust_requirement_no_requirement_has_exits_2_without_a_change()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(4, "uk only (old)")));
+        StubExistingTag(run, "prod");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("prod"));
+
+        var result = await run.RunAsync("tag", "set", "prod", "--trust", "uk only");
+
+        var error = CliAssert.Failed(result, "invalid_argument");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.TryGetProperty("candidates", out var candidates) && candidates.ValueKind == JsonValueKind.Array ? candidates.GetArrayLength() : 0, Is.Zero);
+            Assert.That(run.Requests.Where(request => request.Method != "GET"), Is.Empty);
+        });
+    }
+
+    [TestCase("Web")]
+    [TestCase("../systems")]
+    [TestCase(TagRefText)]
+    public async Task Tag_set_rejects_a_name_outside_the_tag_rule(string badName)
+    {
+        using var run = CliRun.Start();
+        StubExistingTag(run, "web");
+
+        CliAssert.Rejected(run, await run.RunAsync("tag", "set", badName, "--colour", "#2f80ed"), "invalid_argument");
+
+        CliAssert.Succeeded(await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed"));
+        Assert.That(Keys(SingleChange(run, "PATCH", TagPath("web")).BodyJson), Is.EqualTo("Colour").IgnoreCase);
+    }
+
+    // The read tag set makes to choose between update and create still runs under --dry-run, and
+    // the change it chose is printed and not sent ("Dry run").
+    [Test]
+    public async Task Tag_set_with_dry_run_on_a_tag_that_exists_prints_the_update_and_sends_no_change()
+    {
+        using var run = CliRun.Start();
+        StubExistingTag(run, "web");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
+
+        var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--dry-run");
+
+        var request = DryRunRequest(result, "PATCH", TagPath("web"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(Keys(JsonAssert.Property(request, "body")), Is.EqualTo("Colour").IgnoreCase);
+            Assert.That(run.Requests.Where(sent => sent.Method != "GET"), Is.Empty);
+        });
+    }
+
+    [Test]
+    public async Task Tag_set_with_dry_run_on_a_tag_that_does_not_exist_prints_the_create_and_sends_no_change()
+    {
+        using var run = CliRun.Start();
+        StubMissingTag(run, "web");
+        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
+
+        var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--dry-run");
+
+        var body = JsonAssert.Property(DryRunRequest(result, "POST", TagsPath), "body");
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(body, "tag").GetString(), Is.EqualTo("web"));
+            Assert.That(JsonAssert.Property(body, "colour").GetString(), Is.EqualTo("#2f80ed"));
+            Assert.That(JsonAssert.Property(body, "trustRequirements").GetArrayLength(), Is.Zero);
+            Assert.That(run.Requests.Where(sent => sent.Method != "GET"), Is.Empty);
+        });
+    }
+
+    // A command that takes several items always makes the bulk call, and the tag bulk delete takes
+    // names in a "tags" array (Enclave.Sdk.Api 1.0.4, TagsClient.DeleteTagsAsync). affected below
+    // requested is still success ("Several IDs").
+    [Test]
+    public async Task Tag_delete_sends_every_tag_named_in_one_bulk_call()
+    {
+        using var run = CliRun.Start();
+        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 1);
+
+        var result = await run.RunAsync("tag", "delete", "web", "db");
+
+        CliAssert.Bulk(result, 2, 1);
         var request = run.SingleRequest();
-        var output = result.StdoutJson;
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(JsonRead.StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web"));
-            Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(1));
-            Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
+            Assert.That(request.Path, Is.EqualTo(TagsPath));
+            Assert.That(Names(request), Is.EqualTo("db,web"));
         });
     }
 
-    // The API reports one tag deleted of two, so the output shows the difference and the exit code
-    // stays 0 (proposal, "Several IDs").
-    [Test]
-    public async Task Tag_delete_with_yes_sends_every_name_in_one_bulk_delete()
+    // One bad name stops the whole command before any call ("ID checks").
+    [TestCase("Db")]
+    [TestCase(TagRefText)]
+    public async Task Tag_delete_rejects_a_name_outside_the_tag_rule(string badName)
     {
         using var run = CliRun.Start();
-        run.Stub("DELETE", TestData.OrgPath("tags"), json: ApiJson.Bulk("tagsDeleted", 1));
+        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 2);
 
-        var result = await run.RunAsync("tag", "delete", "web", "db", "--yes");
-
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var request = run.SingleRequest();
-        var output = result.StdoutJson;
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("tags")));
-            Assert.That(JsonRead.StringList(JsonAssert.Property(request.BodyJson, "tags")), Is.EqualTo("web,db"));
-            Assert.That(JsonAssert.Property(output, "requested").GetInt32(), Is.EqualTo(2));
-            Assert.That(JsonAssert.Property(output, "affected").GetInt32(), Is.EqualTo(1));
-        });
+        await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "delete", "web", badName], ["tag", "delete", "web", "db"], "DELETE", TagsPath);
     }
 
-    // delete cannot be undone, so it needs --yes (proposal, "Confirmation").
+    // A tag list's items are identified by their name (TagSummaryModel.Tag), which the bulk delete
+    // takes ("Several IDs").
     [Test]
-    public async Task Tag_delete_without_yes_exits_6_naming_yes_and_sends_nothing()
+    public async Task Tag_delete_reads_a_tag_list_from_stdin()
     {
         using var run = CliRun.Start();
-        run.Stub("DELETE", TestData.OrgPath("tags"), json: ApiJson.Bulk("tagsDeleted", 1));
+        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 2);
+        run.StdinText = CliList.WithIds("tag", "web", "db");
 
-        var result = await run.RunAsync("tag", "delete", "web");
+        var result = await run.RunAsync("tag", "delete", "-");
 
-        CliAssert.Rejected(run, result, 6, "confirmation_required");
-        Assert.That(result.Error.GetRawText(), Does.Contain("--yes"));
+        CliAssert.Bulk(result, 2, 2);
+        Assert.That(Names(run.SingleRequest()), Is.EqualTo("db,web"));
     }
 
-    // --dry-run prints the request Enclave.Sdk.Api would send and sends nothing (proposal, "Dry
-    // run").
-    [TestCase("tag create web --dry-run", "POST", "tags")]
-    [TestCase("tag update web --notes x --dry-run", "PATCH", "tags/web")]
-    [TestCase("tag delete web --dry-run", "DELETE", "tags")]
-    public async Task Tag_change_commands_with_dry_run_print_the_request_and_send_nothing(string commandLine, string method, string path)
+    [Test]
+    public async Task Tag_delete_with_dry_run_prints_the_delete_and_sends_nothing()
     {
-        ArgumentNullException.ThrowIfNull(commandLine);
         using var run = CliRun.Start();
+        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 1);
 
-        var result = await run.RunAsync(commandLine.Split(' '));
+        var result = await run.RunAsync("tag", "delete", "web", "--dry-run");
 
-        Assert.That(result.ExitCode, Is.Zero, result.Stderr);
-        var output = result.StdoutJson;
-        var request = JsonAssert.Property(output, "request");
+        var request = DryRunRequest(result, "DELETE", TagsPath);
         Assert.Multiple(() =>
         {
+            Assert.That(JsonRead.StringList(JsonAssert.Property(JsonAssert.Property(request, "body"), "tags")), Is.EqualTo("web"));
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo(method));
-            Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(TestData.OrgPath(path)));
         });
     }
 
-    // A tag goes into the URL path of show and update, and Enclave.Sdk.Api 1.0.4 does not escape
-    // it, so every tag is checked against the API's tag rule before any call (proposal, "ID
-    // checks"; portal TagValidationExtensions.cs:13). The same command with a valid tag is then
-    // sent.
-    [TestCase("tag show Web", "tag show web", "GET", "tags/web")]
-    [TestCase("tag show web_servers", "tag show web-servers", "GET", "tags/web-servers")]
-    [TestCase("tag show ../systems", "tag show web", "GET", "tags/web")]
-    [TestCase("tag update ../systems --notes x", "tag update web --notes x", "PATCH", "tags/web")]
-    [TestCase("tag delete web Db --yes", "tag delete web db --yes", "DELETE", "tags")]
-    [TestCase("tag delete web db. --yes", "tag delete web db --yes", "DELETE", "tags")]
-    public async Task Tag_commands_reject_a_name_outside_the_api_tag_rule_without_sending_a_request(
-        string commandLine, string acceptedCommandLine, string method, string path)
+    private static string TagPath(string tag) => TestData.OrgPath("tags/" + tag);
+
+    private static void StubExistingTag(CliRun run, string tag, string? patched = null)
     {
-        ArgumentNullException.ThrowIfNull(commandLine);
-        ArgumentNullException.ThrowIfNull(acceptedCommandLine);
-        ArgumentNullException.ThrowIfNull(path);
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
-        run.Stub("GET", TestData.OrgPath("tags/web-servers"), json: ApiJson.Tag("web-servers"));
-        run.Stub("PATCH", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
-        run.Stub("DELETE", TestData.OrgPath("tags"), json: ApiJson.Bulk("tagsDeleted", 2));
-
-        var result = await run.RunAsync(commandLine.Split(' '));
-
-        CliAssert.Rejected(run, result);
-        await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(path), acceptedCommandLine.Split(' '));
+        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag(tag)));
+        run.Stub("GET", TagPath(tag), json: ApiJson.Tag(tag));
+        run.Stub("PATCH", TagPath(tag), json: patched ?? ApiJson.Tag(tag));
     }
 
-    // Single-ID commands exit 5 for an unknown ID (proposal, "Several IDs").
-    [TestCase("tag show web", "GET")]
-    [TestCase("tag update web --notes x", "PATCH")]
-    public async Task Tag_single_id_commands_exit_5_when_the_api_reports_not_found(string commandLine, string method)
+    private static void StubMissingTag(CliRun run, string tag)
     {
-        ArgumentNullException.ThrowIfNull(commandLine);
-        using var run = CliRun.Start();
-        run.StubProblem(method, TestData.OrgPath("tags/web"), 404, "Not Found", "Tag web does not exist.");
+        run.Stub("GET", TagsPath, json: ApiJson.Page());
+        run.StubProblem("GET", TagPath(tag), 404, "Not Found", $"Tag {tag} does not exist.");
+        run.StubProblem("PATCH", TagPath(tag), 404, "Not Found", $"Tag {tag} does not exist.");
+    }
 
-        var result = await run.RunAsync(commandLine.Split(' '));
+    // tag set makes one change, the update or the create, whatever reads come first ("Calls per
+    // command"). An update answered 404 is how the API says the tag does not exist (portal
+    // TagModifyHandler.GetResponseAsync:58), so a create may follow a PATCH, and nothing may follow
+    // an update that succeeded.
+    private static RecordedRequest SingleChange(CliRun run, string method, string path)
+    {
+        var changes = run.RequestsTo(method, path);
+        Assert.That(changes, Has.Count.EqualTo(1), string.Join(Environment.NewLine, run.Calls()));
+
+        if (method == "PATCH")
+        {
+            Assert.That(run.RequestsTo("POST", TagsPath), Is.Empty);
+        }
+
+        return changes[0];
+    }
+
+    // The output form "Dry run" gives: { "dryRun": true, "org": { id, name }, "requests": [...] },
+    // with requests a list holding the one change here. CliRun names the organisation by ID
+    // (ENCLAVE_ORG_ID), and then no lookup gives its name, which is null.
+    private static JsonElement DryRunRequest(CliResult result, string method, string path)
+    {
+        CliAssert.Succeeded(result);
+        var output = result.StdoutJson;
+        var org = JsonAssert.Property(output, "org");
+        var requests = JsonAssert.Property(output, "requests");
+        Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
+        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
+        var request = requests[0];
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.EqualTo(5), result.Stderr);
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("not_found"));
-            Assert.That(run.Requests, Has.Count.EqualTo(1));
+            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
+            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
+            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo(method));
+            Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(path));
         });
+
+        return request;
     }
 
-    // --dry-run and --yes exist only on commands that change something; elsewhere they are unknown
-    // options, which exit 2. The same command without the option is then sent.
-    [TestCase("tag list --yes", "tag list", "tags")]
-    [TestCase("tag list --dry-run", "tag list", "tags")]
-    [TestCase("tag show web --dry-run", "tag show web", "tags/web")]
-    public async Task Tag_read_commands_reject_change_options_without_sending_a_request(string commandLine, string acceptedCommandLine, string path)
-    {
-        ArgumentNullException.ThrowIfNull(commandLine);
-        ArgumentNullException.ThrowIfNull(acceptedCommandLine);
-        ArgumentNullException.ThrowIfNull(path);
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("tags"), json: ApiJson.Page(ApiJson.Tag("web")));
-        run.Stub("GET", TestData.OrgPath("tags/web"), json: ApiJson.Tag("web"));
+    // Sorted, so a test can state the exact set of fields an update sends.
+    private static string Keys(JsonElement body) => string.Join("; ", JsonRead.PropertyNames(body).Order(StringComparer.OrdinalIgnoreCase));
 
-        var result = await run.RunAsync(commandLine.Split(' '));
-
-        CliAssert.Rejected(run, result);
-        await CliAssert.AcceptedAsync(run, "GET", TestData.OrgPath(path), acceptedCommandLine.Split(' '));
-    }
+    // Sorted, since the order of a bulk call's names does not change what it does.
+    private static string Names(RecordedRequest request) =>
+        string.Join(",", request.BodyIds("tags").Order(StringComparer.Ordinal));
 }

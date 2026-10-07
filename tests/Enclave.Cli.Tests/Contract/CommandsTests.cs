@@ -1,124 +1,246 @@
 using System.Text.Json;
-using Enclave.Api.Modules.SystemManagement.UnapprovedSystems.Models;
 using Enclave.Cli.Tests.Support;
-using Enclave.Configuration.Data.Enums;
-using Enclave.Configuration.Data.Modules.EnrolmentKeys.Enums;
-using Enclave.Configuration.Data.Modules.Policies.Enums;
-using Enclave.Configuration.Data.Modules.Systems.Enums;
-using Enclave.Configuration.Data.Modules.Tags.Enums;
-using Enclave.Configuration.Data.Modules.TrustRequirements.Enums;
 using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// `commands [<noun>]` is how an agent learns the CLI without reading help text: every command,
-// option, value and error code, as JSON (proposal "Commands"; AGENTS.md requires it to stay
-// complete). The document is {"commands": [...], "errors": [...]}; each command entry holds
-// "command" (its full name), "description", "arguments" (each with "name", in order) and "options"
-// (each with "name", the long form with its dashes, and "values" for an enum), and each error entry
-// holds "code" and "exitCode".
+// `commands`, given nothing or a command's words, is how an agent learns the CLI without reading
+// help text: every command, option, allowed value and error code, as JSON (proposed-cli-surface.md
+// "Commands", "Details"; AGENTS.md requires it to stay complete). The document is
+// {"commands": [...], "errors": [...]} ("Details"). Each command entry holds "command" (its full
+// name, such as "dns list-zones"), "description", "arguments" (each with "name", in order) and
+// "options" (each with "name", the long form with its dashes, and "values" when the option takes
+// one of a fixed set). Each error entry holds "code" and "exitCode". Agents read these by their
+// exact names, so the lookups here are exact.
 [Category(TestCategory.Pending)]
 public class CommandsTests
 {
-    // Every command in the proposal's tree ("Commands").
-    private static readonly string[] ProposalCommands =
+    // Every command in proposed-cli-surface.md "Commands", with its arguments named as the tree
+    // names them. `org use <name> | --id <orgId>` and `org remove-user <email> | --id <accountId>`
+    // take the name or email address as the argument and the ID through --id. The arguments test
+    // leaves out `commands` itself.
+    private static readonly Dictionary<string, string[]> CommandTree = new(StringComparer.Ordinal)
+    {
+        ["login"] = [],
+        ["logout"] = [],
+        ["status"] = [],
+        ["org list"] = [],
+        ["org use"] = ["name"],
+        ["org show"] = [],
+        ["org update"] = [],
+        ["org list-users"] = [],
+        ["org remove-user"] = ["email"],
+        ["org list-invites"] = [],
+        ["org invite"] = ["email"],
+        ["org cancel-invite"] = ["email"],
+        ["partner use"] = [],
+        ["partner customer list"] = [],
+        ["partner customer show"] = ["customer"],
+        ["partner customer create"] = ["name"],
+        ["partner customer update"] = ["customer"],
+        ["partner customer convert"] = ["customer"],
+        ["partner customer list-admins"] = ["customer"],
+        ["partner customer add-admin"] = ["customer"],
+        ["partner customer remove-admin"] = ["customer"],
+        ["partner customer list-invites"] = ["customer"],
+        ["partner customer invite"] = ["customer"],
+        ["partner customer cancel-invite"] = ["customer"],
+        ["partner customer enable-auto-sync"] = ["customer"],
+        ["partner customer disable-auto-sync"] = ["customer"],
+        ["system list"] = [],
+        ["system show"] = ["systemId"],
+        ["system update"] = ["systemId"],
+        ["system approve"] = ["systemId"],
+        ["system decline"] = ["systemId"],
+        ["system enable"] = ["systemId"],
+        ["system disable"] = ["systemId"],
+        ["system revoke"] = ["systemId"],
+        ["key list"] = [],
+        ["key show"] = ["key"],
+        ["key create"] = ["description"],
+        ["key update"] = ["key"],
+        ["key enable"] = ["key"],
+        ["key disable"] = ["key"],
+        ["key delete"] = ["key"],
+        ["policy list"] = [],
+        ["policy show"] = ["policy"],
+        ["policy create"] = ["description"],
+        ["policy update"] = ["policy"],
+        ["policy enable"] = ["policy"],
+        ["policy disable"] = ["policy"],
+        ["policy delete"] = ["policy"],
+        ["tag list"] = [],
+        ["tag show"] = ["tag"],
+        ["tag set"] = ["tag"],
+        ["tag delete"] = ["tag"],
+        ["dns show"] = [],
+        ["dns list-zones"] = [],
+        ["dns show-zone"] = ["zone"],
+        ["dns create-zone"] = ["zone"],
+        ["dns update-zone"] = ["zone"],
+        ["dns delete-zone"] = ["zone"],
+        ["dns list-hostnames"] = [],
+        ["dns show-hostname"] = ["hostname"],
+        ["dns create-hostname"] = ["hostname"],
+        ["dns update-hostname"] = ["hostname"],
+        ["dns delete-hostname"] = ["hostname"],
+        ["trust list"] = [],
+        ["trust show"] = ["trust"],
+        ["trust create"] = ["description"],
+        ["trust update"] = ["trust"],
+        ["trust delete"] = ["trust"],
+        ["log"] = [],
+        ["commands"] = [],
+    };
+
+    // The commands that change something through the API, which take --dry-run ("Options on every
+    // command").
+    private static readonly string[] ChangeCommands =
     [
-        "login", "logout", "status",
-        "org list", "org use", "org show", "org update",
-        "org user list", "org user remove",
-        "org invite list", "org invite send", "org invite cancel",
-        "partner list", "partner use", "partner show", "partner update",
-        "partner user list", "partner user update", "partner user remove",
-        "partner invite list", "partner invite send", "partner invite update", "partner invite cancel",
-        "partner customer list", "partner customer show", "partner customer create", "partner customer update", "partner customer convert",
-        "partner customer admin list", "partner customer admin add", "partner customer admin remove",
-        "partner customer invite list", "partner customer invite send", "partner customer invite cancel",
-        "partner customer auto-sync enable", "partner customer auto-sync disable",
-        "system list", "system show", "system update", "system enable", "system disable", "system revoke",
-        "pending list", "pending show", "pending update", "pending approve", "pending decline",
-        "key list", "key show", "key create", "key update", "key enable", "key disable", "key delete",
-        "policy list", "policy show", "policy create", "policy update", "policy enable", "policy disable", "policy delete",
-        "tag list", "tag show", "tag create", "tag update", "tag delete",
-        "dns show",
-        "dns zone list", "dns zone show", "dns zone create", "dns zone update", "dns zone delete",
-        "dns record list", "dns record show", "dns record create", "dns record update", "dns record delete",
-        "trust list", "trust show", "trust create", "trust update", "trust delete",
-        "log list",
-        "commands",
+        "org update", "org remove-user", "org invite", "org cancel-invite",
+        "partner customer create", "partner customer update", "partner customer convert",
+        "partner customer add-admin", "partner customer remove-admin", "partner customer invite",
+        "partner customer cancel-invite", "partner customer enable-auto-sync", "partner customer disable-auto-sync",
+        "system update", "system approve", "system decline", "system enable", "system disable", "system revoke",
+        "key create", "key update", "key enable", "key disable", "key delete",
+        "policy create", "policy update", "policy enable", "policy disable", "policy delete",
+        "tag set", "tag delete",
+        "dns create-zone", "dns update-zone", "dns delete-zone", "dns create-hostname", "dns update-hostname", "dns delete-hostname",
+        "trust create", "trust update", "trust delete",
     ];
 
-    // The arguments of every command, named as the proposal's tree names them. `org use` takes
-    // `<orgId|name>`, which is not one name, so it is left out.
-    private static readonly Dictionary<string, string[]> ProposalArguments = BuildProposalArguments();
+    // Reads have nothing to preview, and login, logout, org use and partner use change only local
+    // files ("Dry run").
+    private static readonly string[] CommandsWithoutDryRun =
+    [
+        "login", "logout", "org use", "partner use",
+        "status", "org list", "org show", "org list-users", "org list-invites",
+        "partner customer list", "partner customer show", "partner customer list-admins", "partner customer list-invites",
+        "system list", "system show", "key list", "key show", "policy list", "policy show", "tag list", "tag show",
+        "dns show", "dns list-zones", "dns show-zone", "dns list-hostnames", "dns show-hostname",
+        "trust list", "trust show", "log", "commands",
+    ];
 
-    // The members of SystemQuerySortMode (portal Enclave.Configuration.Data/Modules/Systems/Enums,
-    // Enclave.Sdk.Api.Data 304.48.0), written out so that one check does not depend on reflection.
-    private static readonly string[] SystemSortValues = ["RecentlyEnrolled", "RecentlyConnected", "Description", "DescriptionOrHostname", "EnrolmentKeyUsed"];
+    // The commands that act within an organisation, which take --org and --org-id ("Options on
+    // every command", "Context").
+    private static readonly string[] OrganisationCommands =
+    [
+        "org show", "org update", "org list-users", "org remove-user", "org list-invites", "org invite", "org cancel-invite",
+        "system list", "system show", "system update", "system approve", "system decline", "system enable", "system disable", "system revoke",
+        "key list", "key show", "key create", "key update", "key enable", "key disable", "key delete",
+        "policy list", "policy show", "policy create", "policy update", "policy enable", "policy disable", "policy delete",
+        "tag list", "tag show", "tag set", "tag delete",
+        "dns show", "dns list-zones", "dns show-zone", "dns create-zone", "dns update-zone", "dns delete-zone",
+        "dns list-hostnames", "dns show-hostname", "dns create-hostname", "dns update-hostname", "dns delete-hostname",
+        "trust list", "trust show", "trust create", "trust update", "trust delete",
+        "log",
+    ];
 
-    private static readonly string[] OutputFormats = ["json", "table", "id"];
+    // Options the specification removed or never had: output formats, confirmation, file and
+    // template input, the token as an argument, --all and --search on lists, and the old name of
+    // --then ("Changes to AGENTS.md").
+    private static readonly string[] OptionsNoCommandHas =
+    [
+        "-o", "--output", "--yes", "--from-file", "--template", "--token", "--all", "--search", "--expiry-action",
+    ];
 
+    // The `system list` row of "Command options", with --pending and the `system list --pending`
+    // row's --waiting-for, and the options every organisation command takes.
+    private static readonly string[] SystemListOptions =
+    [
+        "--filter", "--tag", "--state", "--os", "--type", "--gateway", "--key", "--key-id", "--dns-name", "--not-seen-for",
+        "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id", "--verbose",
+    ];
+
+    // SystemQuerySortMode (portal Enclave.Configuration.Data/Modules/Systems/Enums) in lower-case,
+    // hyphenated form. With --pending, --sort takes the waiting systems' values ("Details"),
+    // UnapprovedSystemQuerySortMode, whose members are a subset of these, so these are every value
+    // --sort on `system list` takes.
+    private static readonly string[] SystemSortValues =
+    [
+        "recently-enrolled", "recently-connected", "description", "description-or-hostname", "enrolment-key-used",
+    ];
+
+    private static readonly string[] SystemStateValues = ["connected", "disconnected"];
+
+    private static readonly string[] SystemListOnly = ["system list"];
+
+    // Each case names options the command must list and options it must not, so a command that
+    // lists options it does not take fails as well as one that misses its own ("Command options").
+    // The lists are space-separated to keep the cases on one line each.
     public static IEnumerable<TestCaseData> OptionSets()
     {
-        yield return Options(
-            "system list",
-            ["--search", "--key", "--dns-name", "--include-disabled", "--sort", "--org", "--verbose", "--limit", "--all"],
-            ["--dry-run", "--yes", "--partner", "--from-file", "--template"]);
-        yield return Options(
-            "system update",
-            ["--description", "--notes", "--set-tags", "--from-file", "--template", "--dry-run", "--org", "--verbose"],
-            ["--limit", "--all", "--partner"]);
-        yield return Options(
-            "system enable",
-            ["--until", "--expiry-action", "--dry-run", "--yes", "--org", "--verbose"],
-            ["--limit", "--all", "--partner"]);
-        yield return Options(
-            "system revoke",
-            ["--dry-run", "--yes", "--org", "--verbose"],
-            ["--limit", "--all", "--partner", "--from-file"]);
-        yield return Options(
-            "pending list",
-            ["--search", "--key", "--sort", "--org", "--limit", "--all"],
-            ["--include-disabled", "--dns-name", "--dry-run", "--yes"]);
-        yield return Options(
-            "key create",
-            ["--description", "--type", "--approval-mode", "--uses-remaining", "--tags", "--notes", "--from-file", "--template", "--dry-run", "--org"],
-            ["--limit", "--all", "--partner"]);
-        yield return Options(
-            "policy create",
-            ["--from-file", "--template", "--dry-run", "--org"],
-            ["--description", "--notes", "--limit", "--all"]);
-        yield return Options(
-            "tag update",
-            ["--name", "--colour", "--notes", "--from-file", "--template", "--dry-run", "--org"],
-            ["--limit", "--all"]);
-        yield return Options(
-            "dns record list",
-            ["--zone", "--search", "--org", "--limit", "--all"],
-            ["--dry-run", "--yes"]);
-        yield return Options(
-            "dns record create",
-            ["--zone", "--type", "--tags", "--systems", "--notes", "--from-file", "--template", "--dry-run", "--org"],
-            ["--limit", "--all"]);
-        yield return Options(
-            "org update",
-            ["--name", "--website", "--phone", "--from-file", "--template", "--dry-run"],
-            ["--limit", "--all", "--partner"]);
-        yield return Options(
-            "log list",
-            ["--org", "--limit", "--all", "--verbose"],
-            ["--search", "--dry-run", "--yes"]);
-        yield return Options(
-            "partner customer list",
-            ["--partner", "--limit", "--all", "--verbose"],
-            ["--org", "--dry-run", "--yes"]);
-        yield return Options(
-            "commands",
-            ["--verbose"],
-            ["--org", "--partner", "--limit", "--all", "--dry-run", "--yes"]);
+        yield return Options("system list", string.Join(' ', SystemListOptions), "--dry-run --partner-id --limit --id");
+        yield return Options("system update", "--description --notes --set-tags --add-tags --remove-tags --enable-gateway-for --disable-gateway --pending --dry-run --org --org-id", "--tags --limit");
+        yield return Options("system enable", "--for --until --then --dry-run --org --org-id", "--limit");
+        yield return Options("key list", "--filter --tag --approval --state --include-disabled --sort", "--dry-run --limit");
+        yield return Options("key show", "--id", "--dry-run");
+        yield return Options("key create", "--ephemeral --auto-approve --uses --tags --allow-ip --keep-disconnected --for --until --then --notes --dry-run", "--description --type --approval-mode --uses-remaining");
+        yield return Options("key update", "--id --description --notes --auto-approve --require-approval --uses --set-tags --add-tags --remove-tags --set-allow-ip --keep-disconnected --dry-run", "--tags --allow-ip");
+        yield return Options("key enable", "--id --for --until --then --dry-run", "--limit");
+        yield return Options("policy list", "--filter --tag --state --include-disabled --sort", "--dry-run");
+        yield return Options("policy create", "--senders --receivers --acl --trust --trust-id --gateway --mode --subnet-filter --active-hours --for --until --then --notes --disabled --dry-run", "--description --sender-tags --receiver-tags");
+        yield return Options("policy update", "--id --description --notes --set-senders --set-receivers --set-acl --set-trust --set-trust-id --set-gateway --mode --set-subnet-filter --set-active-hours --dry-run", "--senders --receivers --acl");
+        yield return Options("policy enable", "--id --for --until --then --dry-run", "--limit");
+        yield return Options("tag list", "--filter --sort", "--dry-run");
+        yield return Options("tag set", "--name --colour --trust --trust-id --notes --dry-run", "--id");
+        yield return Options("dns create-zone", "--auto-dns-tags --notes --dry-run", "--id");
+        yield return Options("dns update-zone", "--id --name --set-auto-dns-tags --notes --dry-run", "--auto-dns-tags");
+        yield return Options("dns list-hostnames", "--zone --zone-id --filter", "--dry-run");
+        yield return Options("dns create-hostname", "--tags --systems --notes --dry-run", "--type");
+        yield return Options("dns update-hostname", "--id --name --set-tags --add-tags --remove-tags --set-systems --notes --dry-run", "--tags --systems");
+        yield return Options("trust list", "--filter --type --sort", "--dry-run");
+        yield return Options("trust create", "--notes --authority --tenant --authority-uri --client-id --audience --claim --allow-ip --block-ip --allow-country --block-country --dry-run", "--description");
+        yield return Options("trust update", "--id --description --notes --set-claim --set-allow-ip --set-block-ip --set-allow-country --set-block-country --dry-run", "--claim --allow-ip --allow-country");
+        yield return Options("org update", "--name --website --phone --dry-run --org --org-id", "--limit");
+        yield return Options("org use", "--id", "--dry-run");
+        yield return Options("org remove-user", "--id --dry-run", "--limit");
+        yield return Options("partner use", "--id", "--dry-run");
+        yield return Options("partner customer create", "--owner --domain --contact --systems --gateways --industry-discount --hard-limit --auto-sync --partner-id --dry-run", "--limit");
+        yield return Options("partner customer update", "--org-id --name --contact --systems --gateways --industry-discount --no-industry-discount --hard-limit --no-hard-limit --partner-id --dry-run", "--auto-sync");
+        yield return Options("partner customer convert", "--org-id --billing-months --partner-id --dry-run", "--limit");
+        yield return Options("partner customer add-admin", "--org-id --user-id --partner-id --dry-run", "--user");
+        yield return Options("partner customer remove-admin", "--org-id --user --user-id --partner-id --dry-run", "--limit");
+        yield return Options("partner customer invite", "--org-id --email --partner-id --dry-run", "--limit");
+        yield return Options("log", "--limit --since --until --user --level --filter --org --org-id", "--dry-run");
+        yield return Options("login", "--token-stdin", "--dry-run --org --org-id --partner-id");
+        yield return Options("logout", "--verbose", "--dry-run --org --org-id --partner-id");
+        yield return Options("status", "--org --org-id --partner-id", "--dry-run");
+        yield return Options("commands", "--verbose", "--dry-run --org --org-id --partner-id");
+    }
+
+    // The values are the ones the option table in "Command options" lists, and for --sort the API
+    // enum's members in lower-case, hyphenated form ("Options on every command"): SystemQuerySortMode,
+    // EnrolmentKeySortOrder, PolicySortOrder, TagQuerySortOrder and TrustRequirementSortOrder in the
+    // portal's Enclave.Configuration.Data/Modules/*/Enums.
+    public static IEnumerable<TestCaseData> AllowedValues()
+    {
+        yield return Values("system list", "--sort", SystemSortValues);
+        yield return Values("system list", "--state", SystemStateValues);
+        yield return Values("system list", "--os", "windows", "linux", "mac");
+        yield return Values("system list", "--type", "general", "ephemeral");
+        yield return Values("system enable", "--then", "disable", "revoke");
+        yield return Values("key list", "--sort", "description", "last-used", "approval-mode", "uses-remaining");
+        yield return Values("key list", "--approval", "automatic", "manual");
+        yield return Values("key list", "--state", "enabled", "disabled", "no-uses");
+        yield return Values("key create", "--then", "disable", "delete");
+        yield return Values("key enable", "--then", "disable", "delete");
+        yield return Values("policy list", "--sort", "description", "recently-created");
+        yield return Values("policy list", "--state", "enabled", "disabled");
+        yield return Values("policy create", "--then", "disable", "delete");
+        yield return Values("policy create", "--mode", "balanced", "ordered", "geographic");
+        yield return Values("policy update", "--mode", "balanced", "ordered", "geographic");
+        yield return Values("policy enable", "--then", "disable", "delete");
+        yield return Values("tag list", "--sort", "alphabetical", "recently-used", "referenced-systems");
+        yield return Values("trust list", "--sort", "description", "recently-created");
+        yield return Values("trust list", "--type", "user-auth", "public-ip");
+        yield return Values("trust create", "--authority", "portal", "azure", "google", "okta", "jumpcloud", "duo", "oidc");
+        yield return Values("partner customer convert", "--billing-months", "1", "12", "24", "36");
+        yield return Values("log", "--level", "information", "warning", "error");
     }
 
     [Test]
-    public async Task Commands_describes_every_command_in_the_proposal_with_a_description_arguments_and_options()
+    public async Task Commands_describes_every_command_in_the_command_tree_and_no_other()
     {
         using var run = CliRun.Start();
 
@@ -128,19 +250,19 @@ public class CommandsTests
         var entries = CommandEntries(result.StdoutJson);
         Assert.Multiple(() =>
         {
-            Assert.That(entries.Keys, Is.EquivalentTo(ProposalCommands));
+            Assert.That(entries.Keys, Is.EquivalentTo(CommandTree.Keys));
 
             foreach (var (name, entry) in entries)
             {
                 Assert.That(entry.GetProperty("description").GetString(), Is.Not.Null.And.Not.Empty, name);
                 Assert.That(entry.GetProperty("arguments").ValueKind, Is.EqualTo(JsonValueKind.Array), name);
-                Assert.That(OptionNames(entry), Does.Contain("--verbose"), name);
+                Assert.That(entry.GetProperty("options").ValueKind, Is.EqualTo(JsonValueKind.Array), name);
             }
         });
     }
 
     [Test]
-    public async Task Commands_lists_the_arguments_of_every_command_by_name_in_order()
+    public async Task Commands_names_the_arguments_of_every_command_in_order_as_the_command_tree_does()
     {
         using var run = CliRun.Start();
 
@@ -150,7 +272,9 @@ public class CommandsTests
         var entries = CommandEntries(result.StdoutJson);
         Assert.Multiple(() =>
         {
-            foreach (var (name, expected) in ProposalArguments)
+            // commands takes a command's words, three for a partner customer command ("Details"),
+            // which the tree's `[<noun> [<verb>]]` does not name, so its own arguments are left out.
+            foreach (var (name, expected) in CommandTree.Where(pair => !string.Equals(pair.Key, "commands", StringComparison.Ordinal)))
             {
                 if (!entries.TryGetValue(name, out var entry))
                 {
@@ -166,12 +290,8 @@ public class CommandsTests
         });
     }
 
-    // Each command lists the options it accepts, including the shared ones that apply to it, and
-    // leaves out the ones that do not ("Options on every command": --dry-run and --yes only where
-    // something changes, --limit and --all on list only, --org within an organisation, --partner on
-    // partner commands).
     [TestCaseSource(nameof(OptionSets))]
-    public async Task Commands_lists_the_options_each_command_accepts(string command, string[] present, string[] absent)
+    public async Task Commands_lists_the_options_each_command_takes_and_no_others(string command, string[] present, string[] absent)
     {
         using var run = CliRun.Start();
 
@@ -185,65 +305,132 @@ public class CommandsTests
         Assert.Multiple(() =>
         {
             Assert.That(names, Is.SupersetOf(present));
-            Assert.That(names.Intersect(absent), Is.Empty);
+            Assert.That(names.Intersect(absent, StringComparer.Ordinal), Is.Empty);
         });
     }
 
-    // Option values that name an API enum take the API's names, and `commands` lists them (proposal
-    // "Options on every command").
+    // --verbose applies to every command ("Options on every command"). Output is always JSON, no
+    // command asks for confirmation, every field has a flag, the token never goes on the command
+    // line, and lists read every page, so none of the removed options exists anywhere. log alone
+    // keeps --limit ("Command options").
     [Test]
-    public async Task Commands_lists_the_sort_values_of_system_list()
+    public async Task Every_command_takes_verbose_and_none_takes_a_removed_option()
     {
         using var run = CliRun.Start();
 
         var result = await run.RunAsync("commands");
 
         AssertSucceededWithoutRequests(run, result);
-        Assert.That(OptionValues(CommandEntries(result.StdoutJson), "system list", "--sort"), Is.EquivalentTo(SystemSortValues));
+        Assert.Multiple(() =>
+        {
+            foreach (var (name, entry) in CommandEntries(result.StdoutJson))
+            {
+                var options = OptionNames(entry);
+                Assert.That(options, Does.Contain("--verbose"), name);
+                Assert.That(options.Intersect(OptionsNoCommandHas, StringComparer.Ordinal), Is.Empty, name);
+
+                if (!string.Equals(name, "log", StringComparison.Ordinal))
+                {
+                    Assert.That(options, Does.Not.Contain("--limit"), name);
+                }
+            }
+        });
     }
 
-    // The expected values come from the Enclave.Sdk.Api.Data enum behind each option, so the list
-    // follows the SDK version in use.
-    [TestCase("system list", "--sort", typeof(SystemQuerySortMode))]
-    [TestCase("pending list", "--sort", typeof(UnapprovedSystemQuerySortMode))]
-    [TestCase("key list", "--sort", typeof(EnrolmentKeySortOrder))]
-    [TestCase("policy list", "--sort", typeof(PolicySortOrder))]
-    [TestCase("tag list", "--sort", typeof(TagQuerySortOrder))]
-    [TestCase("trust list", "--sort", typeof(TrustRequirementSortOrder))]
-    [TestCase("key create", "--type", typeof(EnrolmentKeyType))]
-    [TestCase("key create", "--approval-mode", typeof(ApprovalMode))]
-    [TestCase("system enable", "--expiry-action", typeof(ExpiryAction))]
-    [TestCase("key enable", "--expiry-action", typeof(ExpiryAction))]
-    [TestCase("policy enable", "--expiry-action", typeof(ExpiryAction))]
-    public async Task Commands_lists_the_api_enum_names_as_the_values_of_an_enum_option(string command, string option, Type values)
-    {
-        using var run = CliRun.Start();
-
-        var result = await run.RunAsync("commands");
-
-        AssertSucceededWithoutRequests(run, result);
-        Assert.That(OptionValues(CommandEntries(result.StdoutJson), command, option), Is.EquivalentTo(Enum.GetNames(values)));
-    }
-
-    // -o takes json, table and id; an agent reads the allowed formats from `commands`.
+    // --dry-run belongs to the commands that change something through the API ("Options on every
+    // command", "Dry run").
     [Test]
-    public async Task Commands_lists_the_output_formats_of_a_list_command()
+    public async Task Commands_that_change_something_through_the_api_take_dry_run_and_no_other_command_does()
     {
         using var run = CliRun.Start();
 
         var result = await run.RunAsync("commands");
 
         AssertSucceededWithoutRequests(run, result);
-        var formats = CommandEntries(result.StdoutJson)["system list"].GetProperty("options").EnumerateArray()
-            .Where(option => option.TryGetProperty("values", out var values) && values.ValueKind == JsonValueKind.Array)
-            .Select(option => JsonAssert.Strings(option.GetProperty("values")))
-            .Where(values => values.Contains("json"));
-        Assert.That(formats, Has.One.EquivalentTo(OutputFormats));
+        var entries = CommandEntries(result.StdoutJson);
+        Assert.Multiple(() =>
+        {
+            foreach (var name in ChangeCommands)
+            {
+                Assert.That(entries, Does.ContainKey(name));
+                Assert.That(OptionNamesOf(entries, name), Does.Contain("--dry-run"), name);
+            }
+
+            foreach (var name in CommandsWithoutDryRun)
+            {
+                Assert.That(entries, Does.ContainKey(name));
+                Assert.That(OptionNamesOf(entries, name), Does.Not.Contain("--dry-run"), name);
+            }
+        });
     }
 
-    // The error codes are a fixed set the CLI owns, so an agent can handle each one (proposal
-    // "Errors and exit codes"). not_implemented is the code partner commands report while
-    // Enclave.Sdk.Api has no partner clients.
+    // The organisation and the partner are chosen separately: commands that act within an
+    // organisation take --org and --org-id and no --partner-id, and partner customer commands take
+    // --partner-id ("Context").
+    [Test]
+    public async Task Organisation_commands_take_org_and_org_id_and_partner_customer_commands_take_partner_id()
+    {
+        using var run = CliRun.Start();
+
+        var result = await run.RunAsync("commands");
+
+        AssertSucceededWithoutRequests(run, result);
+        var entries = CommandEntries(result.StdoutJson);
+        var partnerCommands = entries.Keys.Where(name => name.StartsWith("partner customer ", StringComparison.Ordinal)).ToArray();
+        Assert.Multiple(() =>
+        {
+            foreach (var name in OrganisationCommands)
+            {
+                Assert.That(OptionNamesOf(entries, name), Does.Contain("--org").And.Contain("--org-id"), name);
+                Assert.That(OptionNamesOf(entries, name), Does.Not.Contain("--partner-id"), name);
+            }
+
+            Assert.That(partnerCommands, Has.Length.EqualTo(13));
+
+            foreach (var name in partnerCommands)
+            {
+                Assert.That(OptionNamesOf(entries, name), Does.Contain("--partner-id"), name);
+            }
+        });
+    }
+
+    // Tags are given by name only ("Names and IDs"), so no tag command has an --id.
+    [Test]
+    public async Task Tag_commands_take_no_id_option()
+    {
+        using var run = CliRun.Start();
+
+        var result = await run.RunAsync("commands");
+
+        AssertSucceededWithoutRequests(run, result);
+        var entries = CommandEntries(result.StdoutJson);
+        var tagCommands = entries.Keys.Where(name => name.StartsWith("tag ", StringComparison.Ordinal)).ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(tagCommands, Has.Length.EqualTo(4));
+
+            foreach (var name in tagCommands)
+            {
+                Assert.That(OptionNamesOf(entries, name), Does.Not.Contain("--id"), name);
+            }
+        });
+    }
+
+    // An agent reads the allowed values from `commands` before it builds a command ("Options on
+    // every command": `commands` lists the allowed values).
+    [TestCaseSource(nameof(AllowedValues))]
+    public async Task Commands_lists_the_allowed_values_of_an_option_in_lower_case_hyphenated_form(string command, string option, string[] values)
+    {
+        using var run = CliRun.Start();
+
+        var result = await run.RunAsync("commands");
+
+        AssertSucceededWithoutRequests(run, result);
+        Assert.That(OptionValues(CommandEntries(result.StdoutJson), command, option), Is.EquivalentTo(values));
+    }
+
+    // The error codes are a fixed set the CLI owns, so an agent can handle each one ("Errors and
+    // exit codes").
     [Test]
     public async Task Commands_lists_the_fixed_error_codes_with_their_exit_codes()
     {
@@ -253,72 +440,135 @@ public class CommandsTests
 
         AssertSucceededWithoutRequests(run, result);
         var errors = result.StdoutJson.GetProperty("errors").EnumerateArray()
-            .ToDictionary(error => error.GetProperty("code").GetString()!, error => error.GetProperty("exitCode").GetInt32(), StringComparer.Ordinal);
-        Assert.That(errors, Is.EquivalentTo(new Dictionary<string, int>(StringComparer.Ordinal)
-        {
-            ["api_error"] = 1,
-            ["not_implemented"] = 1,
-            ["invalid_argument"] = 2,
-            ["no_org"] = 2,
-            ["no_partner"] = 2,
-            ["token_missing"] = 3,
-            ["token_invalid"] = 3,
-            ["forbidden"] = 4,
-            ["not_found"] = 5,
-            ["confirmation_required"] = 6,
-            ["transient"] = 7,
-        }));
+            .ToDictionary(
+                error => error.GetProperty("code").GetString()!,
+                error => error.GetProperty("exitCode").GetInt32(),
+                StringComparer.Ordinal);
+        Assert.That(errors, Is.EquivalentTo(CliAssert.ExitCodes));
     }
 
-    // `commands <noun>` keeps the answer small when an agent needs one noun only.
+    // `commands` takes a command's words ("Details"), and the leading words of several commands
+    // describe those commands, which keeps the answer small when an agent needs one noun. log is a
+    // noun without verbs, so `commands log` describes the one command, log, and login is not a log
+    // command. `partner customer` is the second-level noun, so its words name its commands.
     [TestCase("system")]
+    [TestCase("key")]
     [TestCase("dns")]
+    [TestCase("org")]
+    [TestCase("log")]
     [TestCase("partner")]
-    public async Task Commands_with_a_noun_describes_only_that_nouns_commands(string noun)
+    [TestCase("partner customer")]
+    public async Task Commands_given_a_nouns_words_describes_only_that_nouns_commands(string words)
     {
+        ArgumentNullException.ThrowIfNull(words);
         using var run = CliRun.Start();
 
-        var result = await run.RunAsync("commands", noun);
+        var result = await run.RunAsync(["commands", .. words.Split(' ')]);
 
         AssertSucceededWithoutRequests(run, result);
-        Assert.That(
-            CommandEntries(result.StdoutJson).Keys,
-            Is.EquivalentTo(ProposalCommands.Where(command => command.StartsWith(noun + " ", StringComparison.Ordinal))));
+        var expected = CommandTree.Keys
+            .Where(command => string.Equals(command, words, StringComparison.Ordinal) || command.StartsWith(words + " ", StringComparison.Ordinal))
+            .ToArray();
+        Assert.Multiple(() =>
+        {
+            Assert.That(expected, Is.Not.Empty);
+            Assert.That(CommandEntries(result.StdoutJson).Keys, Is.EquivalentTo(expected));
+        });
     }
 
-    // A plural noun is a hidden alias wherever a noun is accepted (proposal "Shape and naming").
+    // Every command can be described alone, the three-word partner customer commands included
+    // ("Details": `commands partner customer create`). One run serves every command line, since
+    // `commands` makes no call and changes nothing.
     [Test]
-    public async Task Commands_with_a_plural_noun_describes_the_singular_nouns_commands()
+    public async Task Commands_given_the_words_of_any_command_describes_that_command_alone()
+    {
+        using var run = CliRun.Start();
+        var results = new Dictionary<string, CliResult>(StringComparer.Ordinal);
+
+        foreach (var command in CommandTree.Keys)
+        {
+            results[command] = await run.RunAsync(["commands", .. command.Split(' ')]);
+        }
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Requests, Is.Empty);
+
+            foreach (var (command, result) in results)
+            {
+                Assert.That(result.ExitCode, Is.Zero, $"commands {command}{Environment.NewLine}{result}");
+                Assert.That(result.Stderr, Is.Empty, $"commands {command}");
+
+                if (result.ExitCode == 0)
+                {
+                    Assert.That(CommandEntries(result.StdoutJson).Keys, Is.EqualTo(new[] { command }), $"commands {command}");
+                }
+            }
+        });
+    }
+
+    // Example 17: `commands system list` describes one command, its options and their allowed
+    // values ("Output").
+    [Test]
+    public async Task Commands_system_list_describes_system_list_alone_with_its_options_and_their_values()
     {
         using var run = CliRun.Start();
 
-        var result = await run.RunAsync("commands", "systems");
+        var result = await run.RunAsync("commands", "system", "list");
 
         AssertSucceededWithoutRequests(run, result);
-        Assert.That(
-            CommandEntries(result.StdoutJson).Keys,
-            Is.EquivalentTo(ProposalCommands.Where(command => command.StartsWith("system ", StringComparison.Ordinal))));
+        var entries = CommandEntries(result.StdoutJson);
+        Assert.That(entries.Keys, Is.EqualTo(SystemListOnly));
+        Assert.Multiple(() =>
+        {
+            Assert.That(OptionNames(entries["system list"]), Is.SupersetOf(SystemListOptions));
+            Assert.That(OptionValues(entries, "system list", "--sort"), Is.EquivalentTo(SystemSortValues));
+            Assert.That(OptionValues(entries, "system list", "--state"), Is.EquivalentTo(SystemStateValues));
+        });
     }
 
-    [Test]
-    public async Task Commands_with_an_unknown_noun_exits_2_with_invalid_argument()
+    // A plural noun is a hidden alias wherever a noun is accepted ("Shape and naming"), and the
+    // description names each command by its singular noun.
+    [TestCase("systems", "system")]
+    [TestCase("systems list", "system list")]
+    [TestCase("policies", "policy")]
+    public async Task Commands_given_a_plural_noun_describes_the_same_commands_as_the_singular_noun(string plural, string singular)
     {
+        ArgumentNullException.ThrowIfNull(plural);
+        ArgumentNullException.ThrowIfNull(singular);
+        using var pluralRun = CliRun.Start();
+        using var singularRun = CliRun.Start();
+
+        var pluralResult = await pluralRun.RunAsync(["commands", .. plural.Split(' ')]);
+        var singularResult = await singularRun.RunAsync(["commands", .. singular.Split(' ')]);
+
+        AssertSucceededWithoutRequests(singularRun, singularResult);
+        AssertSucceededWithoutRequests(pluralRun, pluralResult);
+        Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
+    }
+
+    [TestCase("widget")]
+    [TestCase("system frobnicate")]
+    public async Task Commands_given_a_noun_or_verb_that_does_not_exist_exits_2_with_invalid_argument(string arguments)
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
         using var run = CliRun.Start();
 
-        var result = await run.RunAsync("commands", "widget");
+        var result = await run.RunAsync(["commands", .. arguments.Split(' ')]);
 
         CliAssert.Rejected(run, result);
     }
 
-    // An agent reads `commands` before it has a token, so the command needs none and calls nothing.
+    // An agent reads `commands` before it has a token or has chosen an organisation, so the command
+    // needs neither and calls nothing.
     [TestCase("commands")]
-    [TestCase("commands system")]
-    public async Task Commands_needs_no_token_and_makes_no_request(string command)
+    [TestCase("commands system list")]
+    public async Task Commands_needs_no_token_or_organisation_and_makes_no_request(string command)
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG");
+        run.Environment.Remove("ENCLAVE_ORG_ID");
 
         var result = await run.RunAsync(command.Split(' '));
 
@@ -326,43 +576,11 @@ public class CommandsTests
         Assert.That(CommandEntries(result.StdoutJson), Does.ContainKey("system list"));
     }
 
-    private static TestCaseData Options(string command, string[] present, string[] absent) =>
-        new TestCaseData(command, present, absent).SetArgDisplayNames(command);
+    private static TestCaseData Options(string command, string present, string absent) =>
+        new TestCaseData(command, present.Split(' '), absent.Split(' ')).SetArgDisplayNames(command);
 
-    private static Dictionary<string, string[]> BuildProposalArguments()
-    {
-        var arguments = ProposalCommands
-            .Where(command => command != "org use")
-            .ToDictionary(command => command, _ => Array.Empty<string>(), StringComparer.Ordinal);
-
-        void Set(string argumentNames, params string[] commands)
-        {
-            foreach (var command in commands)
-            {
-                arguments[command] = argumentNames.Split(' ');
-            }
-        }
-
-        Set("accountId", "org user remove", "partner user update", "partner user remove");
-        Set("email", "org invite send", "org invite cancel", "partner invite send");
-        Set("partnerId", "partner use");
-        Set("inviteId", "partner invite update", "partner invite cancel");
-        Set("customerId", "partner customer show", "partner customer update", "partner customer convert", "partner customer admin list", "partner customer invite list", "partner customer auto-sync enable", "partner customer auto-sync disable");
-        Set("customerId accountId", "partner customer admin add", "partner customer admin remove");
-        Set("customerId email", "partner customer invite send");
-        Set("customerId inviteId", "partner customer invite cancel");
-        Set("systemId", "system show", "system update", "system enable", "system disable", "system revoke", "pending show", "pending update", "pending approve", "pending decline");
-        Set("keyId", "key show", "key update", "key enable", "key disable", "key delete");
-        Set("policyId", "policy show", "policy update", "policy enable", "policy disable", "policy delete");
-        Set("tag", "tag show", "tag create", "tag update", "tag delete");
-        Set("zoneId", "dns zone show", "dns zone update", "dns zone delete");
-        Set("recordId", "dns record show", "dns record update", "dns record delete");
-        Set("name", "dns zone create", "dns record create");
-        Set("trustId", "trust show", "trust update", "trust delete");
-        Set("noun", "commands");
-
-        return arguments;
-    }
+    private static TestCaseData Values(string command, string option, params string[] values) =>
+        new TestCaseData(command, option, values).SetArgDisplayNames(command, option);
 
     private static Dictionary<string, JsonElement> CommandEntries(JsonElement document) =>
         document.GetProperty("commands").EnumerateArray()
@@ -373,12 +591,16 @@ public class CommandsTests
             .Select(option => option.GetProperty("name").GetString()!)
             .ToArray();
 
+    // A command missing from the document has no options here; the completeness test reports it.
+    private static string[] OptionNamesOf(Dictionary<string, JsonElement> entries, string command) =>
+        entries.TryGetValue(command, out var entry) ? OptionNames(entry) : [];
+
     private static string[] OptionValues(Dictionary<string, JsonElement> entries, string command, string option)
     {
         Assert.That(entries, Does.ContainKey(command));
 
         var match = entries[command].GetProperty("options").EnumerateArray()
-            .Where(candidate => candidate.GetProperty("name").GetString() == option)
+            .Where(candidate => string.Equals(candidate.GetProperty("name").GetString(), option, StringComparison.Ordinal))
             .ToArray();
         Assert.That(match, Has.Length.EqualTo(1), $"{command} {option}");
 

@@ -1,9 +1,16 @@
+using System.Globalization;
+using static System.FormattableString;
+
 namespace Enclave.Cli.Tests.Support;
+
+// The class is partial so that tests for one area can add their data in their own file,
+// Support/TestData.<Area>.cs, without editing a file other tests share. StyleCop SA1601 requires a
+// <summary> on every part.
 
 /// <summary>
 /// Fixed identities shared by the tests and the fake API responses.
 /// </summary>
-internal static class TestData
+internal static partial class TestData
 {
     public const string Token = "test-token-7f3a9c";
 
@@ -26,4 +33,25 @@ internal static class TestData
     /// </summary>
     public static string OrgPath(string suffix = "") =>
         suffix.Length == 0 ? $"/org/{OrgId:N}" : $"/org/{OrgId:N}/{suffix}";
+
+    /// <summary>
+    /// <paramref name="count"/> distinct IDs of one kind of item (a <see cref="CliList.Kinds"/> value
+    /// other than log), each valid by the proposal's "ID checks": letters and digits for systems,
+    /// integers from 1 for keys, policies, zones, hostnames and trust requirements, tag names for
+    /// tags, GUIDs for organisations, users, customers and admins, and email addresses for invites.
+    /// </summary>
+    public static string[] Ids(string kind, int count)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+
+        return Enumerable.Range(1, count).Select(number => kind switch
+        {
+            "system" or "pending-system" => Invariant($"S{number:D5}"),
+            "key" or "policy" or "zone" or "hostname" or "trust" => number.ToString(CultureInfo.InvariantCulture),
+            "tag" => Invariant($"tag-{number}"),
+            "org" or "user" or "customer" or "admin" => new Guid(number, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1).ToString(),
+            "invite" => Invariant($"invite-{number}@acme.example"),
+            _ => throw new ArgumentException($"No IDs for kind \"{kind}\"; the kinds are {string.Join(", ", CliList.Kinds)}, and log entries have no ID.", nameof(kind)),
+        }).ToArray();
+    }
 }

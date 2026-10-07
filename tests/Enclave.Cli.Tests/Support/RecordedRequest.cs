@@ -47,6 +47,52 @@ internal sealed record RecordedRequest(
     /// </summary>
     public string? QueryValue(string name) => Query.TryGetValue(name, out var value) ? value : null;
 
+    /// <summary>
+    /// The page a list request asks for: its page query parameter, or 0 when it has none, which the
+    /// API reads as page 0 (portal PaginatedRequestModel.Page). Fails the test when the parameter is
+    /// not a whole number.
+    /// </summary>
+    public int PageNumber
+    {
+        get
+        {
+            var page = QueryValue("page");
+
+            if (page is null)
+            {
+                return 0;
+            }
+
+            return int.TryParse(page, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
+                ? number
+                : throw new AssertionException($"Expected the page parameter of {Method} {Path} to be a whole number, found \"{page}\".");
+        }
+    }
+
+    /// <summary>
+    /// The IDs in an array property of the JSON body, such as a bulk call's systemIds, each as text:
+    /// a string as it is, and a number, which is how typed integer IDs are written, in invariant
+    /// form. Fails the test when the property is missing or is not an array of strings and integers.
+    /// </summary>
+    public string[] BodyIds(string field)
+    {
+        var array = JsonAssert.Property(BodyJson, field);
+
+        if (array.ValueKind != JsonValueKind.Array)
+        {
+            throw new AssertionException($"Expected \"{field}\" in the body of {Method} {Path} to be an array, found {array.ValueKind}: {Body}");
+        }
+
+        return array.EnumerateArray()
+            .Select(item => item.ValueKind switch
+            {
+                JsonValueKind.String => item.GetString()!,
+                JsonValueKind.Number when item.TryGetInt64(out var number) => number.ToString(CultureInfo.InvariantCulture),
+                _ => throw new AssertionException($"Expected \"{field}\" in the body of {Method} {Path} to hold strings and integers, found {item.GetRawText()}: {Body}"),
+            })
+            .ToArray();
+    }
+
     // Records print every public property in ToString, and BodyJson fails the test when the body is
     // not JSON. NUnit calls ToString to describe a value in a failure message, so printing only the
     // captured fields keeps that message from raising a second failure.

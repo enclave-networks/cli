@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
@@ -5,6 +6,9 @@ using WireMock;
 
 namespace Enclave.Cli.Tests.Auth;
 
+// login checks a personal access token with one GetOrganisationsAsync call, saves it in
+// credentials.json, prints the organisations the token can see, and never prompts
+// (proposed-cli-surface.md "Login, logout and status").
 [Category(TestCategory.Pending)]
 public class LoginTests
 {
@@ -12,224 +16,250 @@ public class LoginTests
 
     private const string OldToken = "old-token-d40b77";
 
-    private static readonly string[] OrgsLookupOnly = ["GET /account/orgs"];
+    private const string OrgLookup = "GET /account/orgs";
 
+    private static readonly string[] OrgLookupOnly = [OrgLookup];
+
+    // The format Enclave.Sdk.Api reads (EnclaveClient.GetSettingsFile, version 1.0.4), which the CLI
+    // must not change (AGENTS.md "CLI contract").
+    private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
+
+    private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
+
+    // Example 1 reads the token from a file, which ends in a newline, and a Windows pipe ends it
+    // with \r\n. login reads the token without the trailing newline, so neither the Authorization
+    // header nor the saved token carries it.
     [Test]
-    public async Task Login_reads_the_token_from_stdin_when_token_stdin_is_given()
+    public async Task Login_token_stdin_checks_the_token_read_from_stdin_without_its_trailing_newline_and_saves_it()
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
-
-        // A shell pipe ends the token with a newline, and a Windows pipe with \r\n. Neither is part
-        // of the token, so the saved token and the header must not carry them.
         run.StdinText = StdinToken + "\r\n";
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
-        var result = await run.RunAsync("login", "--token-stdin");
-
-        var request = run.SingleRequest();
+        var request = await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "login", "--token-stdin");
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo("/account/orgs"));
             Assert.That(request.Authorization, Is.EqualTo($"Bearer {StdinToken}"));
             Assert.That(SavedToken(run), Is.EqualTo(StdinToken));
         });
     }
 
-    // The proposal ("Login, logout and status") checks the token with one GetOrganisationsAsync call
-    // before saving it, so a mistyped token is reported at login and never saved.
+    // With ENCLAVE_TOKEN set, login saves that token after one check, so a mistyped token is
+    // reported at login and never saved.
     [Test]
-    public async Task Login_checks_the_token_from_ENCLAVE_TOKEN_with_one_organisations_request_and_saves_it()
+    public async Task Login_checks_the_token_from_ENCLAVE_TOKEN_with_one_request_and_saves_it()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
-        var result = await run.RunAsync("login");
-
-        var request = run.SingleRequest();
+        var request = await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "login");
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo("/account/orgs"));
             Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
             Assert.That(SavedToken(run), Is.EqualTo(TestData.Token));
         });
     }
 
-    // --token-stdin is the caller asking for the token on stdin by name, so it decides which token
-    // is saved even when ENCLAVE_TOKEN holds another.
+    // --token-stdin wins over ENCLAVE_TOKEN ("Login, logout and status"), so the token on stdin is
+    // the one checked and saved when ENCLAVE_TOKEN holds another.
     [Test]
-    public async Task Login_takes_the_token_from_stdin_over_ENCLAVE_TOKEN_when_token_stdin_is_given()
+    public async Task Login_token_stdin_takes_the_token_from_stdin_when_ENCLAVE_TOKEN_is_also_set()
     {
         using var run = CliRun.Start();
         run.StdinText = StdinToken + "\n";
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
-        var result = await run.RunAsync("login", "--token-stdin");
+        var request = await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "login", "--token-stdin");
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {StdinToken}"));
+            Assert.That(request.Authorization, Is.EqualTo($"Bearer {StdinToken}"));
             Assert.That(SavedToken(run), Is.EqualTo(StdinToken));
         });
     }
 
-    // credentials.json is the file Enclave.Sdk.Api reads (EnclaveClient.GetSettingsFile, version
-    // 1.0.4), which needs both fields. With no file to keep a base URL from, login records the API
-    // address that accepted the token.
+    // credentials.json holds personalAccessToken and baseUrl, the file Enclave.Sdk.Api reads. With
+    // no file to keep a base URL from, login records the API address that accepted the token.
     [Test]
     public async Task Login_writes_credentials_json_holding_the_token_and_the_api_base_url()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var result = await run.RunAsync("login");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
-        Assert.That(run.Files.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
-
-        var credentials = ReadJson(run, run.CredentialsPath);
-
+        CliAssert.Succeeded(result);
+        var credentials = SavedCredentials(run);
         Assert.Multiple(() =>
         {
+            Assert.That(JsonRead.PropertyNames(credentials), Is.EquivalentTo(CredentialsFields));
             Assert.That(JsonAssert.Property(credentials, "personalAccessToken").GetString(), Is.EqualTo(TestData.Token));
             Assert.That(new Uri(JsonAssert.Property(credentials, "baseUrl").GetString()!), Is.EqualTo(run.ApiUrl));
         });
     }
 
-    // A credentials.json pointing at another API address (a staging or self-hosted API) keeps
-    // pointing there after login: the proposal says login keeps an existing baseUrl. The second
-    // fake API proves both that the check went to the saved address and that the address was kept.
+    // login keeps an existing baseUrl, and ENCLAVE_TOKEN keeps the file's baseUrl ("Login, logout
+    // and status"), so a credentials.json pointing at another API address (a staging or self-hosted
+    // API) points there after login too. The second fake API proves the check went to the saved
+    // address, and the file proves the address was kept while the token was replaced.
     [Test]
-    public async Task Login_keeps_the_base_url_already_in_credentials_json()
+    public async Task Login_keeps_the_base_url_already_in_credentials_json_and_checks_the_token_there()
     {
         using var run = CliRun.Start();
         var (other, otherUrl) = LoopbackApi.Start();
         using var otherApi = other;
-        LoopbackApi.Stub(otherApi, "GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        LoopbackApi.Stub(otherApi, "GET", "/account/orgs", 200, OneOrg());
         run.SaveCredentials(OldToken, otherUrl);
 
         var result = await run.RunAsync("login");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+        var checks = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().Select(request => $"{request.Method} {request.Path}").ToArray();
 
-        var credentials = ReadJson(run, run.CredentialsPath);
-        var checks = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
-
+        CliAssert.Succeeded(result);
+        var credentials = SavedCredentials(run);
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty, "The token was checked against the default API address.");
-            Assert.That(checks.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(checks, Is.EqualTo(OrgLookupOnly));
             Assert.That(new Uri(JsonAssert.Property(credentials, "baseUrl").GetString()!), Is.EqualTo(new Uri(otherUrl)));
             Assert.That(JsonAssert.Property(credentials, "personalAccessToken").GetString(), Is.EqualTo(TestData.Token));
         });
     }
 
-    // The file holds a token that never expires (portal TokensApiController.cs:105 issues personal
-    // access tokens with TimeSpan.MaxValue), so other local users must not be able to read it.
-    // Login asks the file store to write the file private to the user, which is the same request on
-    // every OS. The disk store's own tests prove that a private write creates the .enclave directory
-    // as 0700 and the file as 0600 on Linux and macOS (Storage/DiskFileStoreTests.cs).
+    // The file holds a token that does not expire (portal
+    // Enclave.Accounts/Controllers/Api/TokensApiController.cs:105 issues personal access tokens with
+    // TimeSpan.MaxValue), so other local users must not read it. login asks the file store for a
+    // private write (AGENTS.md "Code"), the same request on every OS; Storage/DiskFileStoreTests.cs
+    // proves that a private write makes ~/.enclave 0700 and the file 0600 on Linux and macOS.
     [Test]
     public async Task Login_writes_credentials_json_private_to_the_user()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var result = await run.RunAsync("login");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
-        Assert.That(run.Files.Exists(run.CredentialsPath), Is.True, "credentials.json was not written.");
+        CliAssert.Succeeded(result);
         Assert.That(run.Files.IsPrivate(run.CredentialsPath), Is.True);
     }
 
-    // login prints what org list prints, so the caller sees which organisations the token reaches
-    // without a second call.
+    // login prints the organisations the token can see as an org list ("Login, logout and status",
+    // "Output"), so the caller learns which organisations the token reaches without a second call.
+    // The items are AccountOrganisationModel unchanged, and Enclave.Sdk.Api writes orgId as 32 hex
+    // digits (OrganisationGuid JSON converter, Enclave.Sdk.Api.Data 304.48.0).
     [Test]
-    public async Task Login_prints_the_organisations_the_token_can_see()
+    public async Task Login_prints_the_organisations_the_token_can_see_as_an_org_list()
     {
         using var run = CliRun.Start();
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
 
         var result = await run.RunAsync("login");
 
-        Assert.That(result.ExitCode, Is.Zero, result.ToString());
-
-        var items = JsonAssert.Property(result.StdoutJson, "items").EnumerateArray().ToArray();
-
+        var items = CliAssert.List(result, "org");
         Assert.Multiple(() =>
         {
-            Assert.That(items.Select(item => Guid.Parse(JsonAssert.Property(item, "orgId").GetString()!)), Is.EquivalentTo(new[] { TestData.OrgId, TestData.OtherOrgId }));
-            Assert.That(items.Select(item => JsonAssert.Property(item, "orgName").GetString()), Is.EquivalentTo(new[] { TestData.OrgName, TestData.OtherOrgName }));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "total").GetInt32(), Is.EqualTo(2));
+            Assert.That(JsonRead.StringFieldList(items, "orgId"), Is.EqualTo($"{TestData.OrgId:N},{TestData.OtherOrgId:N}"));
+            Assert.That(JsonRead.StringFieldList(items, "orgName"), Is.EqualTo($"{TestData.OrgName},{TestData.OtherOrgName}"));
+            Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
         });
     }
 
-    // The proposal ("Context") saves the default when the token sees one organisation. A later
-    // command with no --org and no ENCLAVE_ORG then acts on it straight away; finding it by lookup
-    // instead would show up as a GET /account/orgs before the command's own request.
+    // login saves the default when the token sees exactly one organisation, from the response to its
+    // one check, as { "org": { "id", "name" } } in cli.json ("Login, logout and status"). A later
+    // command with no organisation chosen then builds the organisation client from the saved ID
+    // with no lookup ("Context"). The one organisation is Globex, so a command that used the test
+    // organisation acts on Acme, and one that looked the organisation up shows a GET /account/orgs
+    // before its own request.
     [Test]
     public async Task Login_saves_the_organisation_as_the_default_when_the_token_sees_exactly_one()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_ORG");
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OtherOrgId, TestData.OtherOrgName)));
+        run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
 
         var login = await run.RunAsync("login");
-        Assert.That(login.ExitCode, Is.Zero, login.ToString());
+
+        CliAssert.Succeeded(login);
+        var org = JsonAssert.Property(JsonRead.Parse(run.Files.ReadText(run.CliConfigPath) ?? throw new AssertionException("login saved no cli.json.")), "org");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
+            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OtherOrgId));
+            Assert.That(JsonAssert.Property(org, "name").GetString(), Is.EqualTo(TestData.OtherOrgName));
+        });
 
         var before = run.Requests.Count;
         var result = await run.RunAsync("system", "list");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {TestData.OrgPath("systems")}" }));
-        });
+        CliAssert.Succeeded(result);
+        Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
     }
 
-    // With several organisations there is no single right default, so login saves none and a later
-    // command with no organisation chosen asks the caller to choose.
+    // With several organisations there is no single default, so login saves none, and a later
+    // command with no organisation chosen looks them up and asks the caller to choose ("Context").
     [Test]
     public async Task Login_saves_no_default_organisation_when_the_token_sees_several()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_ORG");
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: BothOrgs());
         run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
 
-        var login = await run.RunAsync("login");
-        Assert.That(login.ExitCode, Is.Zero, login.ToString());
+        CliAssert.Succeeded(await run.RunAsync("login"));
 
         var before = run.Requests.Count;
         var result = await run.RunAsync("system", "list");
 
+        CliAssert.Failed(result, "no_org");
+        Assert.That(run.Calls(before), Is.EqualTo(OrgLookupOnly));
+    }
+
+    // When the token sees several organisations login leaves the saved default as it is ("Login,
+    // logout and status"), so a default chosen with org use survives a new login. The default is
+    // Globex and the token also sees Acme, so a login that rewrote the default changes cli.json,
+    // and one that cleared it leaves the later command to look the organisations up and exit 2.
+    [Test]
+    public async Task Login_leaves_the_saved_default_as_it_is_when_the_token_sees_several()
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
+        CliAssert.Succeeded(await run.RunAsync("org", "use", "--id", TestData.OtherOrgId.ToString()));
+        var savedDefault = run.Files.ReadText(run.CliConfigPath);
+
+        CliAssert.Succeeded(await run.RunAsync("login"));
+
+        var before = run.Requests.Count;
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("no_org"));
-            Assert.That(run.Calls(before), Is.EqualTo(OrgsLookupOnly));
+            Assert.That(run.Files.ReadText(run.CliConfigPath), Is.EqualTo(savedDefault));
+            Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
         });
     }
 
-    // A token the API refuses is not saved: a saved bad token would make every later command fail.
-    // Enclave.Sdk.Api raises EnclaveApiException only for problem+json responses
-    // (ProblemDetailsHttpMessageHandler.cs:20, version 1.0.4), so the plain-status cases, a proxy or
-    // server answering without problem details, reach the CLI as HttpRequestException. A 403 means
-    // the token lacks ReadOrgList, which the check needs.
-    [TestCase(401, true, 3, "token_invalid")]
-    [TestCase(401, false, 3, "token_invalid")]
-    [TestCase(403, true, 4, "forbidden")]
-    [TestCase(403, false, 4, "forbidden")]
-    public async Task Login_exits_with_the_error_and_writes_no_credentials_file_when_the_api_refuses_the_token(
-        int status, bool problemDetails, int exitCode, string code)
+    // login writes credentials.json after its check passes, so a token the API refuses is never
+    // saved: a saved bad token makes every later command fail. Enclave.Sdk.Api raises
+    // EnclaveApiException only for problem+json responses
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:20, version 1.0.4), so the plain cases, a proxy
+    // or server answering without problem details, reach the CLI as HttpRequestException, which
+    // the CLI maps to the same codes ("Errors and exit codes"). 403 means the token lacks
+    // ReadOrgList, which the check needs.
+    [TestCase(401, true, "token_invalid")]
+    [TestCase(401, false, "token_invalid")]
+    [TestCase(403, true, "forbidden")]
+    [TestCase(403, false, "forbidden")]
+    [TestCase(503, true, "transient")]
+    public async Task Login_writes_no_credentials_file_when_the_check_fails(int status, bool problemDetails, string code)
     {
         using var run = CliRun.Start();
 
@@ -239,24 +269,22 @@ public class LoginTests
         }
         else
         {
-            run.Stub("GET", "/account/orgs", status);
+            run.StubRaw("GET", "/account/orgs", status, "text/html", "<html><body>Refused</body></html>");
         }
 
         var result = await run.RunAsync("login");
 
+        CliAssert.Failed(result, code);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.EqualTo(exitCode), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo(code));
-            Assert.That(result.Stdout, Is.Empty);
             Assert.That(run.SingleRequest().Path, Is.EqualTo("/account/orgs"));
             Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
         });
     }
 
-    // A rejected token must not replace the saved one, which may still work.
+    // A refused token must not replace the saved one, which may be a working token.
     [Test]
-    public async Task Login_leaves_an_existing_credentials_file_unchanged_when_the_api_rejects_the_token()
+    public async Task Login_leaves_an_existing_credentials_file_unchanged_when_the_api_refuses_the_token()
     {
         using var run = CliRun.Start();
         run.SaveCredentials(OldToken);
@@ -265,46 +293,47 @@ public class LoginTests
 
         var result = await run.RunAsync("login");
 
-        var after = run.Files.ReadText(run.CredentialsPath);
-
+        CliAssert.Failed(result, "token_invalid");
         Assert.Multiple(() =>
         {
-            Assert.That(result.ExitCode, Is.EqualTo(3), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("token_invalid"));
             Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(after, Is.EqualTo(before));
+            Assert.That(run.Files.ReadText(run.CredentialsPath), Is.EqualTo(before));
         });
     }
 
-    // The CLI never prompts or waits (AGENTS.md "CLI contract"). Without --token-stdin, stdin is not
-    // a token source, so text waiting there must not be read: a CLI that read it would find a valid
-    // token in this test and log in.
-    [TestCase(true)]
-    [TestCase(false)]
-    public async Task Login_exits_2_naming_both_token_sources_when_neither_is_given(bool stdinIsTerminal)
+    // login never prompts, and with no token it exits 3 token_missing; an empty ENCLAVE_TOKEN counts
+    // as unset ("Login, logout and status"). Without --token-stdin, stdin is not a token source:
+    // stdin holds a valid token in every case, so a CLI that read it, or waited on a terminal, logs
+    // in.
+    [TestCase(true, false)]
+    [TestCase(false, false)]
+    [TestCase(false, true)]
+    public async Task Login_with_no_token_exits_3_with_token_missing_and_leaves_stdin_unread(bool stdinIsTerminal, bool emptyVariable)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+
+        if (emptyVariable)
+        {
+            run.Environment["ENCLAVE_TOKEN"] = string.Empty;
+        }
+        else
+        {
+            run.Environment.Remove("ENCLAVE_TOKEN");
+        }
+
         run.StdinIsTerminal = stdinIsTerminal;
         run.StdinText = StdinToken + "\n";
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var result = await run.RunAsync("login");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain("--token-stdin").And.Contain("ENCLAVE_TOKEN"));
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
-        });
+        CliAssert.Rejected(run, result, "token_missing");
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // Reading a terminal waits for someone to type, and the CLI never waits (proposal "Several IDs"
-    // applies the same rule to "-"). The text on stdin is a valid token, so a CLI that read the
-    // terminal anyway would log in and exit 0.
+    // Reading a terminal waits for someone to type, and login never prompts: --token-stdin with
+    // stdin a terminal exits 2 ("Login, logout and status"). The text on stdin is a valid token, so
+    // a CLI that read the terminal anyway logs in.
     [Test]
     public async Task Login_token_stdin_exits_2_without_reading_stdin_when_stdin_is_a_terminal()
     {
@@ -312,46 +341,58 @@ public class LoginTests
         run.Environment.Remove("ENCLAVE_TOKEN");
         run.StdinIsTerminal = true;
         run.StdinText = StdinToken + "\n";
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var result = await run.RunAsync("login", "--token-stdin");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(result.Stdout, Is.Empty);
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
-        });
+        CliAssert.Rejected(run, result);
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // An empty pipe (an unset variable in `echo "$TOKEN" | enclave-cli login --token-stdin`) gives
-    // no token. Sending "Bearer " would turn a caller's mistake into a 401 and a misleading error.
-    [Test]
-    public async Task Login_token_stdin_exits_2_without_a_request_when_stdin_holds_no_token()
+    // Empty stdin (an unset variable in `echo "$TOKEN" | enclave-cli login --token-stdin`) gives no
+    // token and exits 3 token_missing ("Login, logout and status"); a newline alone is the empty
+    // token with its trailing newline. Sending "Bearer " would turn the caller's mistake into a 401
+    // and a misleading token_invalid.
+    [TestCase("")]
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    public async Task Login_token_stdin_exits_3_with_token_missing_when_stdin_holds_no_token(string stdin)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
-        run.StdinText = "\r\n";
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.StdinText = stdin;
+        run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var result = await run.RunAsync("login", "--token-stdin");
 
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.EqualTo(2), result.ToString());
-            Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("invalid_argument"));
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
-        });
+        CliAssert.Rejected(run, result, "token_missing");
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    private static string? SavedToken(CliRun run) =>
-        run.Files.ReadText(run.CredentialsPath) is { } credentials
-            ? JsonAssert.Property(JsonRead.Parse(credentials), "personalAccessToken").GetString()
-            : null;
+    // login changes only local files, so it does not take --dry-run ("Dry run"), and an option a
+    // command does not take exits 2 ("Details"). The corrected run proves the rejection withheld the
+    // check.
+    [Test]
+    public async Task Login_does_not_take_dry_run()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", json: OneOrg());
+        string[] command = ["login"];
 
-    private static JsonElement ReadJson(CliRun run, string path) =>
-        JsonRead.Parse(run.Files.ReadText(path) ?? throw new AssertionException($"Expected a file at {path}."));
+        CliAssert.Rejected(run, await run.RunAsync([.. command, "--dry-run"]));
+        Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
+
+        await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", command);
+    }
+
+    private static string OneOrg() => ApiJson.Orgs((TestData.OrgId, TestData.OrgName));
+
+    private static string BothOrgs() =>
+        ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName));
+
+    private static JsonElement SavedCredentials(CliRun run) =>
+        JsonRead.Parse(run.Files.ReadText(run.CredentialsPath) ?? throw new AssertionException("login wrote no credentials.json."));
+
+    private static string? SavedToken(CliRun run) =>
+        JsonAssert.Property(SavedCredentials(run), "personalAccessToken").GetString();
 }

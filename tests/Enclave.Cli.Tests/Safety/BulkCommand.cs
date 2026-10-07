@@ -1,30 +1,28 @@
-using System.Globalization;
-using System.Text.Json;
 using Enclave.Cli.Tests.Support;
-using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
+
 /// <summary>
-/// An organisation-scoped command that takes several IDs, and the bulk call it makes.
+/// A command that takes several items: the bulk call it makes and the kind of list it reads after "-".
 /// </summary>
 /// <param name="Name">The command words, such as "system disable".</param>
 /// <param name="Method">The HTTP method of the bulk call.</param>
 /// <param name="PathSuffix">The bulk call's path below /org/{orgId}/.</param>
 /// <param name="BodyField">The request body property holding the IDs.</param>
-/// <param name="ResultField">The response body property holding the count of IDs affected.</param>
-/// <param name="Kind">The kind of ID the command takes.</param>
-/// <param name="NeedsYes">Whether the command is on the proposal's --yes list.</param>
-/// <param name="MalformedId">An ID the command's ID check rejects.</param>
+/// <param name="ResultField">The response body property holding the count of items affected.</param>
+/// <param name="Kind">The list kind the command reads after "-", whose IDs are the command's IDs.</param>
+/// <param name="OtherKind">A list kind the command refuses, whose IDs are also valid IDs for the command.</param>
+/// <param name="MalformedId">An ID the command's ID check refuses.</param>
 public readonly record struct BulkCommand(
     string Name,
     string Method,
     string PathSuffix,
     string BodyField,
     string ResultField,
-    IdKind Kind,
-    bool NeedsYes,
+    string Kind,
+    string OtherKind,
     string MalformedId)
 {
     // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.0.4 (SystemsClient,
@@ -33,26 +31,31 @@ public readonly record struct BulkCommand(
     // delete; its route and fields are the API's (portal EnrolmentKeysController.cs:295,
     // DeleteBulkEnrolmentKeys, BulkKeyActionModel and BulkEnrolmentKeyDeleteResult).
     //
-    // Each malformed ID breaks the format the proposal's "ID checks" table gives for its kind. Some
-    // would rewrite a URL path if they reached one (../), the others are plain format errors.
-    // 99999999999 is outside the range of the integer IDs, whose backing type is int (portal
-    // Enclave.Configuration.Data/Identifiers, IdBackingType.Int).
+    // approve and decline act on systems waiting for approval, so they read the output of
+    // system list --pending and refuse that of system list; the other system verbs take the reverse
+    // (proposed-cli-surface.md "Several IDs"). Every other kind here has IDs the command would also
+    // accept: system IDs share one format, the integer IDs are all integers, and a key ID is a valid
+    // tag name. Only the kind check can then refuse the list.
+    //
+    // Each malformed ID breaks the format the "ID checks" table gives for its kind; some would
+    // rewrite a URL path if they reached one. Integer IDs are 32-bit ("Details"; portal
+    // Enclave.Configuration.Data/Identifiers, IdBackingType.Int), so 99999999999 is refused.
     public static IReadOnlyList<BulkCommand> All { get; } =
     [
-        new("system enable", "PUT", "systems/enable", "systemIds", "systemsUpdated", IdKind.System, false, "ABC-DE"),
-        new("system disable", "PUT", "systems/disable", "systemIds", "systemsUpdated", IdKind.System, false, "ABC/DE"),
-        new("system revoke", "DELETE", "systems", "systemIds", "systemsRevoked", IdKind.System, true, "../systems/ABCDE"),
-        new("pending approve", "PUT", "unapproved-systems/approve", "systemIds", "systemsApproved", IdKind.System, true, "AB CD"),
-        new("pending decline", "DELETE", "unapproved-systems", "systemIds", "systemsDeclined", IdKind.System, true, "../systems/ABCDE"),
-        new("key enable", "PUT", "enrolment-keys/enable", "keyIds", "keysModified", IdKind.Integer, false, "12a"),
-        new("key disable", "PUT", "enrolment-keys/disable", "keyIds", "keysModified", IdKind.Integer, false, "1.5"),
-        new("key delete", "DELETE", "enrolment-keys", "keyIds", "keysDeleted", IdKind.Integer, true, "../12"),
-        new("policy enable", "PUT", "policies/enable", "policyIds", "policiesUpdated", IdKind.Integer, false, "0x1F"),
-        new("policy disable", "PUT", "policies/disable", "policyIds", "policiesUpdated", IdKind.Integer, false, "three"),
-        new("policy delete", "DELETE", "policies", "policyIds", "policiesDeleted", IdKind.Integer, true, "99999999999"),
-        new("tag delete", "DELETE", "tags", "tags", "tagsDeleted", IdKind.Tag, true, "Web"),
-        new("dns record delete", "DELETE", "dns/records", "recordIds", "dnsRecordsDeleted", IdKind.Integer, true, "7/../8"),
-        new("trust delete", "DELETE", "trust-requirements", "requirementIds", "requirementsDeleted", IdKind.Integer, true, "five"),
+        new("system approve", "PUT", "unapproved-systems/approve", "systemIds", "systemsApproved", "pending-system", "system", "AB CD"),
+        new("system decline", "DELETE", "unapproved-systems", "systemIds", "systemsDeclined", "pending-system", "system", "../systems/ABCDE"),
+        new("system enable", "PUT", "systems/enable", "systemIds", "systemsUpdated", "system", "pending-system", "ABC-DE"),
+        new("system disable", "PUT", "systems/disable", "systemIds", "systemsUpdated", "system", "pending-system", "AB/CD"),
+        new("system revoke", "DELETE", "systems", "systemIds", "systemsRevoked", "system", "pending-system", "../systems/ABCDE"),
+        new("key enable", "PUT", "enrolment-keys/enable", "keyIds", "keysModified", "key", "policy", "12a"),
+        new("key disable", "PUT", "enrolment-keys/disable", "keyIds", "keysModified", "key", "policy", "1.5"),
+        new("key delete", "DELETE", "enrolment-keys", "keyIds", "keysDeleted", "key", "policy", "../12"),
+        new("policy enable", "PUT", "policies/enable", "policyIds", "policiesUpdated", "policy", "key", "0x1F"),
+        new("policy disable", "PUT", "policies/disable", "policyIds", "policiesUpdated", "policy", "key", "three"),
+        new("policy delete", "DELETE", "policies", "policyIds", "policiesDeleted", "policy", "key", "99999999999"),
+        new("tag delete", "DELETE", "tags", "tags", "tagsDeleted", "tag", "key", "../systems/ABCDE"),
+        new("dns delete-hostname", "DELETE", "dns/records", "recordIds", "dnsRecordsDeleted", "hostname", "zone", "7/../8"),
+        new("trust delete", "DELETE", "trust-requirements", "requirementIds", "requirementsDeleted", "trust", "policy", "five"),
     ];
 
     /// <summary>
@@ -60,88 +63,69 @@ public readonly record struct BulkCommand(
     /// </summary>
     public string Path => TestData.OrgPath(PathSuffix);
 
-    /// <summary>
-    /// The command line for these IDs, with --yes when the command needs it.
-    /// </summary>
-    public string[] Args(params string[] ids) => NeedsYes ? [.. ArgsWithoutYes(ids), "--yes"] : ArgsWithoutYes(ids);
+    // Systems take IDs as arguments, since they have no names, and tags are given by name only. The
+    // arguments of key, policy, hostname and trust requirement commands are names, so their IDs go
+    // after --id (proposed-cli-surface.md "Shape and naming").
 
     /// <summary>
-    /// The command line for these IDs, without --yes.
+    /// Whether the command takes its IDs as --id a,b,c.
     /// </summary>
-    public string[] ArgsWithoutYes(params string[] ids) => [.. Name.Split(' '), .. ids];
+    public bool TakesIdOption => Kind is "key" or "policy" or "hostname" or "trust";
+
+    private string[] Words => Name.Split(' ');
 
     /// <summary>
-    /// A valid ID of this command's kind; different numbers give different IDs.
+    /// The command line acting on these IDs.
     /// </summary>
-    public string Id(int number) => Kind switch
+    public string[] Args(params string[] ids)
     {
-        IdKind.System => "S" + number.ToString("D4", CultureInfo.InvariantCulture),
-        IdKind.Tag => "tag-" + number.ToString(CultureInfo.InvariantCulture),
-        _ => number.ToString(CultureInfo.InvariantCulture),
-    };
+        ArgumentNullException.ThrowIfNull(ids);
 
-    /// <summary>
-    /// Valid, distinct IDs 1 to <paramref name="count"/> of this command's kind.
-    /// </summary>
-    public string[] Ids(int count) => Enumerable.Range(1, count).Select(Id).ToArray();
-
-    /// <summary>
-    /// The IDs as stdin lines, one per line.
-    /// </summary>
-    public static string Lines(IEnumerable<string> ids) => string.Join("\n", ids) + "\n";
-
-    /// <summary>
-    /// The IDs in a request body, as strings. System IDs and tags are JSON strings; the other IDs
-    /// are typed integer IDs, which Enclave.Sdk.Api.Data 304.48.0 writes as JSON numbers.
-    /// </summary>
-    public string[] BodyIds(JsonElement body)
-    {
-        var field = BodyField;
-        var array = JsonAssert.Property(body, field);
-
-        if (Kind != IdKind.Integer)
+        if (TakesIdOption)
         {
-            return JsonAssert.Strings(array);
+            return [.. Words, "--id", string.Join(",", ids)];
         }
 
-        if (array.ValueKind != JsonValueKind.Array)
-        {
-            throw new AssertionException($"Expected \"{field}\" to be a JSON array of numbers, found {array.ValueKind}: {body}");
-        }
-
-        return array.EnumerateArray()
-            .Select(item => item.ValueKind == JsonValueKind.Number
-                ? item.GetInt64().ToString(CultureInfo.InvariantCulture)
-                : throw new AssertionException($"Expected \"{field}\" to hold JSON numbers, found an item of kind {item.ValueKind}: {body}"))
-            .ToArray();
+        return [.. Words, .. ids];
     }
+
+    /// <summary>
+    /// The command line that reads a list from stdin.
+    /// </summary>
+    public string[] StdinArgs() => [.. Words, "-"];
+
+    /// <summary>
+    /// Valid, distinct IDs of the command's kind.
+    /// </summary>
+    public string[] Ids(int count) => TestData.Ids(Kind, count);
+
+    /// <summary>
+    /// A list of the command's kind holding one item for each ID, as a list command prints it.
+    /// </summary>
+    public string List(params string[] ids) => CliList.WithIds(Kind, ids);
 
     // NUnit names each test case after its arguments' ToString.
     public override string ToString() => Name;
 
     /// <summary>
-    /// Answers the bulk call with a result counting <paramref name="affected"/> IDs.
+    /// Answers successive bulk calls with these counts; the last count answers every call after it.
     /// </summary>
-    internal void StubBulk(CliRun run, int affected) => run.Stub(Method, Path, 200, ApiJson.Bulk(ResultField, affected));
-}
-
-/// <summary>
-/// The kinds of ID a bulk command takes.
-/// </summary>
-public enum IdKind
-{
-    /// <summary>
-    /// A system ID: letters and digits.
-    /// </summary>
-    System,
+    internal void StubBulk(CliRun run, params int[] affected) => run.StubBulk(Method, Path, ResultField, affected);
 
     /// <summary>
-    /// A tag name.
+    /// The bulk calls the fake API received, in order.
     /// </summary>
-    Tag,
+    internal IReadOnlyList<RecordedRequest> BulkCalls(CliRun run) => run.RequestsTo(Method, Path);
 
     /// <summary>
-    /// An integer ID: enrolment key, policy, DNS record or trust requirement.
+    /// The IDs of each bulk call, joined with commas, and the calls joined with "|", in the order
+    /// the fake API received them.
     /// </summary>
-    Integer,
+    internal string IdsSent(CliRun run)
+    {
+        // A lambda in a struct cannot use the struct's own members, so the field is copied first.
+        var field = BodyField;
+
+        return string.Join("|", BulkCalls(run).Select(request => string.Join(",", request.BodyIds(field))));
+    }
 }
