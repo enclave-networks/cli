@@ -56,13 +56,28 @@ internal static partial class PolicyActiveHours
     }
 
     /// <summary>
-    /// Checks an active hours option, exiting 2 when its value is not in the documented form.
+    /// Checks an active hours option, exiting 2 when its value is not in the documented form or
+    /// starts and ends at the same time.
     /// </summary>
     public static void Check(string option, string? text)
     {
-        if (text is not null && Parse(text) is null)
+        if (text is null)
+        {
+            return;
+        }
+
+        if (Parse(text) is not { } hours)
         {
             throw CliErrors.InvalidArgument(option, $"{option} takes days, a start and end time, and an optional IANA time zone: \"mon-fri 08:00-18:00 Europe/London\". Days are mon to sun, a range or a comma list; times are 24-hour HH:MM.");
+        }
+
+        // Hours that start and end at the same time are never active: the agent's check needs a
+        // local time at or after the start and before the end (services
+        // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), and 00:00-00:00 is no
+        // exception.
+        if (hours.StartTime.Equals(hours.EndTime))
+        {
+            throw CliErrors.InvalidArgument(option, $"{option} takes a start and an end that differ; hours that start and end at the same time are never active.");
         }
     }
 

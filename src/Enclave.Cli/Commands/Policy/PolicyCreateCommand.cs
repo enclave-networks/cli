@@ -50,6 +50,18 @@ internal static class PolicyCreateCommand
         verb.Check(context => PolicyAcl.Check(acls.Name, context.Get(acls)));
         verb.Exclusive(trust, trustIds);
 
+        // The API refuses sender tags, receiver tags or trust requirements that hold a value twice
+        // (portal PolicyCreateModelValidator.cs:26,28,39). Trust requirement names match ignoring
+        // case ("Names and IDs"), so two that differ only in case name one requirement. The API
+        // stores a repeated ACL, gateway system or subnet filter, and those are sent as given.
+        verb.Check(context =>
+        {
+            ListValues.CheckNoRepeats(senders.Name, context.Get(senders), StringComparer.Ordinal);
+            ListValues.CheckNoRepeats(receivers.Name, context.Get(receivers), StringComparer.Ordinal);
+            ListValues.CheckNoRepeats(trust.Name, context.Get(trust), StringComparer.OrdinalIgnoreCase);
+            ListValues.CheckNoRepeats(trustIds.Name, context.Get(trustIds));
+        });
+
         // The senders of a gateway policy reach the gateway's routes, and the API rejects receiver
         // tags on an exit gateway policy (portal PolicyCreateModelValidator.cs:61).
         verb.Check(context =>

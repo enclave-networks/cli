@@ -66,6 +66,21 @@ internal static class TrustCreateCommand
             verb.Requires(option, authority);
         }
 
+        // A setting given "" carries no value. The API refuses an empty authority address, client
+        // ID or audience (portal TrustRequirementSettingsUserAuthValidator.cs:47-49) and stores an
+        // empty tenant, since for azure it checks only which keys the configuration holds (same
+        // file, 35-38). Each exits 2, as --set-client-id "" does on trust update.
+        verb.Check(context =>
+        {
+            foreach (var (option, _) in settings)
+            {
+                if (context.Get(option) is { Length: 0 })
+                {
+                    throw CliErrors.InvalidArgument(option.Name, $"{option.Name} takes a value; \"\" sets nothing.");
+                }
+            }
+        });
+
         verb.Check(context =>
         {
             if (context.Get(authority) is not { } name)

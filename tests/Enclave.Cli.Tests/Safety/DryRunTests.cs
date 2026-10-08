@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
@@ -38,7 +37,7 @@ public class DryRunTests
         var urls = command.Paths.Select(path => ExpectedUrl(run, path)).ToArray();
         Assert.Multiple(() =>
         {
-            Assert.That(OrgId(org), Is.EqualTo(TestData.OrgId));
+            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OrgId));
             Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(Text(request, "method"), Is.EqualTo(command.Method));
             Assert.That(Url(request), Is.AnyOf(urls));
@@ -194,9 +193,9 @@ public class DryRunTests
         var (org, request) = ReadDryRunOfOneRequest(result);
         Assert.Multiple(() =>
         {
-            Assert.That(OrgId(org), Is.EqualTo(TestData.OtherOrgId));
+            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
             Assert.That(Text(org, "name"), Is.EqualTo(TestData.OtherOrgName));
-            Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, $"/org/{TestData.OtherOrgId:N}/systems/disable")));
+            Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, TestData.OtherOrgPath("systems/disable"))));
             Assert.That(string.Join(",", run.Calls()), Is.EqualTo("GET /account/orgs"));
         });
     }
@@ -214,9 +213,9 @@ public class DryRunTests
         var (org, request) = ReadDryRunOfOneRequest(result);
         Assert.Multiple(() =>
         {
-            Assert.That(OrgId(org), Is.EqualTo(TestData.OtherOrgId));
+            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
             Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, $"/org/{TestData.OtherOrgId:N}/systems/disable")));
+            Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, TestData.OtherOrgPath("systems/disable"))));
             Assert.That(run.Requests, Is.Empty);
         });
     }
@@ -510,9 +509,6 @@ public class DryRunTests
 
         return (org, requests[0]);
     }
-
-    private static Guid? OrgId(JsonElement org) =>
-        Guid.TryParse(Text(org, "id"), CultureInfo.InvariantCulture, out var id) ? id : null;
 
     // A string property's value, or an empty string when it is missing or null.
     private static string Text(JsonElement obj, string name)

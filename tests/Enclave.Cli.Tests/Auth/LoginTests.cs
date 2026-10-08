@@ -17,6 +17,8 @@ public class LoginTests
 
     private const string OrgLookup = "GET /account/orgs";
 
+    private const char ByteOrderMark = (char)0xFEFF;
+
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
     // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.1.0), which the
@@ -24,7 +26,7 @@ public class LoginTests
     // login keeps when it is there and never adds.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
 
-    private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
+    private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
     // Example 1 reads the token from a file, which ends in a newline, and a Windows pipe ends it
     // with \r\n. login reads the token without the trailing newline, so neither the Authorization
@@ -35,6 +37,32 @@ public class LoginTests
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
         run.StdinText = StdinToken + "\r\n";
+        run.Stub("GET", "/account/orgs", json: OneOrg());
+
+        var request = await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "login", "--token-stdin");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.Authorization, Is.EqualTo($"Bearer {StdinToken}"));
+            Assert.That(SavedToken(run), Is.EqualTo(StdinToken));
+        });
+    }
+
+    // A text file saved with a UTF-8 byte order mark starts with the bytes EF BB BF; Windows
+    // PowerShell 5.1 writes one with Out-File -Encoding utf8 (Microsoft Learn,
+    // about_Character_Encoding, PowerShell 5.1). A reader that decodes UTF-8 without looking for the
+    // mark passes it on as the character U+FEFF ahead of the token: Console.In does so for
+    // redirected stdin on Linux and macOS, where it reads with Console.InputEncoding, which has no
+    // preamble, and detectEncodingFromByteOrderMarks: false (dotnet/runtime release/10.0,
+    // src/libraries/System.Console/src/System/ConsolePal.Unix.cs, GetOrCreateReader and
+    // GetConsoleEncoding). StdinText is stdin as the CLI's reader gives it, so the test gives that
+    // character. The mark is no part of the token: login checks and saves the token without it.
+    [Test]
+    public async Task Login_token_stdin_checks_and_saves_the_token_without_the_byte_order_mark_before_it()
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.StdinText = ByteOrderMark + StdinToken + "\n";
         run.Stub("GET", "/account/orgs", json: OneOrg());
 
         var request = await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "login", "--token-stdin");

@@ -24,10 +24,10 @@ public class OrgContextTests
 
     private static readonly string OrgSystems = TestData.OrgPath("systems");
 
+    private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
+
     // The same path form as TestData.OrgPath: Enclave.Sdk.Api writes the organisation ID as 32 hex
     // digits (OrganisationGuid.ToString, Enclave.Sdk.Api.Data 304.48.0).
-    private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
-
     private static readonly string ThirdOrgSystems = $"/org/{ThirdOrgId:N}/systems";
 
     // Precedence is --org or --org-id, then ENCLAVE_ORG or ENCLAVE_ORG_ID, then the default org use
@@ -135,6 +135,30 @@ public class OrgContextTests
 
         CliAssert.Succeeded(result);
         Assert.That(run.Calls(), Is.EqualTo(expected));
+    }
+
+    // org use saves { "org": { "id", "name" } } and partner use { "partner": { "id" } } ("Login,
+    // logout and status"). A saved default in another shape names no organisation or partner, and
+    // a command that read past it would act somewhere the caller did not choose, so it exits 2
+    // before any call and names the file to fix. ENCLAVE_ORG_ID is unset so the file is read, and
+    // the token sees one organisation, so a CLI that skipped the default would use it and succeed.
+    [TestCase("org", """{ "org": "3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17" }""")]
+    [TestCase("org", """{ "org": [] }""")]
+    [TestCase("partner", """{ "partner": "9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48" }""")]
+    [TestCase("partner", """{ "partner": 12 }""")]
+    public async Task A_saved_default_that_is_not_an_object_exits_2_naming_cli_json(string noun, string settings)
+    {
+        using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
+        run.Stub("GET", TestData.PartnerPath("customers"), json: ApiJson.Page());
+        run.Files.WriteText(run.CliConfigPath, settings, privateToUser: false);
+
+        var result = await run.RunAsync(noun == "org" ? ["system", "list"] : ["partner", "customer", "list"]);
+
+        CliAssert.Rejected(run, result);
+        Assert.That(result.Error.GetProperty("detail").GetString(), Does.Contain(run.CliConfigPath));
     }
 
     // An organisation name given with an organisation ID contradict each other and exit 2

@@ -128,10 +128,13 @@ internal static class OrgCommand
         {
             var org = await context.GetOrganisationAsync();
 
-            await org.Client.InviteUserAsync(context.Get(email)!);
+            // The API answers an invite with the invite's model (portal
+            // OrganisationController.CreateInvite), which InviteUserAsync returns (Enclave.Sdk.Api
+            // 1.2.0). It holds the address the invite was first sent to, which can differ in case
+            // from the one given, so the output shows the invite as the API holds it.
+            var invite = await org.Client.InviteUserAsync(context.Get(email)!);
 
-            // The API answers an invite with no body, which prints {} ("Several IDs").
-            await context.Output.WriteNoBodyAsync(context.CancellationToken);
+            await context.Output.WriteAsync(invite, context.CancellationToken);
         });
 
         return verb;
@@ -150,9 +153,13 @@ internal static class OrgCommand
             // to look up ("Partner API"). It answers 404 for an address with no pending invite (portal
             // OrganisationController.DeleteInvite), which a single-ID command reports as exit 5
             // ("Several IDs").
-            await SingleItem.CallAsync(() => org.Client.CancelInviteAync(context.Get(email)!));
+            //
+            // The API answers a cancelled invite with the invite's model (portal
+            // OrganisationController.DeleteInvite), which CancelInviteAync returns (Enclave.Sdk.Api
+            // 1.2.0), and a single-ID command prints the model ("Several IDs").
+            var cancelled = await SingleItem.CallAsync(() => org.Client.CancelInviteAync(context.Get(email)!));
 
-            await context.Output.WriteNoBodyAsync(context.CancellationToken);
+            await context.Output.WriteAsync(cancelled, context.CancellationToken);
         });
 
         return verb;

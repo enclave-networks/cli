@@ -3,6 +3,7 @@ using Enclave.Api.Modules.SystemManagement.Dns.Models;
 using Enclave.Cli.Context;
 using Enclave.Cli.Core;
 using Enclave.Configuration.Data.Identifiers;
+using Enclave.Sdk.Api.Exceptions;
 
 namespace Enclave.Cli.Commands.Dns;
 
@@ -69,6 +70,10 @@ internal static class DnsHostnameCommands
         var systems = verb.Add(CliOptions.IdList("--systems", "The hostname answers with these systems.", IdFormats.System, "id,id"));
         var notes = verb.Add(CliOptions.Text("--notes", "The hostname's notes."));
 
+        // The API refuses tags that hold a tag twice (portal DnsRecordCreateValidator.cs:32).
+        verb.Check(context => ListValues.CheckNoRepeats(tags.Name, context.Get(tags), StringComparer.Ordinal));
+        verb.Check(context => CheckSystems(systems.Name, context.Get(systems)));
+
         verb.SetHandler(async context =>
         {
             var org = await context.GetOrganisationAsync();
@@ -77,7 +82,9 @@ internal static class DnsHostnameCommands
 
             // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter.cs:12),
             // and a create sends an empty list for a list flag left out (proposed-cli-surface.md
-            // "Details").
+            // "Details"). The hostname does not exist yet, so a 404 here is about another item, a
+            // zone or a system (portal DnsRecordCreateHandler.cs:65-68, DnsRecordHandlerBase.cs:117-123),
+            // and exits 1 as any API error does ("Errors and exit codes").
             var record = await org.Client.Dns.CreateRecordAsync(new DnsRecordCreateModel
             {
                 Name = recordName,
@@ -105,6 +112,7 @@ internal static class DnsHostnameCommands
         var notes = verb.Add(CliOptions.Text("--notes", "The hostname's notes."));
 
         verb.AtLeastOne(name, setTags, addTags, removeTags, setSystems, notes);
+        verb.Check(context => CheckSystems(setSystems.Name, context.Get(setSystems)));
 
         verb.SetHandler(async context =>
         {
@@ -148,7 +156,7 @@ internal static class DnsHostnameCommands
                 patch.Set(model => model.Notes, text);
             }
 
-            var updated = await SingleItem.CallAsync(() => patch.ApplyAsync());
+            var updated = await PatchAsync(() => patch.ApplyAsync());
 
             await context.Output.WriteAsync(updated, context.CancellationToken);
         });
@@ -214,6 +222,36 @@ internal static class DnsHostnameCommands
         var record = await SingleItem.CallAsync(() => org.Client.Dns.GetRecordAsync(recordId));
         return new CurrentHostname(record.Id, record.ZoneId, record.Tags.Select(tag => tag.Tag));
     }
+
+    // The API upper-cases system IDs and answers 404 no-such-system when it finds fewer systems than
+    // it was given (portal DnsRecordCreateHandler.cs:104, DnsRecordPatchHandler.cs:128,
+    // DnsRecordHandlerBase.cs:93-124), so it refuses a system given twice, in either case.
+    private static void CheckSystems(string option, IReadOnlyList<string>? systems) =>
+        ListValues.CheckNoRepeats(option, systems, StringComparer.OrdinalIgnoreCase);
+
+    // The API answers update-hostname's patch 404 for the hostname itself (dns-record-not-found,
+    // portal DnsController.cs:361-368) and for a --set-systems system that is not an approved system
+    // of the organisation (no-such-system, portal
+    // DnsRecordHandlerBase.cs:117-123), whose detail names the system. Only the first means the
+    // hostname the command names was not found, exit 5 ("Errors and exit codes"); any other 404,
+    // one without that problem type included, exits 1 and carries the API's detail.
+    private static async Task<T> PatchAsync<T>(Func<Task<T>> patch)
+    {
+        try
+        {
+            return await patch();
+        }
+        catch (Exception exception) when (exception is not CliException)
+        {
+            throw ApiErrors.ToCliException(exception, notFoundIsUnknownItem: IsHostnameNotFound(exception));
+        }
+    }
+
+    // The API writes a problem type as a URL that ends in the type's name (portal
+    // Enclave.Api.Scaffolding/ProblemResponseFactory.cs:41-51, Enclave.Api/WebStartup.cs:166).
+    private static bool IsHostnameNotFound(Exception exception) =>
+        exception is EnclaveApiException { ProblemDetails.Type: { } type }
+        && string.Equals(type[(type.LastIndexOf('/') + 1)..], "dns-record-not-found", StringComparison.Ordinal);
 
     private static (CliVerb Verb, Argument<string?> Hostname, Option<int?> Id) ForHostname(string name, string description, bool changes)
     {

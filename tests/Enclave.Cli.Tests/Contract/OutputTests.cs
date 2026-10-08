@@ -101,6 +101,29 @@ public class OutputTests
         });
     }
 
+    // Output times are UTC (AGENTS.md "CLI contract"; proposed-cli-surface.md "Command options").
+    // System.Text.Json reads a DateTime written with an offset other than Z as local time in the
+    // machine's zone, and one written without a zone as of no kind (dotnet/runtime release/10.0,
+    // src/libraries/System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and
+    // writes each as it holds it: the first with the machine's offset, +00:00 on a machine at UTC,
+    // and the second with no zone. The API's times are UTC, so a time without a zone is UTC too, as
+    // log reads it. EnrolmentKeyModel.Created is a DateTime (Enclave.Sdk.Api.Data 304.48.0). The
+    // expected text is exact, so it differs from what the machine's offset gives on every machine.
+    [TestCase("2026-10-08T12:00:00+05:30", "2026-10-08T06:30:00Z")]
+    [TestCase("2026-10-08T12:00:00", "2026-10-08T12:00:00Z")]
+    public async Task A_time_the_api_writes_prints_as_the_utc_instant_with_z(string written, string printed)
+    {
+        using var run = CliRun.Start();
+        var key = JsonNode.Parse(ApiJson.Key(12, "build agents"))!;
+        key["created"] = written;
+        run.Stub("GET", TestData.OrgPath("enrolment-keys/12"), json: key.ToJsonString());
+
+        var result = await run.RunAsync("key", "show", "--id", "12");
+
+        CliAssert.Succeeded(result);
+        Assert.That(JsonAssert.Property(result.StdoutJson, "created").GetString(), Is.EqualTo(printed), result.ToString());
+    }
+
     // --verbose adds diagnostics on stderr only, so a caller can turn it on without changing what it
     // parses from stdout ("Options on every command"). The diagnostics never include the token
     // ("Login, logout and status").

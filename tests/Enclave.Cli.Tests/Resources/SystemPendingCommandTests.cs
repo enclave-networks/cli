@@ -198,6 +198,24 @@ public class SystemPendingCommandTests
         });
     }
 
+    // A duration that reaches back before year 1 names no time the CLI can compare enrolledAt with
+    // (DateTimeOffset.MinValue), so it is an argument error that names its option, and exits 2
+    // before any call. 1000000d, about 2,700 years, reaches back before year 1 from the fixed clock
+    // in 2030, in the test's own zone, TestData.LocalZone, as in Contract/TimeInputTests.cs.
+    [Test]
+    public async Task System_list_pending_waiting_for_a_duration_reaching_before_year_1_exits_2_without_a_request()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(new DateTimeOffset(2030, 3, 14, 20, 0, 0, TimeSpan.Zero), TestData.LocalZone);
+        run.Stub("GET", PendingPath, json: ApiJson.Page());
+
+        var rejected = await run.RunAsync("system", "list", "--pending", "--waiting-for", "1000000d");
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--waiting-for"));
+        await CliAssert.AcceptedAsync(run, "GET", PendingPath, "system", "list", "--pending", "--waiting-for", "7d");
+    }
+
     // Example 3: the list system list --pending prints is the input of system approve, which
     // approves the listed systems. Both commands run in one sandbox, as a shell pipeline runs them.
     [Test]

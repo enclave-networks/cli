@@ -342,8 +342,10 @@ internal static class CliOptions
             },
         };
 
-    // Each occurrence's value split at commas, with spaces around a piece removed and empty pieces
-    // dropped, so "" is an empty list.
+    // Spaces around a piece are dropped so "web, db" reads as two values, and empty pieces are
+    // dropped so --set-tags "" gives the empty list that clears a list (proposed-cli-surface.md
+    // "Details"). An option that needs at least one value checks for the empty list where it is
+    // read, as Items.ReadAsync does for --id.
     private static IEnumerable<string> Pieces(ArgumentResult result) =>
         result.Tokens.SelectMany(token => token.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
 }

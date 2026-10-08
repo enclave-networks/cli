@@ -24,7 +24,7 @@ internal static class Suggestions
         var limit = Math.Clamp(typed.Length / 3, 1, MaxDistance);
 
         return candidates
-            .Select(candidate => (Candidate: candidate, Distance: Distance(typed, candidate)))
+            .Select(candidate => (Candidate: candidate, Distance: LevenshteinDistance(typed, candidate)))
             .Where(match => match.Distance <= limit)
             .OrderBy(match => match.Distance)
             .ThenByDescending(match => CommonPrefix(typed, match.Candidate))
@@ -44,8 +44,7 @@ internal static class Suggestions
         return length;
     }
 
-    // Levenshtein distance, keeping two rows of the matrix.
-    private static int Distance(string first, string second)
+    private static int LevenshteinDistance(string first, string second)
     {
         var previous = new int[second.Length + 1];
         var current = new int[second.Length + 1];

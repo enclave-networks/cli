@@ -92,7 +92,7 @@ public class OptionDecidesParsingTests
     public async Task Org_id_option_refuses_a_name_and_never_looks_it_up()
     {
         using var run = CliRun.Start();
-        var otherOrgDisable = $"/org/{TestData.OtherOrgId:N}/systems/disable";
+        var otherOrgDisable = TestData.OtherOrgPath("systems/disable");
         run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
         run.StubBulk("PUT", otherOrgDisable, "systemsUpdated", 1);
 
@@ -115,7 +115,7 @@ public class OptionDecidesParsingTests
         using var run = CliRun.Start();
         run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
         run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
-        run.StubBulk("PUT", $"/org/{TestData.OtherOrgId:N}/systems/disable", "systemsUpdated", 1);
+        run.StubBulk("PUT", TestData.OtherOrgPath("systems/disable"), "systemsUpdated", 1);
 
         var result = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OtherOrgId.ToString());
 
@@ -136,8 +136,8 @@ public class OptionDecidesParsingTests
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), 200, ApiJson.Users((AccountId, "sam@example.com")));
-        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:N}"));
-        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:D}"));
+        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:N}"), json: ApiJson.User(AccountId, "sam@example.com"));
+        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:D}"), json: ApiJson.User(AccountId, "sam@example.com"));
 
         var rejected = await run.RunAsync("org", "remove-user", AccountId.ToString());
 
@@ -197,7 +197,7 @@ public class OptionDecidesParsingTests
 
         yield return NameWithId("policy delete <name> --id", ["policy", "delete", "old vpn", "--id", "17"], ["policy", "delete", "--id", "17"], "DELETE", TestData.OrgPath("policies"), ApiJson.Bulk("policiesDeleted", 1));
         yield return NameWithId("key disable <name> --id", ["key", "disable", "build agents", "--id", "12"], ["key", "disable", "--id", "12"], "PUT", TestData.OrgPath("enrolment-keys/disable"), ApiJson.Bulk("keysModified", 1));
-        yield return NameWithId("--org with --org-id", ["system", "disable", "ABCDE", "--org", TestData.OtherOrgName, "--org-id", otherOrg], ["system", "disable", "ABCDE", "--org-id", otherOrg], "PUT", $"/org/{TestData.OtherOrgId:N}/systems/disable", ApiJson.Bulk("systemsUpdated", 1));
+        yield return NameWithId("--org with --org-id", ["system", "disable", "ABCDE", "--org", TestData.OtherOrgName, "--org-id", otherOrg], ["system", "disable", "ABCDE", "--org-id", otherOrg], "PUT", TestData.OtherOrgPath("systems/disable"), ApiJson.Bulk("systemsUpdated", 1));
     }
 
     private static TestCaseData NameWithId(string name, string[] rejectedArgs, string[] acceptedArgs, string method, string path, string response) =>

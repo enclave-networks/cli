@@ -69,6 +69,25 @@ public class DiskFileStoreTests
         });
     }
 
+    // ~/.enclave holds credentials.json, so the directory is readable by the user only, 0700 on Linux
+    // and macOS (proposed-cli-surface.md "Login, logout and status"), whichever file's write creates
+    // it: `org use` before `login` writes cli.json, which holds no secret and is written with
+    // privateToUser false, and a later login writes the token into the same directory. Windows has
+    // no mode bits; a directory under the user profile inherits the profile's access list.
+    [Test]
+    public void WriteText_creates_a_missing_directory_readable_by_the_user_only([Values] bool privateToUser)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Windows has no Unix file modes.");
+            return;
+        }
+
+        _store.WriteText(Path.Combine(EnclaveDirectory, "cli.json"), "{}", privateToUser);
+
+        Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
+    }
+
     // logout deletes credentials.json and reports in its "deleted" field whether there was a file to
     // delete, so Delete reports that too. Afterwards the token is gone from the disk.
     [Test]

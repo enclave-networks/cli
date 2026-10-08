@@ -297,6 +297,27 @@ public class TagCommandTests
         });
     }
 
+    // The API refuses a tag's trust requirements with one twice (portal
+    // Enclave.Api/Modules/SystemManagement/Tags/Validators/TagCreateModelValidator.cs:18,
+    // TagPatchModelValidator.cs:20), so a repeat exits 2 before any call, the lookup included
+    // ("Command options"). Trust requirement names match ignoring case ("Names and IDs"), so
+    // "UK Only" names the requirement "uk only" names. The list with each value once, run next,
+    // shows the rejection comes from the repeat.
+    [TestCase("--trust-id", "5,9,5", "5,9", "5,9")]
+    [TestCase("--trust", "uk only,UK Only", "uk only", "5")]
+    public async Task Tag_set_with_a_trust_requirement_given_twice_exits_2_without_a_request(string option, string repeated, string once, string ids)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(5, "uk only")));
+        StubExistingTag(run, "prod");
+
+        CliAssert.Rejected(run, await run.RunAsync("tag", "set", "prod", option, repeated));
+
+        CliAssert.Succeeded(await run.RunAsync("tag", "set", "prod", option, once));
+        var patch = SingleChange(run, "PATCH", TagPath("prod"));
+        Assert.That(string.Join(",", patch.BodyIds("TrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo(ids));
+    }
+
     // Trust requirement IDs are 32-bit integers, and every ID is checked before any call ("ID
     // checks", "Details").
     [TestCase("5,five")]

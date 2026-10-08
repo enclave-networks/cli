@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
@@ -77,9 +76,9 @@ public class PartnerContextTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNameList(printed), Is.EqualTo("id"), use.ToString());
-            Assert.That(IdOf(printed), Is.EqualTo(TestData.PartnerId), use.ToString());
+            Assert.That(JsonRead.IdOf(printed), Is.EqualTo(TestData.PartnerId), use.ToString());
             Assert.That(JsonRead.PropertyNameList(saved), Is.EqualTo("id"), saved.ToString());
-            Assert.That(IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
+            Assert.That(JsonRead.IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
             Assert.That(use.Stderr, Is.Empty);
             Assert.That(run.Requests, Is.Empty);
         });
@@ -97,7 +96,7 @@ public class PartnerContextTests
         CliAssert.Succeeded(await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString()));
 
         var saved = Saved(run, "partner");
-        Assert.That(IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
+        Assert.That(JsonRead.IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
     }
 
     // A partner is given by its ID, a GUID ("Context", "ID checks"): looking partners up needs the
@@ -156,7 +155,7 @@ public class PartnerContextTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
+            Assert.That(JsonRead.IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
         });
     }
 
@@ -387,7 +386,7 @@ public class PartnerContextTests
         Assert.Multiple(() =>
         {
             Assert.That(Compact(org), Is.EqualTo(orgBefore));
-            Assert.That(IdOf(partner), Is.EqualTo(TestData.PartnerId), partner.ToString());
+            Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId), partner.ToString());
             Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {TestData.OrgPath("systems")}" }));
         });
     }
@@ -498,15 +497,6 @@ public class PartnerContextTests
 
         return settings.GetProperty(name);
     }
-
-    // The ID is compared as a GUID, so the check holds whichever GUID form the CLI writes.
-    private static Guid? IdOf(JsonElement element) =>
-        element.ValueKind == JsonValueKind.Object
-        && element.TryGetProperty("id", out var id)
-        && id.ValueKind == JsonValueKind.String
-        && Guid.TryParse(id.GetString(), CultureInfo.InvariantCulture, out var guid)
-            ? guid
-            : null;
 
     // Whitespace is not part of a saved default, so a default rewritten with other formatting
     // compares equal.

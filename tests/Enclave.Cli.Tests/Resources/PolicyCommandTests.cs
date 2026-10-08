@@ -20,13 +20,18 @@ public partial class PolicyCommandTests
 
     private const string Empty = "(empty)";
 
+    // An --until that has passed exits 2 ("Details"), so a test that gives a fixed --until time runs
+    // on a clock fixed before it, in TestData.LocalZone, which keeps its answer the same whatever the
+    // date. The clock reads 20:00 UTC on 14 January 2030, the day before those --until times.
+    private static readonly DateTimeOffset Now = new(2030, 1, 14, 20, 0, 0, TimeSpan.Zero);
+
     private static readonly string PoliciesPath = TestData.OrgPath("policies");
 
     private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");
 
-    // The same path form as TestData.OrgPath: Enclave.Sdk.Api writes the organisation ID as 32 hex
-    // digits (OrganisationGuid.ToString, Enclave.Sdk.Api.Data 304.48.0).
-    private static readonly string OtherOrgPoliciesPath = $"/org/{TestData.OtherOrgId:N}/policies";
+    // TestData.OtherOrgPath writes the organisation ID as Enclave.Sdk.Api does, 32 hex digits
+    // (OrganisationGuid.ToString, Enclave.Sdk.Api.Data 304.48.0).
+    private static readonly string OtherOrgPoliciesPath = TestData.OtherOrgPath("policies");
 
     private static readonly string[] TagsWebAndDb = ["tags:web,db"];
 
@@ -493,6 +498,7 @@ public partial class PolicyCommandTests
     public async Task Policy_enable_until_a_time_with_a_zone_and_then_delete_schedules_a_delete_at_that_instant_in_utc()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("PUT", EnableUntilPath(23), json: ApiJson.Policy(23, "contractors"));
 
         var request = await CliAssert.AcceptedAsync(
@@ -539,6 +545,7 @@ public partial class PolicyCommandTests
     public async Task Policy_enable_rejects_contradicting_or_past_expiry_options(string option, string value, string? otherOption, string? otherValue)
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("PUT", EnableUntilPath(23), json: ApiJson.Policy(23));
         string[] rejected = otherOption is null ? ["policy", "enable", "--id", "23", option, value] : ["policy", "enable", "--id", "23", option, value, otherOption, otherValue!];
 

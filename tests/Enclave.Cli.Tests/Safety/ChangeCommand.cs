@@ -41,9 +41,9 @@ public readonly record struct ChangeCommand(
     public static IReadOnlyList<ChangeCommand> All { get; } =
     [
         new("org update", ["org", "update", "--name", "Acme Ltd"], "PATCH", string.Empty, ApiJson.OrgProperties("Acme Ltd")),
-        new("org remove-user", ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, OtherPathSuffix: $"users/{AccountId:D}"),
-        new("org invite", ["org", "invite", "alex@example.com"], "POST", "invites", null),
-        new("org cancel-invite", ["org", "cancel-invite", "sam@example.com"], "DELETE", "invites", null),
+        new("org remove-user", ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), OtherPathSuffix: $"users/{AccountId:D}"),
+        new("org invite", ["org", "invite", "alex@example.com"], "POST", "invites", ApiJson.Invite("alex@example.com")),
+        new("org cancel-invite", ["org", "cancel-invite", "sam@example.com"], "DELETE", "invites", ApiJson.Invite("sam@example.com")),
         new("system update", ["system", "update", "ABCDE", "--description", "web server"], "PATCH", "systems/ABCDE", ApiJson.System("ABCDE", "web server")),
         new("system update --pending", ["system", "update", "XYZ12", "--pending", "--set-tags", "kiosk,lobby"], "PATCH", "unapproved-systems/XYZ12", ApiJson.PendingSystem("XYZ12")),
         new("system approve", ["system", "approve", "XYZ12"], "PUT", "unapproved-systems/approve", ApiJson.Bulk("systemsApproved", 1)),

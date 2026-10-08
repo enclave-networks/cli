@@ -2,34 +2,44 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Web;
 using NUnit.Framework;
-using WireMock;
 using WireMock.Matchers;
 using WireMock.Server;
 
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// One test's sandbox for running the CLI in-process: a fake Enclave API on loopback, which also
-/// serves the partner API, files held in memory under a user profile path and a working directory
-/// path, and the only environment variables, stdin and API URLs the CLI sees.
+/// One test's sandbox for running the CLI in-process: a fake Enclave API and a fake partner API,
+/// each on its own loopback address, files held in memory under a user profile path and a working
+/// directory path, and the only environment variables, stdin and API URLs the CLI sees.
 /// </summary>
+// The partner API is a separate service on its own host, with every route under
+// /partner/{partnerId}/, and the main API has no route there (proposed-cli-surface.md "Partner
+// API"). Each stub goes to the fake that serves its path, and each fake answers the other API's
+// routes with 421 Misdirected Request, which the CLI reports as api_error, so a call sent to the
+// wrong address fails the command whatever answer a test expects.
 internal sealed class CliRun : IDisposable
 {
+    private const string PartnerRoutes = "/partner/";
+
     private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
 
     private readonly string _root;
 
-    private CliRun(WireMockServer api, string apiUrl, string root)
+    private CliRun(WireMockServer api, string apiUrl, WireMockServer partnerApi, string partnerApiUrl, string root)
     {
         Api = api;
         ApiBaseUrl = apiUrl;
+        PartnerApi = partnerApi;
+        PartnerApiBaseUrl = partnerApiUrl;
         _root = root;
         Home = Path.Combine(root, "home");
         WorkDirectory = Path.Combine(root, "work");
     }
 
+    /// <summary>
+    /// The fake main API.
+    /// </summary>
     public WireMockServer Api { get; }
 
     /// <summary>
@@ -43,13 +53,21 @@ internal sealed class CliRun : IDisposable
     public Uri ApiUrl => new(ApiBaseUrl);
 
     /// <summary>
-    /// The URL the CLI receives as its default partner API URL: the same fake API as
-    /// <see cref="ApiUrl"/>. Stub partner routes with <see cref="Stub"/> and TestData.PartnerPath.
+    /// The fake partner API. <see cref="Stub"/> and the other Stub methods put a stub for a path
+    /// under /partner/ here, such as TestData.PartnerPath gives.
     /// </summary>
-    // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). Every partner
-    // route is under /partner/{partnerId}/ and no main API route is, so one fake serves both, and
-    // Requests holds a run's partner calls beside its main API calls, in the order they were sent.
-    public Uri PartnerApiUrl => ApiUrl;
+    public WireMockServer PartnerApi { get; }
+
+    /// <summary>
+    /// The URL of the fake partner API, http://127.0.0.1:{port} without a trailing slash, another
+    /// port from <see cref="ApiBaseUrl"/>.
+    /// </summary>
+    public string PartnerApiBaseUrl { get; }
+
+    /// <summary>
+    /// The URL of the fake partner API, which the CLI receives as its default partner API URL.
+    /// </summary>
+    public Uri PartnerApiUrl => new(PartnerApiBaseUrl);
 
     /// <summary>
     /// The user profile path the CLI receives; ~/.enclave lives here. Nothing exists at it on disk:
@@ -103,23 +121,46 @@ internal sealed class CliRun : IDisposable
     public TimeProvider Time { get; set; } = TimeProvider.System;
 
     /// <summary>
-    /// Every request the fake API received, in the order it received them.
+    /// Every request the two fake APIs received, main and partner, in the order they received them.
     /// </summary>
+    // The CLI sends one request at a time and waits for its answer, so each request reaches a fake
+    // after the one before it was answered, and ordering by the time each fake received a request
+    // (RequestMessage.DateTime, from DateTime.UtcNow, WireMock.Net 2.18.0) gives the order sent. A
+    // clock step backwards between two requests to different fakes would swap them; the order
+    // between the two APIs matters only across commands, since one command calls one API, so that
+    // is accepted.
     public IReadOnlyList<RecordedRequest> Requests =>
-        Api.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().Select(Record).ToArray();
+        LoopbackApi.Log(Api).Concat(LoopbackApi.Log(PartnerApi))
+            .OrderBy(request => request.DateTime)
+            .Select(LoopbackApi.Record)
+            .ToArray();
+
+    /// <summary>
+    /// The requests the fake main API received, in the order it received them.
+    /// </summary>
+    public IReadOnlyList<RecordedRequest> ApiRequests => LoopbackApi.Received(Api);
+
+    /// <summary>
+    /// The requests the fake partner API received, in the order it received them.
+    /// </summary>
+    public IReadOnlyList<RecordedRequest> PartnerApiRequests => LoopbackApi.Received(PartnerApi);
 
     public static CliRun Start()
     {
         var (api, apiUrl) = LoopbackApi.Start();
+        var (partnerApi, partnerApiUrl) = LoopbackApi.Start();
+
+        LoopbackApi.Misdirect(api, new RegexMatcher("^" + PartnerRoutes), "This is the main API's address; partner API routes are served at the partner API's address.");
+        LoopbackApi.Misdirect(partnerApi, new RegexMatcher(MatchBehaviour.RejectOnMatch, "^" + PartnerRoutes), "This is the partner API's address; it serves only routes under /partner/.");
 
         var root = Path.Combine(Path.GetTempPath(), "enclave-cli-tests", Guid.NewGuid().ToString("N"));
 
-        return new CliRun(api, apiUrl, root);
+        return new CliRun(api, apiUrl, partnerApi, partnerApiUrl, root);
     }
 
     /// <summary>
     /// The host RunAsync gives the CLI: this run's environment, home directory, stdin, in-memory
-    /// files, clock, and the fake API's URL as the default API URL and the default partner API URL,
+    /// files, clock, and the fake APIs' URLs as the default API URL and the default partner API URL,
     /// so a run can never reach the live API or the live partner API.
     /// </summary>
     public CliHost CreateHost() => new()
@@ -143,6 +184,28 @@ internal sealed class CliRun : IDisposable
             .Parse(args)
             .InvokeAsync(new InvocationConfiguration { Output = stdout, Error = stderr });
 
+        // The test's code after RunAsync must not run inside the CLI's catch blocks, where .NET
+        // 10.0.0 and 10.0.1 lose the failures it throws.
+        //
+        // When an API call fails, the CLI's task completes on the thread that received the answer,
+        // and each awaiting async method resumes there inline, from inside the catch block of the
+        // method it awaited (the compiler-generated MoveNext calls SetException in its catch), so
+        // the test would resume inside those catch blocks. In .NET 10.0.0 and 10.0.1, an exception
+        // thrown there from a finally block that was entered without an exception is taken for a
+        // collided unwind, and the catch blocks of the methods that called it are skipped, the
+        // test's own among them (https://github.com/dotnet/runtime/issues/121578, fixed in 10.0.2
+        // by https://github.com/dotnet/runtime/pull/121626). Assert.Multiple and EnterMultipleScope
+        // throw their failures from Dispose in such a finally block, so the failure escapes the test
+        // and ends the test host. DOTNET_TieredCompilation=0 hides this only for a finally block the
+        // JIT copies onto the normal exit path, which it does only when optimizing and never for a
+        // finally block that cannot exit normally (dotnet/runtime
+        // docs/design/coreclr/jit/finally-optimizations.md), so it does not avoid the defect.
+        //
+        // Task.Yield queues the rest of this method, and the test with it, as a new work item
+        // (https://learn.microsoft.com/dotnet/api/system.threading.tasks.task.yield), which starts
+        // with no exception being caught. The cost is one thread pool hop per run.
+        await Task.Yield();
+
         // Home and WorkDirectory exist only in memory, so anything on disk under this run's root
         // came from the CLI going around CliHost.Files.
         if (Directory.Exists(_root))
@@ -158,7 +221,7 @@ internal sealed class CliRun : IDisposable
     /// and JSON body.
     /// </summary>
     public void Stub(string method, string path, int status = 200, string? json = null) =>
-        LoopbackApi.Stub(Api, method, path, status, json);
+        LoopbackApi.Stub(FakeFor(path), method, path, status, json);
 
     /// <summary>
     /// Answers requests with this method, URL path and query parameter value. These stubs take
@@ -166,7 +229,7 @@ internal sealed class CliRun : IDisposable
     /// list separately.
     /// </summary>
     public void StubWithQuery(string method, string path, string parameter, string value, int status = 200, string? json = null) =>
-        Api.Given(LoopbackApi.Matching(method, path).WithParam(parameter, new ExactMatcher(value))).AtPriority(LoopbackApi.SpecificPriority)
+        FakeFor(path).Given(LoopbackApi.Matching(method, path).WithParam(parameter, new ExactMatcher(value))).AtPriority(LoopbackApi.SpecificPriority)
             .RespondWith(LoopbackApi.Respond(status, json, LoopbackApi.JsonContentType));
 
     /// <summary>
@@ -174,7 +237,7 @@ internal sealed class CliRun : IDisposable
     /// form the Enclave API reports errors in.
     /// </summary>
     public void StubProblem(string method, string path, int status, string title, string? detail = null) =>
-        Api.Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
+        FakeFor(path).Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
             .RespondWith(LoopbackApi.Respond(status, ApiJson.Problem(status, title, detail), LoopbackApi.ProblemContentType));
 
     /// <summary>
@@ -182,7 +245,7 @@ internal sealed class CliRun : IDisposable
     /// HTML error page a proxy in front of the API sends.
     /// </summary>
     public void StubRaw(string method, string path, int status, string contentType, string body) =>
-        Api.Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
+        FakeFor(path).Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
             .RespondWith(LoopbackApi.Respond(status, body, contentType));
 
     /// <summary>
@@ -204,7 +267,7 @@ internal sealed class CliRun : IDisposable
         {
             var pageItems = items.Skip(page * pageSize).Take(pageSize).ToArray();
 
-            Api.Given(LoopbackApi.MatchingPage(path, page)).AtPriority(LoopbackApi.GeneralPriority)
+            FakeFor(path).Given(LoopbackApi.MatchingPage(path, page)).AtPriority(LoopbackApi.GeneralPriority)
                 .RespondWith(LoopbackApi.Respond(200, ApiJson.PageAt(page, pageSize, items.Length, pageItems), LoopbackApi.JsonContentType));
         }
     }
@@ -214,7 +277,7 @@ internal sealed class CliRun : IDisposable
     /// the page <see cref="StubPages"/> serves; a GET without a page parameter asks for page 0.
     /// </summary>
     public void StubPageProblem(string path, int page, int status, string title, string? detail = null) =>
-        Api.Given(LoopbackApi.MatchingPage(path, page)).AtPriority(LoopbackApi.SpecificPriority)
+        FakeFor(path).Given(LoopbackApi.MatchingPage(path, page)).AtPriority(LoopbackApi.SpecificPriority)
             .RespondWith(LoopbackApi.Respond(status, ApiJson.Problem(status, title, detail), LoopbackApi.ProblemContentType));
 
     /// <summary>
@@ -239,7 +302,7 @@ internal sealed class CliRun : IDisposable
         {
             var (status, json) = responses[i];
             var contentType = status is >= 200 and < 300 ? LoopbackApi.JsonContentType : LoopbackApi.ProblemContentType;
-            var mapping = Api.Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority);
+            var mapping = FakeFor(path).Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority);
 
             if (responses.Length > 1)
             {
@@ -270,7 +333,7 @@ internal sealed class CliRun : IDisposable
     /// "METHOD path", in the order it received them.
     /// </summary>
     public string[] Calls(int skip = 0) =>
-        Requests.Skip(skip).Select(request => $"{request.Method} {request.Path}").ToArray();
+        Requests.Skip(skip).Select(request => request.Call).ToArray();
 
     /// <summary>
     /// The requests the fake API received with this method and URL path, in the order it received
@@ -339,6 +402,8 @@ internal sealed class CliRun : IDisposable
     {
         Api.Stop();
         Api.Dispose();
+        PartnerApi.Stop();
+        PartnerApi.Dispose();
 
         // A directory here means the CLI wrote to the disk, which RunAsync reports; it is removed
         // so the failure leaves nothing behind.
@@ -362,35 +427,6 @@ internal sealed class CliRun : IDisposable
         }
     }
 
-    private static RecordedRequest Record(IRequestMessage request)
-    {
-        // WireMock.Net's own query parse can split one value into several
-        // (WireMockServerSettings.QueryParameterMultipleValueSupport, default All, version 2.18.0),
-        // so the raw query is parsed here and each value kept whole.
-        var parsed = HttpUtility.ParseQueryString(request.RawQuery ?? string.Empty);
-        var query = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var key in parsed.AllKeys)
-        {
-            if (key is not null)
-            {
-                query[key] = parsed[key] ?? string.Empty;
-            }
-        }
-
-        string? authorization = null;
-
-        if (request.Headers is not null)
-        {
-            foreach (var header in request.Headers)
-            {
-                if (string.Equals(header.Key, "Authorization", StringComparison.OrdinalIgnoreCase))
-                {
-                    authorization = string.Join(", ", header.Value);
-                }
-            }
-        }
-
-        return new RecordedRequest(request.Method, request.Path, query, request.Body, authorization);
-    }
+    private WireMockServer FakeFor(string path) =>
+        path.StartsWith(PartnerRoutes, StringComparison.Ordinal) ? PartnerApi : Api;
 }

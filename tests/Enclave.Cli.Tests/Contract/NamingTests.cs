@@ -85,8 +85,8 @@ public class NamingTests
         });
     }
 
-    // The partner customer list is read from the partner API, which CliRun serves from the same fake
-    // (TestData.PartnerPath), so the alias is shown to reach the same command by the same request
+    // The partner customer list is read from the partner API, which CliRun serves from a fake of its
+    // own (TestData.PartnerPath), so the alias is shown to reach the same command by the same request
     // and output. An unknown noun would exit 2 with invalid_argument and send nothing.
     [TestCase("partner customers list")]
     [TestCase("partners customer list")]

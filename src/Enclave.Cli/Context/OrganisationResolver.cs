@@ -144,21 +144,29 @@ internal static class OrganisationResolver
             .ToArray());
     }
 
+    // A default in a shape org use does not save, such as an ID given as a bare string, names no
+    // organisation, so it exits 2 naming the file, as a malformed ID does. Only a missing default
+    // falls through to the lookup.
     private static OrganisationChoice? Saved(CliHost host)
     {
         var path = SettingsFile.PathFor(host);
+        var saved = SettingsFile.Read(host)?["org"];
 
-        if (SettingsFile.Read(host)?["org"] is not JsonObject saved)
+        if (saved is null)
         {
             return null;
         }
 
-        var id = saved["id"] is JsonValue value && value.TryGetValue(out string? text) && IdFormats.Guid.TryParse(text, out var guid)
-            ? OrganisationGuid.FromGuid(guid)
-            : throw CliErrors.InvalidArgument($"The default organisation in {path} has no valid ID. Save it again with `enclave-cli org use`.");
+        if (saved is not JsonObject savedOrg
+            || savedOrg["id"] is not JsonValue value
+            || !value.TryGetValue(out string? text)
+            || !IdFormats.Guid.TryParse(text, out var guid))
+        {
+            throw CliErrors.InvalidArgument($"The default organisation in {path} has no valid ID. Save it again with `enclave-cli org use`.");
+        }
 
-        var name = saved["name"] is JsonValue savedName && savedName.TryGetValue(out string? nameText) ? nameText : null;
+        var name = savedOrg["name"] is JsonValue savedName && savedName.TryGetValue(out string? nameText) ? nameText : null;
 
-        return new OrganisationChoice(id, name, path);
+        return new OrganisationChoice(OrganisationGuid.FromGuid(guid), name, path);
     }
 }

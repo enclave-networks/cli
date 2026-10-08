@@ -6,12 +6,14 @@ namespace Enclave.Cli.Tests.Support;
 /// The fake partner API that partner customer commands run against, and the check that a run's
 /// calls went to it.
 /// </summary>
-// CliRun serves the partner API from the same fake as the main API, so these stubs go on a run's
-// fake API, and its request log holds the partner calls. The partner tests and the safety tests
-// that run partner customer commands share this one fake, so they cannot drift apart on what the
-// partner API answers.
+// CliRun serves the partner API from a fake of its own, at its own address, and puts each stub for
+// a partner route on that fake, so these stubs answer only calls sent to the partner API's address.
+// The partner tests and the safety tests that run partner customer commands share this one fake,
+// so they cannot drift apart on what the partner API answers.
 internal static class PartnerApiFake
 {
+    private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";
+
     // The bodies StubPartnerApi serves for the test customer's admins and invites.
     public static string AdminBody => ApiJson.CustomerAdmin(TestData.CustomerAdminAccountId, TestData.CustomerAdminEmail);
 
@@ -24,6 +26,29 @@ internal static class PartnerApiFake
     public static string InviteBody => ApiJson.CustomerInvite(TestData.CustomerOrgId, TestData.CustomerInviteNumber, TestData.CustomerInviteEmail);
 
     public static string NewInviteBody => ApiJson.CustomerInvite(TestData.CustomerOrgId, 4, TestData.CustomerInviteEmail);
+
+    /// <summary>
+    /// A sandbox with the test partner chosen through ENCLAVE_PARTNER_ID and the fake partner API of
+    /// <see cref="StubPartnerApi"/>.
+    /// </summary>
+    public static CliRun StartWithPartner()
+    {
+        var run = StartWithPartnerOnly();
+        StubPartnerApi(run);
+        return run;
+    }
+
+    /// <summary>
+    /// A sandbox with the test partner chosen through ENCLAVE_PARTNER_ID and nothing stubbed.
+    /// </summary>
+    // For a test that serves a route differently from StubPartnerApi: two stubs for one route at one
+    // priority leave WireMock.Net's choice between them unstated.
+    public static CliRun StartWithPartnerOnly()
+    {
+        var run = CliRun.Start();
+        run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
+        return run;
+    }
 
     /// <summary>
     /// Answers every customer route the partner customer commands call, for two customers of the
@@ -56,9 +81,10 @@ internal static class PartnerApiFake
     }
 
     /// <summary>
-    /// Asserts the run exited 0 having sent at least one request, every one of them to this partner's
-    /// routes on the partner API (the test partner's when none is given): a command that exists,
-    /// accepted its arguments and made its calls.
+    /// Asserts the run exited 0 having sent at least one request to the partner API's address,
+    /// every one of them to this partner's routes (the test partner's when none is given), and none
+    /// to the main API's address: a command that exists, accepted its arguments and made its calls
+    /// where partner calls go.
     /// </summary>
     public static void AssertSentToThePartnerApi(CliRun run, CliResult result, Guid? partnerId = null)
     {
@@ -67,7 +93,11 @@ internal static class PartnerApiFake
         var prefix = TestData.PartnerPathOf(partnerId ?? TestData.PartnerId) + "/";
 
         CliAssert.Succeeded(result);
-        Assert.That(run.Requests.Select(request => request.Path), Is.Not.Empty.And.All.StartsWith(prefix), result.ToString());
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.PartnerApiRequests.Select(request => request.Path), Is.Not.Empty.And.All.StartsWith(prefix), result.ToString());
+            Assert.That(run.ApiRequests.Select(request => $"{request.Method} {request.Path}"), Is.Empty, $"The main API's address received calls.{Environment.NewLine}{result}");
+        });
     }
 
     /// <summary>

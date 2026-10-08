@@ -9,8 +9,8 @@ namespace Enclave.Cli.Tests.Partner;
 // (IPartnerClient.Customers), one call per command. A customer given by name, an admin given by
 // email address and an invite given by email address each add one read: the customer list, the
 // customer's admins and the customer's invites (proposed-cli-surface.md "Calls per command", "Names
-// and IDs"). CliRun serves the partner API from the same fake as the main API, so each test checks
-// the requests the fake received as well as what the command printed.
+// and IDs"). CliRun serves the partner API from a fake at its own address, and each test checks the
+// requests the fakes received as well as what the command printed.
 //
 // Every test here chooses a valid partner through ENCLAVE_PARTNER_ID, so a bad argument is the only
 // error a case can have.
@@ -26,20 +26,15 @@ namespace Enclave.Cli.Tests.Partner;
 // what they send. The fake partner API they run against is Support/PartnerApiFake.cs.
 public class PartnerCommandTests
 {
-    private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";
+    private const string FileToken = "file-token-4c7d21";
 
     private static readonly string[] InvalidBillingMonths = ["0", "2", "6", "13", "48", "twelve"];
 
-    // Every field of the API's CustomerCreateModel (Enclave.Sdk.Api 1.1.0; the partner API schema),
-    // and the ones the schema requires, which a create always sends.
+    // Every field of the API's CustomerCreateModel (Enclave.Sdk.Api 1.1.0, which writes it in
+    // camelCase; the partner API schema). A create sends each one ("Command options").
     private static readonly string[] CreateFields =
     [
         "name", "ownerEmail", "domain", "industryDiscount", "initialSystemsCount", "initialGatewaysCount", "contactName", "hardLimit", "adminAutoSyncIsEnabled",
-    ];
-
-    private static readonly string[] RequiredCreateFields =
-    [
-        "name", "industryDiscount", "initialSystemsCount", "initialGatewaysCount", "hardLimit", "adminAutoSyncIsEnabled",
     ];
 
     // One valid command line for each partner customer verb in the commands tree
@@ -72,7 +67,7 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(CommandsByNameWithCalls))]
     public async Task Every_partner_customer_command_given_the_customer_by_name_looks_it_up_then_makes_its_call(string[] args, string[] calls)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
@@ -86,12 +81,64 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(CommandsByOrgIdWithCalls))]
     public async Task Every_partner_customer_command_given_org_id_makes_its_call_without_a_customer_lookup(string[] args, string[] calls)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
         CliAssert.Succeeded(result);
         Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
+    }
+
+    // The partner API runs on its own host, beside the main API (proposed-cli-surface.md "Partner
+    // API"), and partner calls go to the partner API's address: the host's default here, which is
+    // the run's fake partner API. The main API's fake answers partner routes 421, so a call sent
+    // there would fail the command as well as show in its requests.
+    [TestCaseSource(nameof(CommandsByNameWithCalls))]
+    public async Task Every_partner_customer_command_sends_its_calls_to_the_partner_api_address_and_none_to_the_api_address(string[] args, string[] calls)
+    {
+        using var run = PartnerApiFake.StartWithPartner();
+
+        var result = await run.RunAsync(args);
+
+        CliAssert.Succeeded(result);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.PartnerApiRequests.Select(request => request.Call), Is.EqualTo(calls), result.ToString());
+            Assert.That(run.ApiRequests.Select(request => request.Call), Is.Empty, result.ToString());
+        });
+    }
+
+    // credentials.json's partnerApiBaseUrl is the partner API address, read beside baseUrl, and
+    // ENCLAVE_TOKEN keeps it as it keeps baseUrl (proposed-cli-surface.md "Partner API", "Login,
+    // logout and status"). A third fake at another address shows where the command's call went with
+    // which token. The run's own fakes, at the default addresses, serve the partner API too, so a
+    // CLI that ignored the file would succeed there and show only in their requests.
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task A_partner_customer_command_calls_the_partner_api_address_in_credentials_json_whichever_source_supplies_the_token(bool tokenFromEnvironment)
+    {
+        using var run = PartnerApiFake.StartWithPartner();
+        var (other, otherUrl) = LoopbackApi.Start();
+        using var otherApi = other;
+        var customers = TestData.PartnerPath("customers");
+        LoopbackApi.Stub(otherApi, "GET", customers, 200, ApiJson.Page(ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName)));
+        run.SaveCredentials(FileToken, partnerApiBaseUrl: otherUrl);
+
+        if (!tokenFromEnvironment)
+        {
+            run.Environment.Remove("ENCLAVE_TOKEN");
+        }
+
+        var result = await run.RunAsync("partner", "customer", "list");
+
+        var received = LoopbackApi.Received(otherApi);
+        CliAssert.List(result, "customer");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.Empty, "The call went to a default address.");
+            Assert.That(received.Select(request => request.Call), Is.EqualTo(new[] { $"GET {customers}" }));
+            Assert.That(received.Select(request => request.Authorization), Is.EqualTo(new[] { $"Bearer {(tokenFromEnvironment ? TestData.Token : FileToken)}" }));
+        });
     }
 
     // Example 20. A list reads every page, 200 items at a time, the most the API returns, and
@@ -102,7 +149,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_list_reads_every_page_and_prints_the_customers_as_a_customer_list()
     {
-        using var run = StartWithPartnerOnly();
+        using var run = PartnerApiFake.StartWithPartnerOnly();
         var ids = TestData.Ids("customer", 5);
         var bodies = ids.Select((id, i) => ApiJson.Customer(id, $"Customer {i}", "2026.1.1")).ToArray();
         run.StubPages(TestData.PartnerPath("customers"), 2, bodies);
@@ -127,7 +174,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_show_prints_the_customer_as_the_api_returns_it()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "show", "--org-id", TestData.CustomerOrgId);
 
@@ -149,7 +196,7 @@ public class PartnerCommandTests
     [TestCase("globex ltd")]
     public async Task A_customer_name_is_matched_whole_and_ignoring_case(string name)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "show", name);
 
@@ -164,7 +211,7 @@ public class PartnerCommandTests
     [TestCase("Umbrella Corp")]
     public async Task A_customer_name_that_matches_no_customer_exits_2_with_no_candidates(string name)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "show", name);
 
@@ -182,7 +229,7 @@ public class PartnerCommandTests
     [Test]
     public async Task A_customer_name_that_matches_several_customers_exits_2_with_them_as_candidates()
     {
-        using var run = StartWithPartnerOnly();
+        using var run = PartnerApiFake.StartWithPartnerOnly();
         var twin = TestData.Ids("customer", 1)[0];
         run.StubPages(
             TestData.PartnerPath("customers"),
@@ -197,7 +244,7 @@ public class PartnerCommandTests
         var candidates = JsonAssert.Property(error, "candidates");
         Assert.Multiple(() =>
         {
-            Assert.That(candidates.EnumerateArray().Select(candidate => GuidOf(JsonAssert.Property(candidate, "id"))), Is.EquivalentTo(new Guid?[] { Guid.Parse(TestData.CustomerOrgId, CultureInfo.InvariantCulture), Guid.Parse(twin, CultureInfo.InvariantCulture) }));
+            Assert.That(candidates.EnumerateArray().Select(candidate => JsonRead.GuidOf(JsonAssert.Property(candidate, "id"))), Is.EquivalentTo(new Guid?[] { Guid.Parse(TestData.CustomerOrgId, CultureInfo.InvariantCulture), Guid.Parse(twin, CultureInfo.InvariantCulture) }));
             Assert.That(JsonRead.StringFieldList(candidates, "name"), Is.EqualTo($"{TestData.CustomerName},GLOBEX LTD"));
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.PartnerPath("customers")}" }));
         });
@@ -208,7 +255,7 @@ public class PartnerCommandTests
     [Test]
     public async Task The_customer_lookup_reads_every_page_of_the_customer_list()
     {
-        using var run = StartWithPartnerOnly();
+        using var run = PartnerApiFake.StartWithPartnerOnly();
         var others = TestData.Ids("customer", 4).Select((id, i) => ApiJson.Customer(id, $"Customer {i}")).ToArray();
         run.StubPages(TestData.PartnerPath("customers"), 2, [.. others, ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName)]);
         run.Stub("GET", TestData.CustomerPath(TestData.CustomerOrgId), json: ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName));
@@ -225,13 +272,14 @@ public class PartnerCommandTests
 
     // A create sends every field of the API's CustomerCreateModel, with the partner portal's values
     // for the flags left out: 50 systems, 0 gateways, and no discount request, hard limit or
-    // auto-sync; the owner, domain and contact are not sent (proposed-cli-surface.md "Command
-    // options", the create table). A field "not sent" carries no value: Enclave.Sdk.Api 1.1.0 writes
-    // every property of the model, so it may be null or left out, but never an empty text.
+    // auto-sync; the owner, domain and contact go as null (proposed-cli-surface.md "Command
+    // options", the create table). The body holds exactly the model's fields, so a field left out
+    // of the body fails the check as well as a field the model does not have, and null is told
+    // apart from an empty text.
     [Test]
     public async Task Partner_customer_create_sends_every_field_with_the_portal_values_for_the_flags_left_out()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "create", TestData.NewCustomerName);
 
@@ -242,16 +290,16 @@ public class PartnerCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("POST"));
             Assert.That(request.Path, Is.EqualTo(TestData.PartnerPath("customers")));
-            Assert.That(JsonRead.PropertyNames(body), Is.SubsetOf(CreateFields).And.SupersetOf(RequiredCreateFields), request.ToString());
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(CreateFields), request.ToString());
             Assert.That(Raw(body, "name"), Is.EqualTo("\"Initech\""));
             Assert.That(Raw(body, "initialSystemsCount"), Is.EqualTo("50"));
             Assert.That(Raw(body, "initialGatewaysCount"), Is.EqualTo("0"));
             Assert.That(Raw(body, "industryDiscount"), Is.EqualTo("false"));
             Assert.That(Raw(body, "hardLimit"), Is.EqualTo("false"));
             Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo("false"));
-            Assert.That(HasNoValue(body, "ownerEmail"), Is.True, request.ToString());
-            Assert.That(HasNoValue(body, "domain"), Is.True, request.ToString());
-            Assert.That(HasNoValue(body, "contactName"), Is.True, request.ToString());
+            Assert.That(Raw(body, "ownerEmail"), Is.EqualTo("null"));
+            Assert.That(Raw(body, "domain"), Is.EqualTo("null"));
+            Assert.That(Raw(body, "contactName"), Is.EqualTo("null"));
             Assert.That(Unchanged(result.StdoutJson, ApiJson.Customer(TestData.NewCustomerOrgId, TestData.NewCustomerName)), Is.True, result.ToString());
         });
     }
@@ -269,7 +317,7 @@ public class PartnerCommandTests
     [TestCase("--auto-sync", null, "adminAutoSyncIsEnabled", "true")]
     public async Task Partner_customer_create_sends_each_flag_as_its_field(string option, string? value, string field, string json)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
         string[] flag = value is null ? [option] : [option, value];
 
         var request = await CliAssert.AcceptedAsync(run, "POST", TestData.PartnerPath("customers"), ["partner", "customer", "create", TestData.NewCustomerName, .. flag]);
@@ -277,7 +325,7 @@ public class PartnerCommandTests
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(body), Is.SubsetOf(CreateFields).And.SupersetOf(RequiredCreateFields), request.ToString());
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(CreateFields), request.ToString());
             Assert.That(Raw(body, field), Is.EqualTo(json));
             Assert.That(Raw(body, "name"), Is.EqualTo("\"Initech\""));
         });
@@ -288,7 +336,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_create_example_sends_the_owner_domain_counts_and_auto_sync()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
         string[] args = ["partner", "customer", "create", "Initech", "--owner", "it@initech.example", "--domain", "initech.example", "--systems", "20", "--gateways", "1", "--auto-sync"];
 
         var request = await CliAssert.AcceptedAsync(run, "POST", TestData.PartnerPath("customers"), args);
@@ -304,7 +352,7 @@ public class PartnerCommandTests
             Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo("true"));
             Assert.That(Raw(body, "industryDiscount"), Is.EqualTo("false"));
             Assert.That(Raw(body, "hardLimit"), Is.EqualTo("false"));
-            Assert.That(HasNoValue(body, "contactName"), Is.True, request.ToString());
+            Assert.That(Raw(body, "contactName"), Is.EqualTo("null"));
         });
     }
 
@@ -323,7 +371,7 @@ public class PartnerCommandTests
     [TestCase("--no-hard-limit", null, "EnableHardLimit", "false")]
     public async Task Partner_customer_update_patches_only_the_field_each_flag_sets(string option, string? value, string field, string json)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
         string[] flag = value is null ? [option] : [option, value];
 
         var result = await run.RunAsync(["partner", "customer", "update", "--org-id", TestData.CustomerOrgId, .. flag]);
@@ -344,7 +392,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_update_sends_every_flag_given_in_one_patch()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
         string[] fields = ["Name", "ContactName", "LicensedAgentsCount", "LicensedGatewaysCount", "IndustryDiscount", "EnableHardLimit"];
         string[] args = ["partner", "customer", "update", "--org-id", TestData.CustomerOrgId, "--name", "Globex Limited", "--contact", "Jo Bloggs", "--systems", "30", "--gateways", "2", "--no-industry-discount", "--hard-limit"];
 
@@ -372,7 +420,7 @@ public class PartnerCommandTests
     [TestCase("36")]
     public async Task Partner_customer_convert_puts_the_billing_period_and_prints_the_customer(string months)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "convert", "--org-id", TestData.CustomerOrgId, "--billing-months", months);
 
@@ -394,7 +442,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_list_admins_prints_the_admins_as_an_admin_list()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "list-admins", "--org-id", TestData.CustomerOrgId);
 
@@ -412,7 +460,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_add_admin_puts_the_account_and_prints_the_admin()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "add-admin", "--org-id", TestData.CustomerOrgId, "--user-id", TestData.PartnerStaffAccountId);
 
@@ -434,7 +482,7 @@ public class PartnerCommandTests
     [TestCase("ALEX@Example.COM")]
     public async Task Partner_customer_remove_admin_looks_the_email_up_in_the_customer_admins(string email)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "remove-admin", "--org-id", TestData.CustomerOrgId, "--user", email);
 
@@ -454,7 +502,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_remove_admin_with_user_id_removes_the_account_without_a_lookup()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "remove-admin", "--org-id", TestData.CustomerOrgId, "--user-id", TestData.CustomerAdminAccountId);
 
@@ -471,7 +519,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_remove_admin_given_an_email_no_admin_has_exits_2_with_no_candidates()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "remove-admin", "--org-id", TestData.CustomerOrgId, "--user", "nobody@example.com");
 
@@ -489,7 +537,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_list_invites_prints_the_pending_invites_as_an_invite_list()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "list-invites", "--org-id", TestData.CustomerOrgId);
 
@@ -506,7 +554,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_invite_posts_the_email_address_and_prints_the_invite()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "invite", "--org-id", TestData.CustomerOrgId, "--email", TestData.CustomerInviteEmail);
 
@@ -532,7 +580,7 @@ public class PartnerCommandTests
     [TestCase("SAM@GLOBEX.example")]
     public async Task Partner_customer_cancel_invite_looks_the_email_up_and_deletes_that_invite(string email)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "cancel-invite", "--org-id", TestData.CustomerOrgId, "--email", email);
 
@@ -553,7 +601,7 @@ public class PartnerCommandTests
     [Test]
     public async Task Partner_customer_cancel_invite_for_an_address_with_no_pending_invite_exits_2_with_no_candidates()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "cancel-invite", "--org-id", TestData.CustomerOrgId, "--email", "nobody@example.com");
 
@@ -572,7 +620,7 @@ public class PartnerCommandTests
     [TestCase("disable-auto-sync")]
     public async Task Partner_customer_auto_sync_commands_put_to_their_own_route_and_print_the_customer(string verb)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", verb, "--org-id", TestData.CustomerOrgId);
 
@@ -596,7 +644,7 @@ public class PartnerCommandTests
     public async Task Partner_customer_auto_sync_for_a_customer_the_partner_does_not_have_exits_5(string verb)
     {
         ArgumentNullException.ThrowIfNull(verb);
-        using var run = StartWithPartnerOnly();
+        using var run = PartnerApiFake.StartWithPartnerOnly();
         var path = TestData.CustomerPath(TestData.CustomerOrgId, verb);
         run.Stub("PUT", path, 204);
 
@@ -613,7 +661,7 @@ public class PartnerCommandTests
     public async Task A_partner_customer_command_exits_5_when_the_partner_api_does_not_know_the_customer(string[] args, string firstCall)
     {
         ArgumentNullException.ThrowIfNull(firstCall);
-        using var run = StartWithPartnerOnly();
+        using var run = PartnerApiFake.StartWithPartnerOnly();
         var call = firstCall.Split(' ');
         run.StubProblem(call[0], call[1], 404, "Not Found", "Customer cannot be found.");
 
@@ -628,7 +676,7 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(Examples))]
     public async Task The_partner_examples_in_the_specification_send_their_calls(string[] args, string lastCall)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
@@ -651,8 +699,8 @@ public class PartnerCommandTests
     public async Task Plural_nouns_run_the_singular_partner_customer_command(params string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        using var singularRun = StartWithPartner();
-        using var pluralRun = StartWithPartner();
+        using var singularRun = PartnerApiFake.StartWithPartner();
+        using var pluralRun = PartnerApiFake.StartWithPartner();
         string[] singular = ["partner", "customer", .. args[2..]];
 
         var singularResult = await singularRun.RunAsync(singular);
@@ -673,7 +721,7 @@ public class PartnerCommandTests
     [Test]
     public async Task A_plural_noun_applies_the_argument_checks_of_the_singular_command()
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync("partner", "customers", "convert", TestData.CustomerName, "--billing-months", "6"));
 
@@ -685,7 +733,7 @@ public class PartnerCommandTests
     [TestCase("partner", "customer", "lst")]
     public async Task An_unknown_partner_noun_or_verb_exits_2_invalid_argument(params string[] args)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
@@ -718,7 +766,7 @@ public class PartnerCommandTests
     [TestCase("partner", "customer", "auto-sync", "enable", TestData.CustomerName)]
     public async Task Partner_commands_the_specification_leaves_out_exit_2_invalid_argument(params string[] args)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
@@ -728,10 +776,60 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(BadArguments))]
     public async Task A_bad_argument_exits_2_invalid_argument_before_the_partner_api(string[] rejected, string[] corrected)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
+    }
+
+    // An empty or blank address names no admin and no invite, so --user and --email given one exit 2
+    // invalid_argument with the other argument checks, keyed by the option, before the token is
+    // read and before any call, the customer lookup included ("Errors and exit codes": arguments,
+    // then the token, then the call). The run has no token, so a CLI that checked the token first
+    // would exit 3; the customer is given by name, so a CLI that looked it up first would show the
+    // call.
+    [TestCase("remove-admin", "--user", "")]
+    [TestCase("remove-admin", "--user", "   ")]
+    [TestCase("invite", "--email", "")]
+    [TestCase("invite", "--email", " \t ")]
+    [TestCase("cancel-invite", "--email", "")]
+    [TestCase("cancel-invite", "--email", "  ")]
+    public async Task A_blank_email_address_exits_2_invalid_argument_before_the_token_and_any_call(string verb, string option, string value)
+    {
+        using var run = PartnerApiFake.StartWithPartner();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+
+        var result = await run.RunAsync(ForCustomer(verb, option, value));
+
+        CliAssert.Rejected(run, result);
+        Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(option), result.ToString());
+    }
+
+    // An empty or blank name names no customer. Given for the customer a command acts on, it would
+    // cost the customer lookup and match nothing; given to create or to update --name, it would
+    // reach the API, which refuses a blank name (portal
+    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:19
+    // and CustomerPatchModelValidator.cs:10, NotEmpty, which FluentValidation fails for a string
+    // that is empty or white space). Each exits 2 invalid_argument with the other argument checks,
+    // keyed by the argument or option, before the token is read and before any call ("Errors and
+    // exit codes": arguments, then the token, then the call). The run has no token, so a CLI that
+    // checked the token first would exit 3.
+    [TestCase("customer", "show", "")]
+    [TestCase("customer", "show", "   ")]
+    [TestCase("customer", "convert", " \t ", "--billing-months", "12")]
+    [TestCase("name", "create", "")]
+    [TestCase("name", "create", "  ")]
+    [TestCase("--name", "update", "--org-id", TestData.CustomerOrgId, "--name", "")]
+    [TestCase("--name", "update", "--org-id", TestData.CustomerOrgId, "--name", " ")]
+    public async Task A_blank_customer_name_exits_2_invalid_argument_before_the_token_and_any_call(string key, string verb, params string[] rest)
+    {
+        using var run = PartnerApiFake.StartWithPartner();
+        run.Environment.Remove("ENCLAVE_TOKEN");
+
+        var result = await run.RunAsync(Line(verb, rest));
+
+        CliAssert.Rejected(run, result);
+        Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(key), result.ToString());
     }
 
     // A command that acts on a customer needs one, by name or by --org-id (proposed-cli-surface.md
@@ -741,7 +839,7 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(CommandsWithoutTheCustomer))]
     public async Task A_customer_command_without_a_customer_exits_2_invalid_argument(string[] rejected, string[] corrected)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
@@ -752,7 +850,7 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(CommandsWithNameAndOrgId))]
     public async Task A_customer_name_with_org_id_exits_2_invalid_argument(string[] rejected, string[] corrected)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
@@ -764,7 +862,7 @@ public class PartnerCommandTests
     [TestCaseSource(nameof(ReadsWithDryRun))]
     public async Task Dry_run_is_an_unknown_option_on_a_partner_customer_command_that_only_reads(string[] rejected, string[] corrected)
     {
-        using var run = StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
@@ -784,34 +882,6 @@ public class PartnerCommandTests
     internal static string[] Line(string verb, params string[] rest) => ["partner", "customer", verb, .. rest];
 
     internal static string[] ForCustomer(string verb, params string[] rest) => ["partner", "customer", verb, TestData.CustomerName, .. rest];
-
-    /// <summary>
-    /// A sandbox with the test partner chosen through ENCLAVE_PARTNER_ID and the fake partner API of
-    /// <see cref="PartnerApiFake.StubPartnerApi"/>.
-    /// </summary>
-    internal static CliRun StartWithPartner()
-    {
-        var run = StartWithPartnerOnly();
-        PartnerApiFake.StubPartnerApi(run);
-        return run;
-    }
-
-    /// <summary>
-    /// The GUID a JSON string holds, in any form, or null for any other value: GUIDs are compared as
-    /// GUIDs, since the API writes them as 32 hex digits and people type them hyphenated.
-    /// </summary>
-    internal static Guid? GuidOf(JsonElement value) =>
-        value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), CultureInfo.InvariantCulture, out var guid) ? guid : null;
-
-    // A sandbox with the test partner chosen and nothing stubbed, for a test that serves a route
-    // differently from PartnerApiFake.StubPartnerApi: two stubs for one route at one priority leave
-    // WireMock.Net's choice between them unstated.
-    private static CliRun StartWithPartnerOnly()
-    {
-        var run = CliRun.Start();
-        run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
-        return run;
-    }
 
     private static IEnumerable<TestCaseData> CommandsByNameWithCalls() =>
         Commands.Select(command => new TestCaseData(command.ByName(), command.Calls(byName: true)).SetArgDisplayNames(Display(command.ByName())));
@@ -895,6 +965,14 @@ public class PartnerCommandTests
         yield return Pair(ForCustomer("invite"), ForCustomer("invite", "--email", TestData.CustomerInviteEmail));
         yield return Pair(ForCustomer("cancel-invite"), ForCustomer("cancel-invite", "--email", TestData.CustomerInviteEmail));
 
+        // An empty or blank address names nobody, so it is no address at all.
+        foreach (var blank in new[] { string.Empty, " " })
+        {
+            yield return Pair(ForCustomer("remove-admin", "--user", blank), ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail));
+            yield return Pair(ForCustomer("invite", "--email", blank), ForCustomer("invite", "--email", TestData.CustomerInviteEmail));
+            yield return Pair(ForCustomer("cancel-invite", "--email", blank), ForCustomer("cancel-invite", "--email", TestData.CustomerInviteEmail));
+        }
+
         // Anything a partner customer command needs besides the customer is a named option
         // ("Commands"), so a second positional argument is an error.
         yield return Pair(ForCustomer("add-admin", TestData.PartnerStaffAccountId), ForCustomer("add-admin", "--user-id", TestData.PartnerStaffAccountId));
@@ -929,9 +1007,6 @@ public class PartnerCommandTests
         && printedItems.EnumerateArray().Zip(bodies).All(pair => Unchanged(pair.First, pair.Second));
 
     private static string Raw(JsonElement body, string field) => JsonAssert.Property(body, field).GetRawText();
-
-    private static bool HasNoValue(JsonElement body, string field) =>
-        !body.TryGetProperty(field, out var value) || value.ValueKind == JsonValueKind.Null;
 
     // Test names show each case as the command line it runs, with placeholders for the fixed IDs.
     private static string Display(string[] args) => string.Join(' ', args.Select(DisplayArg));

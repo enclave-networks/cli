@@ -42,15 +42,18 @@ internal sealed class DiskFileStore : IFileStore
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath)!;
 
-        // An existing directory keeps its mode: ~/.enclave is shared with other Enclave tools, so
-        // the CLI sets the mode only on a directory it creates.
-        if (privateToUser && !OperatingSystem.IsWindows())
+        // A directory the CLI creates gets mode 0700 whichever file it is created for: ~/.enclave
+        // holds credentials.json, and `org use` before `login` creates it for cli.json, which holds
+        // no secret, with the token written into it later. An existing directory keeps its mode:
+        // ~/.enclave is shared with other Enclave tools, so the CLI sets the mode only on a directory
+        // it creates.
+        if (OperatingSystem.IsWindows())
         {
-            Directory.CreateDirectory(directory, PrivateDirectoryMode);
+            Directory.CreateDirectory(directory);
         }
         else
         {
-            Directory.CreateDirectory(directory);
+            Directory.CreateDirectory(directory, PrivateDirectoryMode);
         }
 
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");

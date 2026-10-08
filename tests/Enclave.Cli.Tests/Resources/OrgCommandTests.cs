@@ -14,6 +14,10 @@ public class OrgCommandTests
 
     private const string AlexEmail = "alex@example.com";
 
+    private const string SamStoredEmail = "Sam@Example.com";
+
+    private const string AlexStoredEmail = "Alex@Example.com";
+
     private static readonly Guid SamId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
 
     private static readonly Guid AlexId = new("0b7e4d19-3c2a-4f6e-8d15-a9b8c7d6e5f4");
@@ -110,15 +114,17 @@ public class OrgCommandTests
     // Example 19 in proposed-cli-surface.md. org remove-user takes an email address in place of the
     // account ID and looks it up with one call, matching ignoring case ("Names and IDs"). Sam is the
     // second user the lookup reads, so a lookup that took the first user removes the wrong account.
-    // The removal's response has no body, which prints {} ("Several IDs").
+    // The API answers the removal with the removed user's model (portal
+    // OrganisationController.RemoveUser), and a single-ID command prints the model ("Several IDs").
+    // Each account's removal answers with that account, so the output shows which one was removed.
     [TestCase(SamEmail)]
     [TestCase("SAM@Example.COM")]
-    public async Task Org_remove_user_looks_the_email_up_and_removes_that_account(string email)
+    public async Task Org_remove_user_looks_the_email_up_removes_that_account_and_prints_it(string email)
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((AlexId, AlexEmail), (SamId, SamEmail)));
-        StubRemoval(run, AlexId);
-        StubRemoval(run, SamId);
+        StubRemoval(run, AlexId, AlexEmail);
+        StubRemoval(run, SamId, SamEmail);
 
         var result = await run.RunAsync("org", "remove-user", email);
 
@@ -131,7 +137,8 @@ public class OrgCommandTests
             Assert.That(requests[0].Path, Is.EqualTo(TestData.OrgPath("users")));
             Assert.That(requests[1].Method, Is.EqualTo("DELETE"));
             Assert.That(AccountIn(requests[1].Path), Is.EqualTo(SamId));
-            Assert.That(IsEmptyObject(result.StdoutJson), Is.True, result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(SamEmail), result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutJson, "id").GetString(), Is.EqualTo(SamId.ToString("N")).IgnoreCase);
             Assert.That(result.Stderr, Is.Empty);
         });
     }
@@ -145,7 +152,7 @@ public class OrgCommandTests
         using var run = CliRun.Start();
         run.StdinIsTerminal = true;
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));
-        StubRemoval(run, SamId);
+        StubRemoval(run, SamId, SamEmail);
 
         var result = await run.RunAsync("org", "remove-user", "--id", SamId.ToString());
 
@@ -155,7 +162,7 @@ public class OrgCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(AccountIn(request.Path), Is.EqualTo(SamId));
-            Assert.That(IsEmptyObject(result.StdoutJson), Is.True, result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(SamEmail), result.ToString());
         });
     }
 
@@ -166,8 +173,8 @@ public class OrgCommandTests
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail), (AlexId, AlexEmail)));
-        StubRemoval(run, SamId);
-        StubRemoval(run, AlexId);
+        StubRemoval(run, SamId, SamEmail);
+        StubRemoval(run, AlexId, AlexEmail);
 
         var result = await run.RunAsync("org", "remove-user", "nobody@example.com");
 
@@ -187,7 +194,7 @@ public class OrgCommandTests
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));
-        StubRemoval(run, SamId);
+        StubRemoval(run, SamId, SamEmail);
 
         CliAssert.Rejected(run, await run.RunAsync("org", "remove-user", SamEmail, "--id", SamId.ToString()));
 
@@ -208,7 +215,7 @@ public class OrgCommandTests
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));
         run.Stub("DELETE", TestData.OrgPath("invites"));
-        StubRemoval(run, SamId);
+        StubRemoval(run, SamId, SamEmail);
 
         CliAssert.Rejected(run, await run.RunAsync("org", "remove-user", "--id", accountId));
 
@@ -256,13 +263,16 @@ public class OrgCommandTests
     }
 
     // Example 64 in proposed-cli-surface.md, first command. The API takes the invite as
-    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.1.0). The response
-    // has no body, which prints {} ("Several IDs").
+    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.1.0). The API
+    // answers with the invite's model (portal OrganisationController.CreateInvite), which the
+    // command prints. The invite holds the address it was first sent to, which can differ in case
+    // from the one given (IOrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.2.0), so the
+    // fake answers with another case, and output copied from the argument does not match.
     [Test]
-    public async Task Org_invite_posts_the_email_address_and_prints_an_empty_object()
+    public async Task Org_invite_posts_the_email_address_and_prints_the_invite_the_api_returns()
     {
         using var run = CliRun.Start();
-        run.Stub("POST", TestData.OrgPath("invites"));
+        run.Stub("POST", TestData.OrgPath("invites"), json: ApiJson.Invite(AlexStoredEmail));
 
         var result = await run.RunAsync("org", "invite", AlexEmail);
 
@@ -273,21 +283,23 @@ public class OrgCommandTests
             Assert.That(request.Method, Is.EqualTo("POST"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
             Assert.That(JsonAssert.Property(request.BodyJson, "emailAddress").GetString(), Is.EqualTo(AlexEmail));
-            Assert.That(IsEmptyObject(result.StdoutJson), Is.True, result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(AlexStoredEmail), result.ToString());
             Assert.That(result.Stderr, Is.Empty);
         });
     }
 
     // Example 19 in proposed-cli-surface.md, second command. The main API cancels an invite by email
     // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api
-    // 1.1.0), so the CLI sends the address and makes no lookup ("Partner API"). The response has no
-    // body, which prints {} ("Several IDs").
+    // 1.1.0), so the CLI sends the address and makes no lookup ("Partner API"). The API answers with
+    // the cancelled invite's model (portal OrganisationController.DeleteInvite), which a single-ID
+    // command prints ("Several IDs"). The fake answers with the address in another case, as the
+    // invite test above does, so output copied from the argument does not match.
     [Test]
-    public async Task Org_cancel_invite_deletes_the_invite_by_email_address_without_a_lookup()
+    public async Task Org_cancel_invite_deletes_the_invite_by_email_address_without_a_lookup_and_prints_it()
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("invites"), json: ApiJson.Invites(SamEmail));
-        run.Stub("DELETE", TestData.OrgPath("invites"));
+        run.Stub("DELETE", TestData.OrgPath("invites"), json: ApiJson.Invite(SamStoredEmail));
 
         var result = await run.RunAsync("org", "cancel-invite", SamEmail);
 
@@ -298,7 +310,7 @@ public class OrgCommandTests
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
             Assert.That(JsonAssert.Property(request.BodyJson, "emailAddress").GetString(), Is.EqualTo(SamEmail));
-            Assert.That(IsEmptyObject(result.StdoutJson), Is.True, result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(SamStoredEmail), result.ToString());
             Assert.That(result.Stderr, Is.Empty);
         });
     }
@@ -336,8 +348,8 @@ public class OrgCommandTests
         using var run = CliRun.Start();
         run.StdinIsTerminal = true;
         run.Stub("PATCH", TestData.OrgPath(), json: ApiJson.OrgProperties("Initech"));
-        run.Stub("POST", TestData.OrgPath("invites"));
-        run.Stub("DELETE", TestData.OrgPath("invites"));
+        run.Stub("POST", TestData.OrgPath("invites"), json: ApiJson.Invite(AlexEmail));
+        run.Stub("DELETE", TestData.OrgPath("invites"), json: ApiJson.Invite(SamEmail));
 
         await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(suffix ?? string.Empty), commandLine.Split(' '));
     }
@@ -420,7 +432,7 @@ public class OrgCommandTests
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((AlexId, AlexEmail), (SamId, SamEmail)));
-        StubRemoval(run, SamId);
+        StubRemoval(run, SamId, SamEmail);
 
         var result = await run.RunAsync("org", "remove-user", SamEmail, "--dry-run");
 
@@ -469,16 +481,14 @@ public class OrgCommandTests
     private static string[] AccountPaths(Guid accountId) =>
         [TestData.OrgPath("users/" + accountId.ToString("N")), TestData.OrgPath("users/" + accountId.ToString("D"))];
 
-    // The removal is answered with no body, at either form of the account's path, for the reason
+    // The fake answers the removal with the removed user's model, as the API does (portal
+    // OrganisationController.RemoveUser), at either form of the account's path, for the reason
     // AccountIn gives.
-    private static void StubRemoval(CliRun run, Guid accountId)
+    private static void StubRemoval(CliRun run, Guid accountId, string email)
     {
         foreach (var path in AccountPaths(accountId))
         {
-            run.Stub("DELETE", path);
+            run.Stub("DELETE", path, json: ApiJson.User(accountId, email));
         }
     }
-
-    private static bool IsEmptyObject(JsonElement output) =>
-        output.ValueKind == JsonValueKind.Object && !output.EnumerateObject().Any();
 }

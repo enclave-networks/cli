@@ -43,6 +43,11 @@ internal sealed record RecordedRequest(
     }
 
     /// <summary>
+    /// The method and path, as "METHOD path", the form CliRun.Calls lists requests in.
+    /// </summary>
+    public string Call => $"{Method} {Path}";
+
+    /// <summary>
     /// The value of a query parameter, or null when the request does not carry it.
     /// </summary>
     public string? QueryValue(string name) => Query.TryGetValue(name, out var value) ? value : null;

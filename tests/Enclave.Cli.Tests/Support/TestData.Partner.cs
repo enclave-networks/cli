@@ -51,8 +51,8 @@ internal static partial class TestData
 
     /// <summary>
     /// The partner API path of the test partner, TestData.PartnerId, with an optional suffix such as
-    /// "customers". CliRun serves the partner API from the same fake as the main API, so a test stubs
-    /// and finds partner requests by this path.
+    /// "customers". CliRun puts a stub for this path on its fake partner API, and a test finds the
+    /// partner requests by it.
     /// </summary>
     public static string PartnerPath(string suffix = "") => PartnerPathOf(PartnerId, suffix);
 

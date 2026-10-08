@@ -4,7 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Enclave.Sdk.Api" Version="1.1.0" />
+    <PackageVersion Include="Enclave.Sdk.Api" Version="1.2.0" />
     <PackageVersion Include="System.CommandLine" Version="2.0.12" />
   </ItemGroup>
 

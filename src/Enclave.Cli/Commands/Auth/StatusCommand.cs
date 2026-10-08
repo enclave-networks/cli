@@ -21,10 +21,15 @@ internal static class StatusCommand
         {
             var client = context.GetClient();
 
+            // Checks run in the order the token, the organisation and partner, then the call
+            // (proposed-cli-surface.md "Errors and exit codes"), so a malformed or contradictory
+            // source exits 2 before the call is made.
+            var choice = OrganisationResolver.Choose(context);
+            var partnerChoice = PartnerResolver.Choose(context);
+
             // The one call: it proves the token works and gives the names and roles to report. A
             // name, or the lookup when nothing is chosen, is resolved from this same response.
             var organisations = await client.GetOrganisationsAsync();
-            var choice = OrganisationResolver.Choose(context);
             JsonObject? org = null;
 
             if (choice?.Id is { } id)
@@ -43,7 +48,7 @@ internal static class StatusCommand
                 org = Org(only.OrgId.ToString(), only.OrgName, only.Role.ToString(), OrganisationResolver.OnlyOrganisation);
             }
 
-            var partner = PartnerResolver.Choose(context) is { } chosen
+            var partner = partnerChoice is { } chosen
                 ? new JsonObject { ["id"] = chosen.Id.ToString("D"), ["source"] = chosen.Source }
                 : null;
 

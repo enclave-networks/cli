@@ -179,6 +179,48 @@ public partial class TrustCommandTests
             TrustsPath);
     }
 
+    // A sign-in setting given "" carries no value, so it exits 2 before any call, as trust update's
+    // --set-client-id "" does ("Command options"). The API refuses an authority address that is not
+    // https, an empty client ID and an empty audience (portal
+    // TrustRequirementSettingsUserAuthValidator.cs:47-49), and stores an empty tenant, since for
+    // azure it checks only which keys the configuration holds (same file, 35-38). The command with
+    // every setting given a value, run next, shows the rejection comes from the empty one.
+    [TestCase("oidc", "--authority-uri")]
+    [TestCase("oidc", "--client-id")]
+    [TestCase("oidc", "--audience")]
+    [TestCase("azure", "--tenant")]
+    public async Task Trust_create_rejects_an_empty_sign_in_setting(string authority, string option)
+    {
+        using var run = CliRun.Start();
+        run.Stub("POST", TrustsPath, json: ApiJson.Trust(7, "sso"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run,
+            ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, emptied: option)],
+            ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, emptied: null)],
+            "POST",
+            TrustsPath);
+    }
+
+    // The API stores a repeated range or country as given: its public IP validator checks each
+    // condition on its own (portal TrustRequirementSettingsPublicIpValidator.cs:24-53), so the CLI
+    // sends both conditions ("Command options").
+    [TestCase("--allow-ip")]
+    [TestCase("--block-ip")]
+    [TestCase("--allow-country")]
+    [TestCase("--block-country")]
+    public async Task Trust_create_sends_a_repeated_range_or_country_as_given(string option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+        using var run = CliRun.Start();
+        run.Stub("POST", TrustsPath, json: ApiJson.Trust(5, "uk only"));
+        var value = option.EndsWith("-ip", StringComparison.Ordinal) ? "203.0.113.0/24" : "GB";
+
+        var request = await CliAssert.AcceptedAsync(run, "POST", TrustsPath, "trust", "create", "uk only", option, value, option, value);
+
+        Assert.That(JsonAssert.Property(JsonAssert.Property(request.BodyJson, "settings"), "conditions").GetArrayLength(), Is.EqualTo(2));
+    }
+
     // Each authority takes only its own settings, as the API does, and a setting the authority does
     // not take exits 2 ("Command options"; portal TrustRequirementSettingsUserAuthValidator.cs:34-48).
     [TestCase("portal", "--tenant", Tenant)]
@@ -373,5 +415,16 @@ public partial class TrustCommandTests
 
         await CliAssert.RejectedThenAcceptedAsync(
             run, ["trust", "create", "portal login"], ["trust", "create", "portal login", "--authority", "portal"], "POST", TrustsPath);
+    }
+
+    // The settings an authority takes, each with a value the API accepts, and the one named by
+    // emptied given "".
+    private static string[] SignInSettings(string authority, string? emptied)
+    {
+        (string Option, string Value)[] settings = authority == "azure"
+            ? [("--tenant", Tenant)]
+            : [("--authority-uri", "https://sso.example.com"), ("--client-id", "enclave-portal"), ("--audience", "api://enclave")];
+
+        return [.. settings.SelectMany(setting => new[] { setting.Option, setting.Option == emptied ? string.Empty : setting.Value })];
     }
 }

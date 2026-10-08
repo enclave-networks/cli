@@ -31,8 +31,12 @@ internal static partial class TestData
     /// <summary>
     /// The API path of the test organisation, with an optional suffix.
     /// </summary>
-    public static string OrgPath(string suffix = "") =>
-        suffix.Length == 0 ? $"/org/{OrgId:N}" : $"/org/{OrgId:N}/{suffix}";
+    public static string OrgPath(string suffix = "") => OrgPathOf(OrgId, suffix);
+
+    /// <summary>
+    /// The API path of the other test organisation, <see cref="OtherOrgId"/>, with an optional suffix.
+    /// </summary>
+    public static string OtherOrgPath(string suffix = "") => OrgPathOf(OtherOrgId, suffix);
 
     /// <summary>
     /// <paramref name="count"/> distinct IDs of one kind of item (a <see cref="CliList.Kinds"/> value
@@ -54,4 +58,7 @@ internal static partial class TestData
             _ => throw new ArgumentException($"No IDs for kind \"{kind}\"; the kinds are {string.Join(", ", CliList.Kinds)}, and log entries have no ID.", nameof(kind)),
         }).ToArray();
     }
+
+    private static string OrgPathOf(Guid orgId, string suffix) =>
+        suffix.Length == 0 ? $"/org/{orgId:N}" : $"/org/{orgId:N}/{suffix}";
 }

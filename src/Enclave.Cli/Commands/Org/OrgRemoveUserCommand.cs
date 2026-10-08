@@ -40,10 +40,13 @@ internal static class OrgRemoveUserCommand
             // ("Several IDs"). Enclave.Sdk.Api 1.1.0 checks the status of this response, so a
             // failure without problem details is reported too ("`Enclave.Sdk.Api` changes",
             // item 6).
-            await SingleItem.CallAsync(() => org.Client.RemoveUserAsync(accountId.ToString()));
+            //
+            // The API answers a removal with the removed user's model (portal
+            // OrganisationController.RemoveUser), which RemoveUserAsync returns (Enclave.Sdk.Api
+            // 1.2.0), so the output shows which account was removed.
+            var removed = await SingleItem.CallAsync(() => org.Client.RemoveUserAsync(accountId.ToString()));
 
-            // The API answers a removal with no body, which prints {} ("Several IDs").
-            await context.Output.WriteNoBodyAsync(context.CancellationToken);
+            await context.Output.WriteAsync(removed, context.CancellationToken);
         });
 
         return verb;

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -12,6 +13,9 @@ namespace Enclave.Cli.Tests.Resources;
 // longest zone name it ends in, at a label boundary, and the record name is the rest ("Details").
 public class DnsCommandTests
 {
+    // The detail the API sends with no-such-system (portal DnsRecordHandlerBase.cs:117).
+    private const string UnknownSystemDetail = "One or more of the provided systems are not known approved systems in the organisation: ZZZZZ";
+
     private static readonly string Zones = TestData.OrgPath("dns/zones");
 
     private static readonly string Records = TestData.OrgPath("dns/records");
@@ -664,18 +668,19 @@ public class DnsCommandTests
     }
 
     // Single-ID commands exit 5 for an unknown ID, dns delete-zone among them (proposed-cli-surface.md
-    // "Several IDs").
-    [TestCase("dns show-zone --id 4", "GET", "dns/zones/4")]
-    [TestCase("dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4")]
-    [TestCase("dns delete-zone --id 4", "DELETE", "dns/zones/4")]
-    [TestCase("dns show-hostname --id 7", "GET", "dns/records/7")]
-    [TestCase("dns update-hostname --id 7 --notes Reviewed", "PATCH", "dns/records/7")]
-    public async Task Dns_single_id_commands_exit_5_for_an_id_the_api_does_not_know(string commandLine, string method, string suffix)
+    // "Several IDs"). The fake answers as the API does for a zone or hostname it does not have: 404
+    // with the problem type zone-not-found or dns-record-not-found (portal DnsController.cs:352-368).
+    [TestCase("dns show-zone --id 4", "GET", "dns/zones/4", "zone-not-found")]
+    [TestCase("dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4", "zone-not-found")]
+    [TestCase("dns delete-zone --id 4", "DELETE", "dns/zones/4", "zone-not-found")]
+    [TestCase("dns show-hostname --id 7", "GET", "dns/records/7", "dns-record-not-found")]
+    [TestCase("dns update-hostname --id 7 --notes Reviewed", "PATCH", "dns/records/7", "dns-record-not-found")]
+    public async Task Dns_single_id_commands_exit_5_for_an_id_the_api_does_not_know(string commandLine, string method, string suffix, string problemType)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
         ArgumentNullException.ThrowIfNull(suffix);
         using var run = CliRun.Start();
-        run.StubProblem(method, TestData.OrgPath(suffix), 404, "Not Found", "No such DNS item.");
+        run.StubRaw(method, TestData.OrgPath(suffix), 404, LoopbackApi.ProblemContentType, Problem(404, problemType, "Not Found", "No such DNS item."));
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
@@ -686,6 +691,94 @@ public class DnsCommandTests
             Assert.That(request.Method, Is.EqualTo(method));
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath(suffix)));
         });
+    }
+
+    // Exit 5 means the item the command names was not found (proposed-cli-surface.md "Errors and
+    // exit codes"). The API also answers 404 when a --set-systems system is not an approved system
+    // of the organisation (problem type no-such-system, portal DnsRecordHandlerBase.cs:117-123), and
+    // the hostname exists then, so that 404 exits 1 api_error and carries the API's detail, which
+    // names the system. The hostname is given by ID and by name, the two ways to reach the patch.
+    [TestCase("dns update-hostname --id 7 --set-systems ABCDE,ZZZZZ")]
+    [TestCase("dns update-hostname db.internal --set-systems ABCDE,ZZZZZ")]
+    public async Task Dns_update_hostname_with_a_system_the_api_does_not_know_exits_1_api_error(string commandLine)
+    {
+        ArgumentNullException.ThrowIfNull(commandLine);
+        using var run = CliRun.Start();
+        StubHostnames(run);
+        run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, Problem(404, "no-such-system", "System Not Found", UnknownSystemDetail));
+
+        var result = await run.RunAsync(commandLine.Split(' '));
+
+        var error = CliAssert.Failed(result, "api_error");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
+            Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo(UnknownSystemDetail));
+            Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Has.Count.EqualTo(1));
+        });
+    }
+
+    // create-hostname names a hostname that does not exist yet, so no 404 means it was not found
+    // (proposed-cli-surface.md "Errors and exit codes"). The API answers 404 for a --systems system
+    // the organisation does not have (no-such-system, portal DnsRecordHandlerBase.cs:117-123) and
+    // for a zone deleted after the CLI read the zones (no-such-zone, portal
+    // DnsRecordCreateHandler.cs:65-68), and each exits 1 api_error with the API's detail.
+    [TestCase("no-such-system", "System Not Found", UnknownSystemDetail)]
+    [TestCase("no-such-zone", "Zone does not exist", "Specified owning zone #4 does not exist.")]
+    public async Task Dns_create_hostname_answered_404_exits_1_api_error(string problemType, string title, string detail)
+    {
+        using var run = CliRun.Start();
+        StubZones(run);
+        run.StubRaw("POST", Records, 404, LoopbackApi.ProblemContentType, Problem(404, problemType, title, detail));
+
+        var result = await run.RunAsync("dns", "create-hostname", "db.internal", "--systems", "ABCDE,ZZZZZ");
+
+        var error = CliAssert.Failed(result, "api_error");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
+            Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo(detail));
+            Assert.That(run.RequestsTo("POST", Records), Has.Count.EqualTo(1));
+        });
+    }
+
+    // The API refuses a hostname's tags with a tag twice (portal DnsRecordCreateValidator.cs:32). It
+    // upper-cases system IDs and answers 404 no-such-system when it finds fewer systems than it was
+    // given (DnsRecordCreateHandler.cs:104, DnsRecordHandlerBase.cs:93-124), so it refuses a system
+    // twice too, and abcde repeats ABCDE. Each exits 2 before any call, the zone read included
+    // (proposed-cli-surface.md "Command options"). The list with each value once, run next, shows
+    // the rejection comes from the repeat.
+    [TestCase("--tags", "web,db,web", "web,db")]
+    [TestCase("--systems", "ABCDE,FGHIJ,ABCDE", "ABCDE,FGHIJ")]
+    [TestCase("--systems", "ABCDE,abcde", "ABCDE")]
+    public async Task Dns_create_hostname_with_a_value_twice_in_a_list_exits_2_without_a_request(string option, string repeated, string once)
+    {
+        using var run = CliRun.Start();
+        StubZones(run);
+        run.Stub("POST", Records, json: DbInternal());
+
+        CliAssert.Rejected(run, await run.RunAsync("dns", "create-hostname", "db.internal", option, repeated));
+
+        CliAssert.Succeeded(await run.RunAsync("dns", "create-hostname", "db.internal", option, once));
+        Assert.That(run.RequestsTo("POST", Records), Has.Count.EqualTo(1));
+    }
+
+    // As for create-hostname: the patch's systems go through the same check (DnsRecordPatchHandler.cs:124-130).
+    // The zone's automatic DNS tags are refused with a tag twice (DnsZoneCreateValidator.cs:32,
+    // DnsZonePatchValidator.cs:28).
+    [TestCase("dns update-hostname --id 7 --set-systems ABCDE,abcde", "dns update-hostname --id 7 --set-systems ABCDE", "PATCH", "dns/records/7")]
+    [TestCase("dns create-zone internal --auto-dns-tags web,web", "dns create-zone internal --auto-dns-tags web", "POST", "dns/zones")]
+    [TestCase("dns update-zone --id 4 --set-auto-dns-tags web,api,web", "dns update-zone --id 4 --set-auto-dns-tags web,api", "PATCH", "dns/zones/4")]
+    public async Task Dns_changes_with_a_value_twice_in_a_list_exit_2_without_a_request(string rejected, string accepted, string method, string suffix)
+    {
+        ArgumentNullException.ThrowIfNull(rejected);
+        ArgumentNullException.ThrowIfNull(accepted);
+        ArgumentNullException.ThrowIfNull(suffix);
+        using var run = CliRun.Start();
+        run.Stub("POST", Zones, json: ApiJson.Zone(4, "internal"));
+        StubEverySingleItemCall(run);
+
+        await CliAssert.RejectedThenAcceptedAsync(run, rejected.Split(' '), accepted.Split(' '), method, TestData.OrgPath(suffix));
     }
 
     // Zone and hostname IDs are integers, and every ID is checked before any call, so a malformed
@@ -806,6 +899,16 @@ public class DnsCommandTests
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));
         });
     }
+
+    // A problem details body as the API writes it: the type is a URL ending in the problem's name
+    // (portal Enclave.Api.Scaffolding/ProblemResponseFactory.cs:41-51, Enclave.Api/WebStartup.cs:166).
+    private static string Problem(int status, string type, string title, string detail) => new JsonObject
+    {
+        ["type"] = $"https://api.enclave.io/problems/type/{type}",
+        ["title"] = title,
+        ["status"] = status,
+        ["detail"] = detail,
+    }.ToJsonString();
 
     private static string ZonePath(string id) => $"{Zones}/{id}";
 

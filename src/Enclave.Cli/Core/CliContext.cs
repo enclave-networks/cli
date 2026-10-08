@@ -159,15 +159,15 @@ internal sealed class CliContext : IDisposable
     /// <summary>
     /// The instant a time given to <paramref name="option"/> names, read forwards from now (a
     /// duration counts from now, a clock time is its next occurrence), as UTC. A time that has
-    /// passed, or does not exist in the local time zone, exits 2 (proposed-cli-surface.md "Details").
+    /// passed, does not exist in the local time zone, or lies beyond the times the CLI holds exits 2
+    /// (proposed-cli-surface.md "Details").
     /// </summary>
     public DateTimeOffset FutureInstant(TimeInput input, Option option)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(option);
 
-        var instant = input.Forwards(Host.Time)
-            ?? throw CliErrors.InvalidArgument(option.Name, $"The time given to {option.Name} does not exist in the local time zone.");
+        var instant = input.Forwards(Host.Time, option.Name);
 
         return instant > Host.Time.GetUtcNow()
             ? instant
@@ -175,9 +175,21 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
+    /// The instant <paramref name="duration"/> after now, as UTC: --for. A duration that reaches
+    /// past the end of year 9999 exits 2 naming <paramref name="option"/>.
+    /// </summary>
+    public DateTimeOffset FutureInstant(TimeSpan duration, Option option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+
+        return TimeInput.After(Host.Time.GetUtcNow(), duration, option.Name);
+    }
+
+    /// <summary>
     /// The expiry --for or --until gives, as a UTC instant, or null when neither is given. --for
-    /// counts from now; --until is read as <see cref="FutureInstant"/> reads it, so a time that has
-    /// passed exits 2. Declare the two options exclusive, and --then as requiring one of them.
+    /// counts from now; --until is read as <see cref="FutureInstant(TimeInput, Option)"/> reads it,
+    /// so a time that has passed exits 2. Declare the two options exclusive, and --then as requiring
+    /// one of them.
     /// </summary>
     public DateTimeOffset? ExpiryFrom(Option<TimeSpan?> forOption, Option<TimeInput?> untilOption)
     {
@@ -186,7 +198,7 @@ internal sealed class CliContext : IDisposable
 
         if (Get(forOption) is { } duration)
         {
-            return Host.Time.GetUtcNow() + duration;
+            return FutureInstant(duration, forOption);
         }
 
         return Get(untilOption) is { } until ? FutureInstant(until, untilOption) : null;
@@ -195,14 +207,30 @@ internal sealed class CliContext : IDisposable
     /// <summary>
     /// The instant a time given to <paramref name="option"/> names, read backwards from now (a
     /// duration counts back from now, a clock time is its latest occurrence), as UTC: log's --since.
+    /// A time that does not exist in the local time zone, or lies beyond the times the CLI holds,
+    /// exits 2.
     /// </summary>
     public DateTimeOffset PastInstant(TimeInput input, Option option)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(option);
 
-        return input.Backwards(Host.Time)
-            ?? throw CliErrors.InvalidArgument(option.Name, $"The time given to {option.Name} does not exist in the local time zone.");
+        return input.Backwards(Host.Time, option.Name);
+    }
+
+    /// <summary>
+    /// The instant <paramref name="duration"/> before now, as UTC: the cut-off of a filter such as
+    /// --not-seen-for or --waiting-for. A duration that reaches back before the start of year 1
+    /// exits 2 naming <paramref name="option"/>.
+    /// </summary>
+    // A duration's range is checked against the clock, so this is a check of the arguments: call it
+    // before GetOrganisationAsync, so a duration out of range exits 2 before the token is checked
+    // ("Errors and exit codes").
+    public DateTimeOffset PastInstant(TimeSpan duration, Option option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+
+        return TimeInput.Before(Host.Time.GetUtcNow(), duration, option.Name);
     }
 
     // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions; the caller owns it

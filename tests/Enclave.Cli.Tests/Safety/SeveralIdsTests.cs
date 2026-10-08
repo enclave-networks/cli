@@ -12,6 +12,10 @@ public class SeveralIdsTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
 
+    // An --until that has passed exits 2 ("Details"), so the timed enables run on a clock fixed
+    // before Until, which keeps their answer the same whatever the date.
+    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
+
     // A command that accepts several IDs makes the bulk call for one ID too, so its output has one
     // shape whatever the number of IDs, and a caller handles one form.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
@@ -313,6 +317,7 @@ public class SeveralIdsTests
         string id)
     {
         using var run = CliRun.Start();
+        run.Time = Clock;
         run.Stub("PUT", path, 200, response);
 
         var rejected = await run.RunAsync(several);

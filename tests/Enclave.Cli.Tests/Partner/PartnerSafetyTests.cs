@@ -36,7 +36,7 @@ public class PartnerSafetyTests
     [TestCaseSource(nameof(CustomerOrgIdsThatAreNotGuids))]
     public async Task A_customer_org_id_that_is_not_a_guid_exits_2_before_the_partner_api(string[] rejected, string[] corrected)
     {
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
@@ -45,7 +45,7 @@ public class PartnerSafetyTests
     [TestCaseSource(nameof(UserIdsThatAreNotGuids))]
     public async Task A_user_id_that_is_not_a_guid_exits_2_before_the_partner_api(string[] rejected, string[] corrected)
     {
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         CliAssert.Rejected(run, await run.RunAsync(rejected));
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
@@ -86,7 +86,7 @@ public class PartnerSafetyTests
     public async Task A_dry_run_of_a_partner_customer_command_prints_its_change_for_the_partner_and_sends_only_the_reads_it_depends_on(string[] args, string[] reads, string change)
     {
         ArgumentNullException.ThrowIfNull(change);
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync([.. args, "--dry-run"]);
 
@@ -101,7 +101,7 @@ public class PartnerSafetyTests
             Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(DryRunFields), result.ToString());
             Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
             Assert.That(JsonRead.PropertyNameList(partner), Is.EqualTo("id"));
-            Assert.That(PartnerCommandTests.GuidOf(JsonAssert.Property(partner, "id")), Is.EqualTo(TestData.PartnerId));
+            Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId));
             Assert.That($"{JsonAssert.Property(requests[0], "method").GetString()} {url.AbsolutePath}", Is.EqualTo(change));
             Assert.That(url.GetLeftPart(UriPartial.Authority), Is.EqualTo(run.PartnerApiUrl.GetLeftPart(UriPartial.Authority)));
             Assert.That(run.Calls(), Is.EqualTo(reads));
@@ -125,7 +125,7 @@ public class PartnerSafetyTests
     public async Task A_dry_run_shows_the_body_the_change_would_send(string commandLine, string? field, string? json)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(["partner", "customer", .. commandLine.Split(' '), "--dry-run"]);
 
@@ -148,26 +148,32 @@ public class PartnerSafetyTests
     // "Login, logout and status"): a printed token lands in CI logs and agent transcripts, and
     // personal access tokens do not expire (portal Enclave.Accounts TokensApiController.cs:105).
     // Each token test also requires the command to succeed, so a command that printed nothing
-    // because it did nothing does not pass, and every request it sent carries the token, which shows
-    // the CLI held the token it left out.
+    // because it did nothing does not pass, and to send exactly the requests the command table
+    // gives, each carrying the token, which shows the CLI held the token it left out. create under
+    // --dry-run is the one run that sends no request: it reads nothing first, and its change is
+    // withheld ("Dry run"). The report it prints is what shows it ran.
     [TestCaseSource(nameof(CustomerCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args)
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls)
     {
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync(args);
 
         TokenAssert.Absent(result);
         CliAssert.Succeeded(result);
-        Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
+            Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
+        });
     }
 
     // --verbose adds diagnostics to stderr, each request's method and URL among them ("Details"), so
     // stderr is not empty, and it holds no error.
     [TestCaseSource(nameof(CustomerCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args)
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args, string[] calls)
     {
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync([.. args, "--verbose"]);
 
@@ -177,6 +183,7 @@ public class PartnerSafetyTests
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
             Assert.That(result.Stderr, Is.Not.Empty);
             Assert.That(StderrErrorCodes(result), Is.Empty, result.ToString());
+            Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
     }
@@ -207,7 +214,7 @@ public class PartnerSafetyTests
     [Test]
     public async Task A_token_given_to_an_unknown_option_is_not_repeated_in_the_error()
     {
-        using var run = PartnerCommandTests.StartWithPartner();
+        using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "list", "--token", TestData.Token);
 
@@ -250,19 +257,25 @@ public class PartnerSafetyTests
         new TestCaseData(args, calls[..^1], calls[^1]).SetArgDisplayNames(string.Join(' ', args));
 
     // Each partner customer command alone and, where it changes something through the API, under
-    // --dry-run.
+    // --dry-run, with the calls it sends: all of them alone, and under --dry-run the reads before
+    // its change.
     private static IEnumerable<TestCaseData> CustomerCommandRuns()
     {
         foreach (var command in PartnerCommandTests.Commands)
         {
-            yield return PartnerCommandTests.Case(command.ByName());
+            var calls = command.Calls(byName: true);
+
+            yield return Run(command.ByName(), calls);
 
             if (command.Changes)
             {
-                yield return PartnerCommandTests.Case([.. command.ByName(), "--dry-run"]);
+                yield return Run([.. command.ByName(), "--dry-run"], calls[..^1]);
             }
         }
     }
+
+    private static TestCaseData Run(string[] args, string[] calls) =>
+        new TestCaseData(args, calls).SetArgDisplayNames(string.Join(' ', args));
 
     // The error codes of the stderr lines that are CLI errors, { "error": { "code", ... } }. The form
     // of --verbose diagnostics is not part of the CLI contract, so lines that are not JSON are

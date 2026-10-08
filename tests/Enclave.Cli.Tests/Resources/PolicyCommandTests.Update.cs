@@ -294,6 +294,51 @@ public partial class PolicyCommandTests
             run, ["policy", "update", "--id", "61", "--set-active-hours", "weekdays 9-5"], ["policy", "update", "--id", "61", "--set-active-hours", "mon-fri 09:00-17:00"], "PATCH", PolicyPath(61));
     }
 
+    // Active hours that start and end at the same time are never active (services
+    // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), so --set-active-hours exits
+    // 2 for them as --active-hours does ("Command options").
+    [Test]
+    public async Task Policy_update_rejects_active_hours_that_start_and_end_at_the_same_time()
+    {
+        using var run = CliRun.Start();
+        run.Stub("PATCH", PolicyPath(61), json: ApiJson.Policy(61, "facilities tablets"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run, ["policy", "update", "--id", "61", "--set-active-hours", "mon 08:00-08:00"], ["policy", "update", "--id", "61", "--set-active-hours", "mon 08:00-18:00"], "PATCH", PolicyPath(61));
+    }
+
+    // The API refuses sender tags, receiver tags or trust requirement IDs with a value twice (portal
+    // PolicyPatchModelValidator.cs:27-28,42), so a repeat exits 2 before any call ("Command
+    // options"). The list with each value once, run next, shows the rejection comes from the repeat.
+    [TestCase("--set-senders", "web,api,web", "web,api")]
+    [TestCase("--set-receivers", "db,db", "db")]
+    [TestCase("--set-trust-id", "3,8,3", "3,8")]
+    public async Task Policy_update_with_a_value_twice_in_a_list_exits_2_without_a_request(string option, string repeated, string once)
+    {
+        using var run = CliRun.Start();
+        run.Stub("PATCH", PolicyPath(42), json: ApiJson.Policy(42, "web to db"));
+
+        await CliAssert.RejectedThenAcceptedAsync(run, ["policy", "update", "--id", "42", option, repeated], ["policy", "update", "--id", "42", option, once], "PATCH", PolicyPath(42));
+    }
+
+    // Trust requirement names match ignoring case ("Names and IDs"), so "Entra Staff" repeats
+    // "entra staff". The repeat exits 2 before the lookup; the name once, run next, looks it up and
+    // patches its ID.
+    [Test]
+    public async Task Policy_update_with_a_trust_requirement_named_twice_exits_2_without_a_request()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(3, "entra staff")));
+        run.Stub("PATCH", PolicyPath(42), json: ApiJson.Policy(42, "web to db"));
+
+        CliAssert.Rejected(run, await run.RunAsync("policy", "update", "--id", "42", "--set-trust", "entra staff,Entra Staff"));
+
+        CliAssert.Succeeded(await run.RunAsync("policy", "update", "--id", "42", "--set-trust", "entra staff"));
+        var patch = run.RequestsTo("PATCH", PolicyPath(42));
+        Assert.That(patch, Has.Count.EqualTo(1));
+        Assert.That(string.Join(",", patch[0].BodyIds("SenderTrustRequirements")), Is.EqualTo("3"));
+    }
+
     // Example 79. The CLI splits at the first "=", so the label is "VLAN=20 (finance)" ("Command
     // options").
     [Test]

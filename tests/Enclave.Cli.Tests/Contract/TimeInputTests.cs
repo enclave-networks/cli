@@ -14,19 +14,15 @@ namespace Enclave.Cli.Tests.Contract;
 // shows how the CLI read the value.
 //
 // Every run reads a fixed clock in a fixed time zone through CliHost.Time, so each expected
-// instant is exact and the same on every machine. The zone is UTC+05:30 with no daylight saving,
-// made by the test: a runner set to UTC is not in it, its offset is not a whole number of hours,
-// and its rules are the same on every OS. The clock reads 20:00 UTC, which is 01:30 the next day
-// in that zone, so reading a time in UTC and reading it in the zone give different dates as well as
-// different hours.
+// instant is exact and the same on every machine. The zone is TestData.LocalZone, UTC+05:30 with
+// no daylight saving, made by the test: a runner set to UTC is not in it, its offset is not a whole
+// number of hours, and its rules are the same on every OS. The clock reads 20:00 UTC, which is
+// 01:30 the next day in that zone, so reading a time in UTC and reading it in the zone give
+// different dates as well as different hours.
 public class TimeInputTests
 {
-    private const string ZoneName = "Enclave CLI test UTC+05:30";
-
     // A time well after the clock, for a command that needs a valid --until.
     private const string Later = "2030-10-09T17:30:00Z";
-
-    private static readonly TimeZoneInfo Zone = TimeZoneInfo.CreateCustomTimeZone(ZoneName, TimeSpan.FromMinutes(330), ZoneName, ZoneName);
 
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
@@ -154,6 +150,36 @@ public class TimeInputTests
             EnableUntilPath);
     }
 
+    // A time holds instants from year 1 to year 9999 (DateTimeOffset.MinValue and MaxValue), so a
+    // duration that reaches beyond them names no instant the CLI can send or compare, and the
+    // argument is refused, naming its option, before any call. From the clock in 2030, 5000000d
+    // forwards is about the year 15700 and 1000000d back is about 700 years before year 1; both are
+    // durations the duration form reads (TimeSpan holds about 29,000 years). log's --since and
+    // --until count back from now. The corrected run proves the command and option exist.
+    [TestCase("policy enable --id 42", "--for", "5000000d", "8h", "PUT", "policies/42/enable-until")]
+    [TestCase("log", "--since", "1000000d", "24h", "GET", "logs")]
+    [TestCase("log", "--until", "1000000d", "1h", "GET", "logs")]
+    public async Task A_duration_reaching_beyond_the_times_the_cli_can_hold_exits_2_naming_its_option(
+        string command,
+        string option,
+        string duration,
+        string corrected,
+        string method,
+        string pathSuffix)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        using var run = StartWithPolicy(Now);
+        var path = TestData.OrgPath(pathSuffix);
+        run.StubPages(TestData.OrgPath("logs"), 200);
+
+        var rejected = await run.RunAsync([.. command.Split(' '), option, duration]);
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(new[] { option }));
+
+        await CliAssert.AcceptedAsync(run, method, path, [.. command.Split(' '), option, corrected]);
+    }
+
     // --for and --until each set the expiry, so together they cannot mean one expiry; --then says
     // what happens at an expiry, so without either it has nothing to apply to ("Details").
     [TestCase("--for 8h --until 2030-10-09T17:30:00Z", "--until 2030-10-09T17:30:00Z")]
@@ -175,7 +201,7 @@ public class TimeInputTests
     private static CliRun StartWithPolicy(DateTimeOffset now)
     {
         var run = CliRun.Start();
-        run.Time = new FixedTimeProvider(now, Zone);
+        run.Time = new FixedTimeProvider(now, TestData.LocalZone);
         run.Stub("PUT", EnableUntilPath, json: ApiJson.Policy(42, "contractors"));
         return run;
     }

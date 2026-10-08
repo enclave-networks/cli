@@ -80,6 +80,7 @@ internal static class PartnerCustomerCommand
         var industryDiscount = verb.Add(CliOptions.Flag("--industry-discount", "Request the industry discount."));
         var hardLimit = verb.Add(CliOptions.Flag("--hard-limit", "Refuse systems beyond the licensed number."));
         var autoSync = verb.Add(CliOptions.Flag("--auto-sync", "Keep the partner's staff as the customer's admins."));
+        RefuseBlankName(verb, name, context => context.Get(name));
 
         verb.SetHandler(async context =>
         {
@@ -123,6 +124,7 @@ internal static class PartnerCustomerCommand
         var noIndustryDiscount = verb.Add(CliOptions.Flag("--no-industry-discount", "Withdraw the industry discount request."));
         var hardLimit = verb.Add(CliOptions.Flag("--hard-limit", "Refuse systems beyond the licensed number."));
         var noHardLimit = verb.Add(CliOptions.Flag("--no-hard-limit", "Allow systems beyond the licensed number."));
+        RefuseBlankName(verb, name, context => context.Get(name));
 
         verb.AtLeastOne(name, contact, systems, gateways, industryDiscount, noIndustryDiscount, hardLimit, noHardLimit);
         verb.Exclusive(industryDiscount, noIndustryDiscount);
@@ -217,7 +219,7 @@ internal static class PartnerCustomerCommand
     private static CliVerb RemoveAdmin()
     {
         var (verb, customer) = ForCustomer("remove-admin", "Remove an admin from the customer, given by email address or account ID.", changes: true);
-        var user = verb.Add(CliOptions.Text("--user", "The admin's email address.", "email"));
+        var user = EmailOption(verb, "--user", "The admin's email address.");
         var userId = verb.Add(CliOptions.Id("--user-id", "The admin's account ID.", IdFormats.Guid, "accountId"));
         verb.ExactlyOne(user, userId);
 
@@ -301,9 +303,29 @@ internal static class PartnerCustomerCommand
     private static (CliVerb Verb, CustomerChoice Customer, Option<string?> Email) ForInvite(string name, string description)
     {
         var (verb, customer) = ForCustomer(name, description, changes: true);
-        var email = verb.Add(CliOptions.Text("--email", "The email address.", "email"));
+        var email = EmailOption(verb, "--email", "The email address.");
         verb.ExactlyOne(email);
         return (verb, customer, email);
+    }
+
+    // An empty or blank address names no admin or invite, so it is refused with the other argument
+    // checks, before the token and any call (proposed-cli-surface.md "Errors and exit codes").
+    // Passed on, it would cost the customer lookup and then match nothing, or reach
+    // ICustomersClient.InviteAdminAsync, which throws ArgumentException for a blank address
+    // (Enclave.Sdk.Api 1.1.0).
+    private static Option<string?> EmailOption(CliVerb verb, string name, string description)
+    {
+        var option = verb.Add(CliOptions.Text(name, description, "email"));
+
+        verb.Check(context =>
+        {
+            if (context.Get(option) is { } value && string.IsNullOrWhiteSpace(value))
+            {
+                throw CliErrors.InvalidArgument(CliVerb.KeyOf(option), $"{option.Name} takes an email address, and the value given is blank.");
+            }
+        });
+
+        return option;
     }
 
     // A command that acts on one customer takes its name, or --org-id, its organisation ID, the
@@ -317,8 +339,25 @@ internal static class PartnerCustomerCommand
         var customer = verb.Add(CliArguments.OptionalText("customer", "The customer's name, matched whole and ignoring case."));
         var orgId = verb.Add(CliOptions.Id("--org-id", "The customer's organisation ID.", IdFormats.Guid, "orgId"));
         verb.ExactlyOne(customer, orgId);
+        RefuseBlankName(verb, customer, context => context.Get(customer));
         return (verb, new CustomerChoice(customer, orgId));
     }
+
+    // An empty or blank name names no customer, so it is refused with the other argument checks,
+    // before the token and any call (proposed-cli-surface.md "Errors and exit codes"). Passed on,
+    // the name of the customer a command acts on would cost the customer lookup and then match
+    // nothing, and a name for create or update --name would reach the API, which refuses it (portal
+    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:19
+    // and CustomerPatchModelValidator.cs:10, NotEmpty, which fails a string that is empty or white
+    // space: FluentValidation 11.9.0, NotEmptyValidator.IsValid).
+    private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value) =>
+        verb.Check(context =>
+        {
+            if (value(context) is { } name && string.IsNullOrWhiteSpace(name))
+            {
+                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes a customer name, and the value given is blank.");
+            }
+        });
 
     // Checks run in the order arguments, token, partner, then the call (proposed-cli-surface.md
     // "Errors and exit codes"). The declared checks run before the handler, and GetPartnerAsync
@@ -347,6 +386,5 @@ internal static class PartnerCustomerCommand
         await context.Output.WriteAsync(model, context.CancellationToken);
     }
 
-    // The customer a command acts on: its name, or its organisation ID after --org-id.
     private sealed record CustomerChoice(Argument<string?> Name, Option<Guid?> OrgId);
 }

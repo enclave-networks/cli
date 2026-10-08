@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Reflection;
@@ -22,7 +23,7 @@ namespace Enclave.Cli.Tests.Support;
 
 // The tests in this project trust three things this fixture proves: that every ApiJson body is JSON
 // Enclave.Sdk.Api 1.1.0 reads into the model it names, field for field, that a CliRun confines the
-// CLI to its own environment, home directory and fake API, and that the stubs, the request records
+// CLI to its own environment, home directory and fake APIs, and that the stubs, the request records
 // and the CliAssert checks behave as their documentation says. A check that passed everything would
 // let every test that relies on it pass, so each check is shown failing on the outputs it rejects.
 public class HarnessTests
@@ -384,6 +385,31 @@ public class HarnessTests
         Assert.Throws<AssertionException>(() => run.SingleRequest());
     }
 
+    // A failed API call completes the CLI's task from inside the catch blocks of the async methods
+    // that awaited it, and on .NET 10.0.0 and 10.0.1 a test resuming inline there loses the failures
+    // Assert.Multiple throws (CliRun.RunAsync gives the details). The CLI's methods on the stack
+    // where the test resumes show whether it resumed inside them. The run's outcome and its one
+    // request prove it took the failed-call path. The checks are plain Assert.That calls, which
+    // throw from the test's body and so are reported wherever the test resumes.
+    [Test]
+    public async Task RunAsync_resumes_the_test_outside_the_cli_call_stack_after_a_failed_api_call()
+    {
+        using var run = CliRun.Start();
+        var systems = TestData.OrgPath("systems");
+        run.StubProblem("GET", systems, 500, "Server error");
+
+        var result = await run.RunAsync("system", "list");
+        var cliMethods = new StackTrace().GetFrames()
+            .Select(frame => frame.GetMethod()?.DeclaringType)
+            .Where(type => type?.Assembly == typeof(Program).Assembly)
+            .Select(type => type!.FullName)
+            .ToArray();
+
+        Assert.That(result.ExitCode, Is.EqualTo(CliAssert.ExitCodes["transient"]), result.ToString());
+        Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {systems}" }));
+        Assert.That(cliMethods, Is.Empty, "The test resumed inside the CLI's call stack.");
+    }
+
     [Test]
     public async Task StubWithQuery_takes_precedence_over_Stub_for_the_same_path()
     {
@@ -729,13 +755,12 @@ public class HarnessTests
     }
 
     // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). A run gives the
-    // CLI its fake API's URL as the partner API address too, so a partner call can never reach the
-    // live partner API, and the fake's request log holds partner calls beside main API calls. One
-    // fake serves both, since every partner route is under /partner/{partnerId}/ and no main API
-    // route is. The client is the one ApiAccess builds from the run's host, which every command's
-    // calls go through, so the call stands for any partner command's.
+    // CLI a second fake's URL as the partner API address, on loopback at another port, so a partner
+    // call can never reach the live partner API, and a partner call sent to the main API's address
+    // shows. The client is the one ApiAccess builds from the run's host, which every command's calls
+    // go through, so the call stands for any partner command's.
     [Test]
-    public async Task Partner_api_calls_of_a_run_reach_its_fake_api_with_the_token()
+    public async Task Partner_api_calls_of_a_run_reach_its_fake_partner_api_with_the_token()
     {
         using var run = CliRun.Start();
         var customers = TestData.PartnerPath("customers");
@@ -749,10 +774,84 @@ public class HarnessTests
         Assert.Multiple(() =>
         {
             Assert.That(host.DefaultPartnerApiUrl, Is.EqualTo(run.PartnerApiUrl));
-            Assert.That(run.PartnerApiUrl, Is.EqualTo(run.ApiUrl));
-            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {customers}" }));
+            Assert.That(run.PartnerApiUrl, Is.Not.EqualTo(run.ApiUrl));
+            Assert.That(run.PartnerApiUrl.Host, Is.EqualTo("127.0.0.1"));
+            Assert.That(run.PartnerApiRequests.Select(request => request.Call), Is.EqualTo(new[] { $"GET {customers}" }));
+            Assert.That(run.ApiRequests, Is.Empty);
             Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
         });
+    }
+
+    // A stub goes to the fake that serves its path, and each fake answers the other API's routes
+    // with 421 Misdirected Request, which Enclave.Sdk.Api 1.1.0 raises as EnclaveApiException for a
+    // problem details body. The client with the addresses swapped sends each call to the wrong fake;
+    // the client with them right shows both stubs exist.
+    [Test]
+    public async Task Each_fake_api_answers_only_its_own_api_routes()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", TestData.PartnerPath("customers"), json: ApiJson.Page());
+        var right = Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
+        var swapped = Connect(run.PartnerApiBaseUrl, run.ApiBaseUrl);
+
+        await OrganisationOf(right).EnrolledSystems.GetSystemsAsync();
+        await PartnerOf(right).Customers.GetCustomersAsync();
+        var mainCallAtThePartnerApi = Assert.ThrowsAsync<EnclaveApiException>(() => OrganisationOf(swapped).EnrolledSystems.GetSystemsAsync());
+        var partnerCallAtTheMainApi = Assert.ThrowsAsync<EnclaveApiException>(() => PartnerOf(swapped).Customers.GetCustomersAsync());
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(mainCallAtThePartnerApi!.ProblemDetails.Status, Is.EqualTo(421));
+            Assert.That(partnerCallAtTheMainApi!.ProblemDetails.Status, Is.EqualTo(421));
+            Assert.That(run.ApiRequests.Select(request => request.Call), Is.EqualTo(new[] { $"GET {TestData.OrgPath("systems")}", $"GET {TestData.PartnerPath("customers")}" }));
+            Assert.That(run.PartnerApiRequests.Select(request => request.Call), Is.EqualTo(new[] { $"GET {TestData.PartnerPath("customers")}", $"GET {TestData.OrgPath("systems")}" }));
+        });
+    }
+
+    // Requests holds both fakes' requests in the order they arrived, so a test reads a run's calls
+    // in the order the CLI sent them whichever API each went to; ApiRequests and PartnerApiRequests
+    // hold each fake's own.
+    [Test]
+    public async Task Requests_holds_the_requests_of_both_fake_apis_in_the_order_received()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+        run.Stub("GET", TestData.PartnerPath("customers"), json: ApiJson.Page());
+        var client = Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
+
+        await OrganisationOf(client).EnrolledSystems.GetSystemsAsync(pageNumber: 1);
+        await PartnerOf(client).Customers.GetCustomersAsync();
+        await OrganisationOf(client).EnrolledSystems.GetSystemsAsync(pageNumber: 2);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.OrgPath("systems")}", $"GET {TestData.PartnerPath("customers")}", $"GET {TestData.OrgPath("systems")}" }));
+            Assert.That(string.Join(",", run.Requests.Select(request => request.QueryValue("page") ?? "none")), Is.EqualTo("1,none,2"));
+            Assert.That(string.Join(",", run.ApiRequests.Select(request => request.QueryValue("page"))), Is.EqualTo("1,2"));
+            Assert.That(run.PartnerApiRequests.Select(request => request.Call), Is.EqualTo(new[] { $"GET {TestData.PartnerPath("customers")}" }));
+        });
+    }
+
+    // The check the partner tests rely on: a partner call at the main API's address fails it, and
+    // so does a run that sent nothing, as well as a run that did not exit 0.
+    [Test]
+    public async Task AssertSentToThePartnerApi_fails_the_test_unless_the_partner_api_address_alone_received_the_calls()
+    {
+        using var run = CliRun.Start();
+        var success = new CliResult(0, "{}", string.Empty);
+        run.Stub("GET", TestData.PartnerPath("customers"), json: ApiJson.Page());
+
+        AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, success));
+
+        await PartnerOf(Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl)).Customers.GetCustomersAsync();
+
+        Assert.That(() => PartnerApiFake.AssertSentToThePartnerApi(run, success), Throws.Nothing);
+        AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, new CliResult(1, string.Empty, ErrorLine("api_error") + "\n")));
+
+        Assert.ThrowsAsync<EnclaveApiException>(() => PartnerOf(Connect(run.ApiBaseUrl, run.ApiBaseUrl)).Customers.GetCustomersAsync());
+
+        AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, success));
     }
 
     // A test fixes the clock by setting CliRun.Time, which reaches the CLI only if the host carries
@@ -777,14 +876,14 @@ public class HarnessTests
     // Tests whose answer depends on the time read FixedTimeProvider, so it must give the instant it
     // was given, in UTC whatever offset that instant was written with (TimeProvider.GetUtcNow
     // returns a zero offset, .NET 8 documentation), and the local time in the zone it was given
-    // (TimeProvider.GetLocalNow converts GetUtcNow into LocalTimeZone). The zone is made here, at
-    // UTC+05:30, so the local time differs from UTC in its date and minutes as well as its hour,
-    // whatever zone the runner is in; the instant is written at UTC-04:00 so the conversion to UTC
-    // shows.
+    // (TimeProvider.GetLocalNow converts GetUtcNow into LocalTimeZone). The zone is the tests' own,
+    // TestData.LocalZone, at UTC+05:30, so the local time differs from UTC in its date and minutes as
+    // well as its hour, whatever zone the runner is in; the instant is written at UTC-04:00 so the
+    // conversion to UTC shows.
     [Test]
     public void FixedTimeProvider_reads_the_given_instant_in_utc_and_the_local_time_in_the_given_zone()
     {
-        var zone = TimeZoneInfo.CreateCustomTimeZone("Harness test UTC+05:30", TimeSpan.FromMinutes(330), "Harness test UTC+05:30", "Harness test UTC+05:30");
+        var zone = TestData.LocalZone;
         var instant = new DateTimeOffset(2030, 3, 14, 16, 0, 0, TimeSpan.FromHours(-4));
         var clock = new FixedTimeProvider(instant, zone);
 
@@ -1094,18 +1193,27 @@ public class HarnessTests
     private static TestCaseData Bulk(string field, string method, string path, Func<IOrganisationClient, Task<int>> call) =>
         new TestCaseData(field, method, path, call).SetArgDisplayNames(field, method, path);
 
-    private static EnclaveClient Connect(CliRun run) => new(new EnclaveClientOptions
+    private static EnclaveClient Connect(CliRun run) => Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
+
+    // The partner API address is always given: left out, Enclave.Sdk.Api 1.1.0 uses production's
+    // (EnclaveClientOptions.PartnerApiBaseUrl).
+    private static EnclaveClient Connect(string baseUrl, string partnerApiBaseUrl) => new(new EnclaveClientOptions
     {
-        BaseUrl = run.ApiBaseUrl,
+        BaseUrl = baseUrl,
+        PartnerApiBaseUrl = partnerApiBaseUrl,
         PersonalAccessToken = TestData.Token,
     });
 
-    private static IOrganisationClient ConnectOrganisation(CliRun run) =>
-        Connect(run).CreateOrganisationClient(new AccountOrganisationModel(
+    private static IOrganisationClient OrganisationOf(EnclaveClient client) =>
+        client.CreateOrganisationClient(new AccountOrganisationModel(
             OrganisationGuid.FromGuid(TestData.OrgId),
             TestData.OrgName,
             UserOrganisationRole.Owner,
             partnerAccess: false));
+
+    private static IPartnerClient PartnerOf(EnclaveClient client) => client.CreatePartnerClient(PartnerId.FromGuid(TestData.PartnerId));
+
+    private static IOrganisationClient ConnectOrganisation(CliRun run) => OrganisationOf(Connect(run));
 
     private static async Task<object> FirstAsync<T>(IAsyncEnumerable<T> items)
         where T : notnull

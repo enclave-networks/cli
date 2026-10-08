@@ -502,6 +502,91 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
+    // Active hours that start and end at the same time are never active: the check needs a time at
+    // or after the start and before the end (services
+    // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), so such a value exits 2
+    // ("Command options"). 00:00-00:00 is not read as the whole day.
+    [TestCase("mon 08:00-08:00")]
+    [TestCase("mon-fri 00:00-00:00 Europe/London")]
+    public async Task Policy_create_rejects_active_hours_that_start_and_end_at_the_same_time(string activeHours)
+    {
+        using var run = CliRun.Start();
+        run.Stub("POST", PoliciesPath, json: ApiJson.Policy(61, "facilities tablets"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run,
+            ["policy", "create", "facilities tablets", "--senders", "tablets", "--receivers", "printers", "--acl", "tcp:9100", "--active-hours", activeHours],
+            ["policy", "create", "facilities tablets", "--senders", "tablets", "--receivers", "printers", "--acl", "tcp:9100", "--active-hours", "mon 08:00-18:00"],
+            "POST",
+            PoliciesPath);
+    }
+
+    // The API refuses sender tags, receiver tags or trust requirement IDs with a value twice (portal
+    // PolicyCreateModelValidator.cs:26,28,39), so a repeat exits 2 before any call ("Command
+    // options"). A repeated flag adds to its list as a comma does. The policy with each value once,
+    // run next, shows the rejection comes from the repeat.
+    [TestCase("--senders", "web,api,web", "web,api")]
+    [TestCase("--receivers", "db,db", "db")]
+    [TestCase("--trust-id", "3,8,3", "3,8")]
+    public async Task Policy_create_with_a_value_twice_in_a_list_exits_2_without_a_request(string option, string repeated, string once)
+    {
+        using var run = CliRun.Start();
+        run.Stub("POST", PoliciesPath, json: ApiJson.Policy(42, "web to db"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run, ["policy", "create", "web to db", "--acl", "tcp:5432", option, repeated], ["policy", "create", "web to db", "--acl", "tcp:5432", option, once], "POST", PoliciesPath);
+    }
+
+    [Test]
+    public async Task Policy_create_with_a_flag_repeated_with_the_same_value_exits_2_without_a_request()
+    {
+        using var run = CliRun.Start();
+        run.Stub("POST", PoliciesPath, json: ApiJson.Policy(42, "web to db"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run,
+            ["policy", "create", "web to db", "--acl", "tcp:5432", "--senders", "web", "--senders", "web"],
+            ["policy", "create", "web to db", "--acl", "tcp:5432", "--senders", "web", "--senders", "api"],
+            "POST",
+            PoliciesPath);
+    }
+
+    // Trust requirement names match ignoring case ("Names and IDs"), so "Entra Staff" names the same
+    // requirement as "entra staff", and the API would get its ID twice. The repeat exits 2 before
+    // the lookup; the names once each, run next, look up and create.
+    [Test]
+    public async Task Policy_create_with_a_trust_requirement_named_twice_exits_2_without_a_request()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(3, "entra staff"), ApiJson.Trust(9, "uk only")));
+        run.Stub("POST", PoliciesPath, json: ApiJson.Policy(42, "office to build farm"));
+        string[] create = ["policy", "create", "office to build farm", "--senders", "office", "--receivers", "build", "--acl", "tcp:443", "--trust"];
+
+        CliAssert.Rejected(run, await run.RunAsync([.. create, "entra staff,uk only,Entra Staff"]));
+
+        CliAssert.Succeeded(await run.RunAsync([.. create, "entra staff,uk only"]));
+        var posts = run.RequestsTo("POST", PoliciesPath);
+        Assert.That(posts, Has.Count.EqualTo(1));
+        Assert.That(string.Join(",", posts[0].BodyIds("senderTrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo("3,9"));
+    }
+
+    // The API stores a repeated ACL, gateway system or subnet filter as given: neither its validators
+    // nor its create handler refuse one (portal PolicyCreateModelValidator.cs, PolicyGatewayValidator.cs,
+    // PolicyCreateHandler.cs), so the CLI sends both entries ("Command options").
+    [TestCase("--senders web --receivers db --acl tcp:443 --acl tcp:443", "acls")]
+    [TestCase("--senders staff --gateway GW001:10.0.0.0/16 --gateway GW001:10.1.0.0/16 --acl any", "gateways")]
+    [TestCase("--senders staff --gateway GW001:10.0.0.0/16 --subnet-filter 10.0.0.0/16 --subnet-filter 10.0.0.0/16 --acl any", "gatewayAllowedIpRanges")]
+    public async Task Policy_create_sends_a_repeated_acl_gateway_system_or_subnet_filter_as_given(string options, string field)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        using var run = CliRun.Start();
+        run.Stub("POST", PoliciesPath, json: ApiJson.Policy(42, "web to db"));
+
+        var request = await CliAssert.AcceptedAsync(run, "POST", PoliciesPath, ["policy", "create", "web to db", .. options.Split(' ')]);
+
+        Assert.That(JsonAssert.Property(request.BodyJson, field).GetArrayLength(), Is.EqualTo(2));
+    }
+
     // Example 22. A clock time without a zone means its next occurrence in the machine's time zone,
     // and the policy is disabled then unless --then says otherwise ("Command options", --until); the
     // expiry is sent as a UTC instant ("Details"). The CLI runs in this process, so
@@ -553,6 +638,7 @@ public partial class PolicyCommandTests
     public async Task Policy_create_until_a_time_with_a_zone_expires_at_that_instant_in_utc()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", PoliciesPath, json: ApiJson.Policy(70, "support ssh"));
 
         var request = await CliAssert.AcceptedAsync(
@@ -576,6 +662,7 @@ public partial class PolicyCommandTests
     public async Task Policy_create_rejects_contradicting_or_past_expiry_options(string option, string value, string? otherOption, string? otherValue)
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", PoliciesPath, json: ApiJson.Policy(70, "support ssh"));
         string[] create = ["policy", "create", "support ssh", "--senders", "support", "--receivers", "prod", "--acl", "tcp:22"];
         string[] rejected = otherOption is null ? [.. create, option, value] : [.. create, option, value, otherOption, otherValue!];

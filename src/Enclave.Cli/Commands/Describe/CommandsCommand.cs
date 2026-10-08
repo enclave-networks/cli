@@ -96,8 +96,6 @@ internal static class CommandsCommand
         return verb;
     }
 
-    // The call that reads the search keys for the command named, or exit 2 for a command that is
-    // not one of the lists or --pending on a list other than system list.
     private static Func<IOrganisationScopedClient, Task<IReadOnlyList<SearchKey>>> SearchKeysReader(string command, bool pending, Option searchKeys, Option pendingOption)
     {
         if (!SearchKeyLists.TryGetValue(command, out var read))
@@ -116,8 +114,8 @@ internal static class CommandsCommand
             : throw CliErrors.InvalidArgument(CliVerb.KeyOf(pendingOption), $"{pendingOption.Name} with {searchKeys.Name} takes {SystemList}, for the systems waiting for approval. `{command}` has no {pendingOption.Name}.");
     }
 
-    // A command that runs has no subcommands; a noun's commands are its verbs and second-level
-    // nouns' verbs.
+    // `partner customer` is a noun inside a noun (proposed-cli-surface.md "Shape and naming"), so
+    // `commands partner` reaches the customer verbs only by walking down to the commands that run.
     private static IEnumerable<(string Name, Command Command)> Leaves(Command command, List<string> path)
     {
         var subcommands = command.Subcommands.Where(subcommand => !subcommand.Hidden).ToArray();

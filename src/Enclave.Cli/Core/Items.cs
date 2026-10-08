@@ -36,7 +36,13 @@ internal static class Items
 
         if (context.Get(ids) is { } idList)
         {
-            return new ItemSelection<TId>(idList.Distinct().ToArray(), []);
+            // --id "" or --id "," reads as an empty list (CliOptions.Pieces). It names nothing, as a
+            // command given no items does; only "-" with an empty list succeeds with nothing to do,
+            // so that a pipeline fed by an empty list succeeds (proposed-cli-surface.md "Several
+            // IDs").
+            return idList.Count > 0
+                ? new ItemSelection<TId>(idList.Distinct().ToArray(), [])
+                : throw CliErrors.InvalidArgument(ids.Name, $"{ids.Name} holds no ID. Give at least one ID after {ids.Name}, a <{names.Name}>, or \"{CliArguments.Stdin}\" to read a list from stdin.");
         }
 
         if (given.Count == 0)

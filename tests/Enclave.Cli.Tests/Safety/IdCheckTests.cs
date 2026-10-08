@@ -14,6 +14,12 @@ public class IdCheckTests
 {
     private const string Until = "2030-01-01T00:00:00Z";
 
+    private const string AllZeroGuid = "00000000-0000-0000-0000-000000000000";
+
+    // An --until that has passed exits 2 ("Details"), so the commands run on a clock fixed before
+    // Until, which keeps each case's answer the same whatever the date.
+    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
+
     private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
 
     private static readonly Guid CustomerOrgId = new("6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b");
@@ -104,6 +110,7 @@ public class IdCheckTests
         string? readResponse)
     {
         using var run = CliRun.Start();
+        run.Time = Clock;
         run.Stub(method, path, 200, response);
 
         if (otherPath is not null)
@@ -172,6 +179,67 @@ public class IdCheckTests
             Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
             Assert.That(run.Requests, Is.Empty);
         });
+    }
+
+    // The all-zero GUID names no organisation or partner, so org use and partner use refuse it
+    // before saving it as the default every later command would use. The corrected run proves the
+    // option and the file.
+    [TestCase("org")]
+    [TestCase("partner")]
+    public async Task Use_exits_2_for_the_all_zero_guid_and_saves_nothing(string noun)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        var valid = noun == "org" ? TestData.OtherOrgId : TestData.PartnerId;
+
+        var rejected = await run.RunAsync(noun, "use", "--id", AllZeroGuid);
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
+
+        var accepted = await run.RunAsync(noun, "use", "--id", valid.ToString());
+
+        CliAssert.Succeeded(accepted);
+        var saved = JsonAssert.Property(JsonRead.Parse(run.Files.ReadText(run.CliConfigPath) ?? throw new AssertionException($"{noun} use saved no cli.json.")), noun);
+        Assert.That(Guid.Parse(JsonAssert.Property(saved, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(valid));
+    }
+
+    // The organisation and partner IDs that come from the environment or from cli.json are checked
+    // as the options' are ("ID checks"), so the all-zero GUID there exits 2 before any call. It
+    // comes after the token in the order of checks ("Errors and exit codes"), and a saved default
+    // names the file it came from, so the caller knows what to fix. The corrected run, with a real
+    // ID in the same place, proves the source is read.
+    [TestCase("ENCLAVE_ORG_ID")]
+    [TestCase("ENCLAVE_PARTNER_ID")]
+    [TestCase("cli.json org")]
+    [TestCase("cli.json partner")]
+    public async Task The_all_zero_guid_in_the_environment_or_a_saved_default_exits_2_before_any_call(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        using var run = CliRun.Start();
+        PartnerApiFake.StubPartnerApi(run);
+        run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"));
+        run.Environment.Remove("ENCLAVE_ORG_ID");
+        var partner = source is "ENCLAVE_PARTNER_ID" or "cli.json partner";
+        string[] command = partner ? ["partner", "customer", "list"] : ["system", "list"];
+        var call = partner ? $"GET {TestData.PartnerPath("customers")}" : $"GET {TestData.OrgPath("systems")}";
+        var valid = partner ? TestData.PartnerId : TestData.OrgId;
+
+        Choose(run, source, AllZeroGuid);
+        var rejected = await run.RunAsync(command);
+
+        CliAssert.Rejected(run, rejected);
+
+        if (source.StartsWith("cli.json", StringComparison.Ordinal))
+        {
+            Assert.That(rejected.Error.GetProperty("detail").GetString(), Does.Contain(run.CliConfigPath));
+        }
+
+        Choose(run, source, valid.ToString());
+        var accepted = await run.RunAsync(command);
+
+        CliAssert.Succeeded(accepted);
+        Assert.That(run.Calls(), Is.EqualTo(new[] { call }));
     }
 
     // Partners and customers are given by GUID (proposed-cli-surface.md "ID checks"), and arguments
@@ -259,7 +327,7 @@ public class IdCheckTests
 
     private static IEnumerable<TestCaseData> MalformedIdCases()
     {
-        var otherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
+        var otherOrgSystems = TestData.OtherOrgPath("systems");
 
         // Systems: letters and digits.
         yield return Case("system show ../policies/3", ["system", "show", "../policies/3"], ["system", "show", "ABCDE"], "GET", "systems/ABCDE", ApiJson.System("ABCDE"));
@@ -303,8 +371,14 @@ public class IdCheckTests
         // whichever GUID form the CLI passes.
         yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
-        yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, otherPathSuffix: $"users/{AccountId:D}");
-        yield return Case("org remove-user --id ../invites", ["org", "remove-user", "--id", "../invites"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", null, otherPathSuffix: $"users/{AccountId:D}");
+        yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
+        yield return Case("org remove-user --id ../invites", ["org", "remove-user", "--id", "../invites"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
+
+        // The all-zero GUID has a GUID's form and names nothing: no organisation or account has it.
+        // It is refused in either form a GUID is read in, with hyphens and without.
+        yield return Case("system list --org-id all zeros", ["system", "list", "--org-id", AllZeroGuid], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return Case("system list --org-id 32 zeros", ["system", "list", "--org-id", Guid.Empty.ToString("N")], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return Case("org remove-user --id all zeros", ["org", "remove-user", "--id", AllZeroGuid], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
     }
 
     // A path starting with "/" is a full path; any other is below the test organisation's path.
@@ -335,10 +409,34 @@ public class IdCheckTests
         yield return PartnerCase("--partner-id ../customers", ["partner", "customer", "list", "--partner-id", "../customers"], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");
         yield return PartnerCase("partner customer show --org-id 12", ["partner", "customer", "show", "--org-id", "12", "--partner-id", partner], ["partner", "customer", "show", "--org-id", customer, "--partner-id", partner], $"GET {TestData.CustomerPath(customer)}");
         yield return PartnerCase("partner customer convert --org-id ../admins", ["partner", "customer", "convert", "--org-id", "../admins", "--billing-months", "12", "--partner-id", partner], ["partner", "customer", "convert", "--org-id", customer, "--billing-months", "12", "--partner-id", partner], $"PUT {TestData.CustomerPath(customer, "convert")}");
+
+        // The all-zero GUID names no partner, customer or account.
+        yield return PartnerCase("--partner-id all zeros", ["partner", "customer", "list", "--partner-id", AllZeroGuid], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");
+        yield return PartnerCase("partner customer show --org-id all zeros", ["partner", "customer", "show", "--org-id", AllZeroGuid, "--partner-id", partner], ["partner", "customer", "show", "--org-id", customer, "--partner-id", partner], $"GET {TestData.CustomerPath(customer)}");
+        yield return PartnerCase("partner customer add-admin --user-id all zeros", ["partner", "customer", "add-admin", "--org-id", customer, "--user-id", AllZeroGuid, "--partner-id", partner], ["partner", "customer", "add-admin", "--org-id", customer, "--user-id", TestData.PartnerStaffAccountId, "--partner-id", partner], $"PUT {TestData.CustomerAdminPath(customer, TestData.PartnerStaffAccountId)}");
     }
 
     private static TestCaseData PartnerCase(string name, string[] rejectedArgs, string[] acceptedArgs, string call) =>
         new TestCaseData(rejectedArgs, acceptedArgs, call).SetArgDisplayNames(name);
+
+    // Puts the ID where the case names: in its environment variable, or as the default in cli.json
+    // in the form org use and partner use save ("Login, logout and status").
+    private static void Choose(CliRun run, string source, string id)
+    {
+        switch (source)
+        {
+            case "ENCLAVE_ORG_ID":
+            case "ENCLAVE_PARTNER_ID":
+                run.Environment[source] = id;
+                break;
+            case "cli.json org":
+                run.Files.WriteText(run.CliConfigPath, $$"""{ "org": { "id": "{{id}}", "name": "{{TestData.OrgName}}" } }""", privateToUser: false);
+                break;
+            default:
+                run.Files.WriteText(run.CliConfigPath, $$"""{ "partner": { "id": "{{id}}" } }""", privateToUser: false);
+                break;
+        }
+    }
 
     // A copy of the list's first item with its ID replaced by the malformed one, placed between the
     // two good items. The malformed ID is written as a JSON number where it reads as one, the type

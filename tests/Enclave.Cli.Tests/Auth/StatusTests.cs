@@ -294,6 +294,41 @@ public class StatusTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo("/account/orgs"));
     }
 
+    // Checks run in the order arguments, the token, the organisation or partner, then the call
+    // ("Errors and exit codes"), and status chooses the organisation and partner as any command
+    // does. A source it reads that is malformed, or two that contradict each other ("Details"),
+    // exit 2 before its one call. In the cli.json case ENCLAVE_ORG_ID chooses the organisation, and
+    // with no partner chosen elsewhere the file is read for the partner.
+    [TestCase("ENCLAVE_ORG with ENCLAVE_ORG_ID")]
+    [TestCase("ENCLAVE_ORG_ID that is not a GUID")]
+    [TestCase("ENCLAVE_PARTNER_ID that is not a GUID")]
+    [TestCase("cli.json that is not JSON")]
+    public async Task Status_exits_2_before_its_call_when_the_organisation_or_partner_cannot_be_chosen(string arrangement)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", json: OrgsWithRoles());
+
+        switch (arrangement)
+        {
+            case "ENCLAVE_ORG with ENCLAVE_ORG_ID":
+                run.Environment["ENCLAVE_ORG"] = TestData.OtherOrgName;
+                break;
+            case "ENCLAVE_ORG_ID that is not a GUID":
+                run.Environment["ENCLAVE_ORG_ID"] = "not-a-guid";
+                break;
+            case "ENCLAVE_PARTNER_ID that is not a GUID":
+                run.Environment["ENCLAVE_PARTNER_ID"] = "12";
+                break;
+            default:
+                run.Files.WriteText(run.CliConfigPath, "{ not json", privateToUser: false);
+                break;
+        }
+
+        var result = await run.RunAsync("status");
+
+        CliAssert.Rejected(run, result);
+    }
+
     // status is a read, so it does not take --dry-run ("Dry run"), and an option a command does not
     // take exits 2 ("Details"). The corrected run proves the rejection withheld the request.
     [Test]

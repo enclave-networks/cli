@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Modules.SystemManagement.UnapprovedSystems.Models;
 using Enclave.Cli.Context;
 using Enclave.Cli.Core;
@@ -19,8 +20,12 @@ internal static class SystemListCommand
         var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var tags = verb.Add(CliOptions.TagList("--tag", "Systems with every tag given."));
 
-        // The values each flag stands for are the API's search values ("Filters"): os matches the
-        // platform name the API stores exactly, so mac is Mac.
+        // The values each flag stands for are the API's search values ("Filters"). The API matches os
+        // against the platform name it stores exactly and case-sensitively (UseExactMatch), so
+        // windows and linux are sent as Windows and Linux. It stores macOS as Darwin, and rewrites an
+        // os value of Mac, matched ignoring case, to Darwin before matching, so mac is sent as Mac
+        // (portal Enclave.Configuration.Data/Modules/Systems/SystemSearchKeyService.cs, the "os"
+        // search key and BuildFilterAsync).
         var state = verb.Add(CliOptions.ChoiceText("--state", "Connected or disconnected systems.", ("connected", "connected"), ("disconnected", "disconnected")));
         var os = verb.Add(CliOptions.ChoiceText("--os", "Systems on this operating system.", ("windows", "Windows"), ("linux", "Linux"), ("mac", "Mac")));
         var type = verb.Add(CliOptions.ChoiceText("--type", "General-purpose or ephemeral systems.", ("general", "general"), ("ephemeral", "ephemeral")));
@@ -28,7 +33,7 @@ internal static class SystemListCommand
         var key = verb.Add(CliOptions.Text("--key", "Systems enrolled with the key of this description.", "name"));
         var keyId = verb.Add(CliOptions.Id("--key-id", "Systems enrolled with the key of this ID.", IdFormats.Int32));
         var dnsName = verb.Add(CliOptions.Text("--dns-name", "Systems that answer to this DNS name.", "name"));
-        var notSeenFor = verb.Add(CliOptions.Duration("--not-seen-for", "Systems not seen for at least this long; a system never seen counts from when it enrolled."));
+        var notSeenFor = verb.Add(CliOptions.Duration("--not-seen-for", "Systems not connected and not seen for at least this long; a system never seen counts from when it enrolled."));
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled systems."));
         var sort = verb.Add(CliOptions.Enum(
             "--sort",
@@ -68,6 +73,12 @@ internal static class SystemListCommand
 
         verb.SetHandler(async context =>
         {
+            // A duration that reaches back before the earliest time the CLI holds is an argument
+            // error, so the cut-offs are worked out before the token is read or any call is made
+            // ("Errors and exit codes": arguments are checked first).
+            var unseenSince = context.Get(notSeenFor) is { } unseen ? context.PastInstant(unseen, notSeenFor) : (DateTimeOffset?)null;
+            var waitingSince = context.Get(waitingFor) is { } wait ? context.PastInstant(wait, waitingFor) : (DateTimeOffset?)null;
+
             var org = await context.GetOrganisationAsync();
             var enrolmentKey = context.Get(keyId) ?? await KeyIdAsync(context, org, context.Get(key));
 
@@ -79,8 +90,6 @@ internal static class SystemListCommand
                 .AddFlag("gateway", context.Get(gateway))
                 .ToSearchTerm();
 
-            var now = context.Host.Time.GetUtcNow();
-
             if (context.Get(pending))
             {
                 var pendingSort = context.Get(sort) is { } mode ? PendingSort(mode) : null;
@@ -90,9 +99,9 @@ internal static class SystemListCommand
 
                 // --waiting-for has no API search key, so the CLI keeps the matches from every page
                 // it read, and total counts them ("Filters").
-                if (context.Get(waitingFor) is { } wait)
+                if (waitingSince is { } enrolledBy)
                 {
-                    waiting = waiting.Where(system => AsUtc(system.EnrolledAt) <= now - wait).ToList();
+                    waiting = waiting.Where(system => AsUtc(system.EnrolledAt) <= enrolledBy).ToList();
                 }
 
                 await context.Output.WriteListAsync(ListKind.PendingSystem, waiting, context.CancellationToken);
@@ -112,9 +121,21 @@ internal static class SystemListCommand
 
             // --not-seen-for has no API search key either. A system never seen counts from when it
             // enrolled, so one that has just enrolled is not listed for removal ("Filters").
-            if (context.Get(notSeenFor) is { } unseen)
+            //
+            // A connected system is being seen now, so it is never listed, whatever its lastSeen.
+            // lastSeen is when the discovery service last wrote the system's session (portal
+            // Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:63 reads
+            // systemSession.LastUpdate, which services
+            // Enclave.Discover/Discovery/PeerSessionReporter.cs:129 sets when it writes the
+            // session), and a system that stays connected can go long without that write; the portal
+            // shows lastSeen for disconnected systems only (portal-spa
+            // src/modules/Systems/Columns/Status.tsx). Reading lastSeen alone would put live systems
+            // in the list that example 14 revokes.
+            if (unseenSince is { } lastSeenBy)
             {
-                systems = systems.Where(system => (system.LastSeen ?? system.EnrolledAt) <= now - unseen).ToList();
+                systems = systems
+                    .Where(system => system.State != SystemState.Connected && (system.LastSeen ?? system.EnrolledAt) <= lastSeenBy)
+                    .ToList();
             }
 
             await context.Output.WriteListAsync(ListKind.System, systems, context.CancellationToken);
@@ -155,7 +176,11 @@ internal static class SystemListCommand
     };
 
     // UnapprovedSystemSummaryModel.EnrolledAt is a DateTime, which the API writes in UTC; one read
-    // without a zone is taken as UTC too.
+    // without a zone is taken as UTC too. System.Text.Json reads a time written with another offset
+    // as local time in the machine's zone (dotnet/runtime release/10.0, System.Text.Json
+    // JsonHelpers.Date.cs, TryParseAsISO, returns DateTimeOffset.LocalDateTime), and ToUniversalTime
+    // converts back with that same zone, which is why it reads the machine's zone outside CliHost:
+    // CliHost.Time's zone, which tests fix, is not the zone System.Text.Json used.
     private static DateTimeOffset AsUtc(DateTime time) =>
         new(time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : DateTime.SpecifyKind(time, DateTimeKind.Utc));
 }

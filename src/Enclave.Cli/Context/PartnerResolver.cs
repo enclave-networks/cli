@@ -36,13 +36,19 @@ internal static class PartnerResolver
         }
 
         var path = SettingsFile.PathFor(host);
+        var saved = SettingsFile.Read(host)?["partner"];
 
-        if (SettingsFile.Read(host)?["partner"] is not JsonObject saved)
+        if (saved is null)
         {
             return null;
         }
 
-        return saved["id"] is JsonValue value && value.TryGetValue(out string? savedId) && IdFormats.Guid.TryParse(savedId, out var savedGuid)
+        // A default in a shape partner use does not save names no partner, so it exits 2 naming
+        // the file, as a malformed ID does. Only a missing default means none is chosen.
+        return saved is JsonObject savedPartner
+            && savedPartner["id"] is JsonValue value
+            && value.TryGetValue(out string? savedId)
+            && IdFormats.Guid.TryParse(savedId, out var savedGuid)
             ? new PartnerChoice(savedGuid, path)
             : throw CliErrors.InvalidArgument($"The default partner in {path} has no valid ID. Save it again with `enclave-cli partner use --id <partnerId>`.");
     }

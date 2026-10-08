@@ -254,7 +254,7 @@ public class CommandsTests
     // costs one lookup call; an ID costs none.
     public static IEnumerable<TestCaseData> SearchKeyOrganisations()
     {
-        var path = OtherOrgPath("enrolment-keys/meta/search-keys");
+        var path = TestData.OtherOrgPath("enrolment-keys/meta/search-keys");
 
         yield return new TestCaseData("--org-id", TestData.OtherOrgId.ToString(), new[] { $"GET {path}" }).SetArgDisplayNames("--org-id");
         yield return new TestCaseData("--org", TestData.OtherOrgName, new[] { "GET /account/orgs", $"GET {path}" }).SetArgDisplayNames("--org");
@@ -698,7 +698,7 @@ public class CommandsTests
         run.Environment.Remove("ENCLAVE_ORG_ID");
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
         run.Stub("GET", TestData.OrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
-        run.Stub("GET", OtherOrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
+        run.Stub("GET", TestData.OtherOrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
 
         var result = await run.RunAsync("commands", "tag", "list", "--search-keys");
 
@@ -712,7 +712,7 @@ public class CommandsTests
         using var run = CliRun.Start();
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
         run.Stub("GET", TestData.OrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
-        run.Stub("GET", OtherOrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
+        run.Stub("GET", TestData.OtherOrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
 
         var result = await run.RunAsync("commands", "key", "list", "--search-keys", option, value);
 
@@ -774,9 +774,6 @@ public class CommandsTests
 
     private static TestCaseData Rejection(string rejected, string key, string corrected, string route) =>
         new TestCaseData(rejected, key, corrected, route).SetArgDisplayNames(rejected);
-
-    // Enclave.Sdk.Api writes the organisation ID in a path as 32 hex digits (TestData.OrgPath).
-    private static string OtherOrgPath(string suffix) => $"/org/{TestData.OtherOrgId:N}/{suffix}";
 
     private static Dictionary<string, JsonElement> CommandEntries(JsonElement document) =>
         document.GetProperty("commands").EnumerateArray()

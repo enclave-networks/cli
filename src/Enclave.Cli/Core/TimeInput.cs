@@ -132,11 +132,12 @@ internal sealed partial class TimeInput
     }
 
     /// <summary>
-    /// The instant this time names, read forwards from now: a duration counts from now, and a clock
-    /// time is its next occurrence after now. Null when a date and time without a zone does not
-    /// exist in the local time zone (it falls in a daylight saving gap).
+    /// The instant this time names, read forwards from now, as UTC: a duration counts from now, and
+    /// a clock time is its next occurrence after now. Exits 2, naming the option
+    /// <paramref name="name"/>, when a time without a zone does not exist in the local time zone (it
+    /// falls in a daylight saving gap), or a duration reaches past the latest time the CLI holds.
     /// </summary>
-    public DateTimeOffset? Forwards(TimeProvider time)
+    public DateTimeOffset Forwards(TimeProvider time, string name)
     {
         ArgumentNullException.ThrowIfNull(time);
 
@@ -144,18 +145,20 @@ internal sealed partial class TimeInput
 
         return _form switch
         {
-            Form.Duration => now + _duration,
+            Form.Duration => After(now, _duration, name),
             Form.Instant => _instant.ToUniversalTime(),
-            Form.Local => FromLocal(_local, time.LocalTimeZone),
-            _ => NextClock(now, time.LocalTimeZone, forwards: true),
+            Form.Local => FromLocal(_local, time.LocalTimeZone) ?? throw NotInLocalZone(name),
+            _ => NextClock(now, time.LocalTimeZone, forwards: true) ?? throw NotInLocalZone(name),
         };
     }
 
     /// <summary>
-    /// The instant this time names, read backwards from now: a duration counts back from now, and a
-    /// clock time is its latest occurrence at or before now. Null as for <see cref="Forwards"/>.
+    /// The instant this time names, read backwards from now, as UTC: a duration counts back from
+    /// now, and a clock time is its latest occurrence at or before now. Exits 2 as
+    /// <see cref="Forwards"/> does, and when a duration reaches back before the earliest time the
+    /// CLI holds.
     /// </summary>
-    public DateTimeOffset? Backwards(TimeProvider time)
+    public DateTimeOffset Backwards(TimeProvider time, string name)
     {
         ArgumentNullException.ThrowIfNull(time);
 
@@ -163,12 +166,48 @@ internal sealed partial class TimeInput
 
         return _form switch
         {
-            Form.Duration => now - _duration,
+            Form.Duration => Before(now, _duration, name),
             Form.Instant => _instant.ToUniversalTime(),
-            Form.Local => FromLocal(_local, time.LocalTimeZone),
-            _ => NextClock(now, time.LocalTimeZone, forwards: false),
+            Form.Local => FromLocal(_local, time.LocalTimeZone) ?? throw NotInLocalZone(name),
+            _ => NextClock(now, time.LocalTimeZone, forwards: false) ?? throw NotInLocalZone(name),
         };
     }
+
+    /// <summary>
+    /// The instant <paramref name="duration"/> after <paramref name="now"/>, as UTC. Exits 2,
+    /// naming the option <paramref name="name"/>, when it is past the end of year 9999.
+    /// </summary>
+    // DateTimeOffset holds the years 1 to 9999 (DateTimeOffset.MinValue and MaxValue,
+    // https://learn.microsoft.com/dotnet/api/system.datetimeoffset.maxvalue), and arithmetic beyond
+    // them throws ArgumentOutOfRangeException, which no option check would name. A duration of up to
+    // about 29,000 years parses (TimeSpan.MaxValue), so the instant is checked against the range
+    // here. The difference of two DateTimeOffset values is at most 10,000 years, so the check itself
+    // cannot overflow.
+    public static DateTimeOffset After(DateTimeOffset now, TimeSpan duration, string name)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
+
+        return duration <= DateTimeOffset.MaxValue - now
+            ? now.ToUniversalTime() + duration
+            : throw CliErrors.InvalidArgument(name, $"The duration given to {name} reaches past the end of year 9999, the latest time the CLI holds.");
+    }
+
+    /// <summary>
+    /// The instant <paramref name="duration"/> before <paramref name="now"/>, as UTC. Exits 2,
+    /// naming the option <paramref name="name"/>, when it is before the start of year 1.
+    /// </summary>
+    // After gives the reason for the range check.
+    public static DateTimeOffset Before(DateTimeOffset now, TimeSpan duration, string name)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
+
+        return duration <= now - DateTimeOffset.MinValue
+            ? now.ToUniversalTime() - duration
+            : throw CliErrors.InvalidArgument(name, $"The duration given to {name} reaches back before the start of year 1, the earliest time the CLI holds.");
+    }
+
+    private static CliException NotInLocalZone(string name) =>
+        CliErrors.InvalidArgument(name, $"The time given to {name} does not exist in the local time zone.");
 
     private static DateTimeOffset? FromLocal(DateTime local, TimeZoneInfo zone)
     {
@@ -178,7 +217,9 @@ internal sealed partial class TimeInput
         }
 
         // An ambiguous local time (the hour repeated when daylight saving ends) is read as standard
-        // time, which TimeZoneInfo.ConvertTimeToUtc chooses.
+        // time, which TimeZoneInfo.ConvertTimeToUtc chooses: "If dateTime is ambiguous, this method
+        // assumes that it is the standard time of the source time zone"
+        // (https://learn.microsoft.com/dotnet/api/system.timezoneinfo.converttimetoutc, .NET 10).
         return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone), TimeSpan.Zero);
     }
 
@@ -187,8 +228,9 @@ internal sealed partial class TimeInput
         var today = TimeZoneInfo.ConvertTime(now, zone).Date;
         var step = forwards ? 1 : -1;
 
-        // Today's occurrence, or the next (or previous) day's when today's is on the wrong side of
-        // now. A day whose occurrence falls in a daylight saving gap is skipped.
+        // Two days away is far enough: today's occurrence can be on the wrong side of now, and the
+        // next day's can fall in a daylight saving gap, which leaves that day without one. A clock
+        // time with no occurrence that close is reported as not existing in the local time zone.
         for (var days = 0; Math.Abs(days) <= 2; days += step)
         {
             var candidate = FromLocal(today.AddDays(days).Add(_clock.ToTimeSpan()), zone);

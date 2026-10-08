@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using Enclave.Sdk.Api.Exceptions;
 
@@ -66,6 +67,23 @@ internal static class ApiErrors
             // resolution failed. Retrying can succeed.
             case HttpRequestException http:
                 return new CliException(ErrorCode.Transient, $"The Enclave API could not be reached: {http.Message}", innerException: http);
+
+            // A connection that fails once the headers have arrived fails while the body is read,
+            // after SendAsync has returned, so no HttpRequestException wraps it: Enclave.Sdk.Api
+            // reads with HttpClient.GetFromJsonAsync, which returns from SendAsync at the headers
+            // (HttpCompletionOption.ResponseHeadersRead). .NET reports a body that ends early as
+            // HttpIOException, "thrown when an error occurs while reading the response" (.NET 8 and
+            // later, https://learn.microsoft.com/dotnet/api/system.net.http.httpioexception), and a
+            // reset as the IOException NetworkStream wraps the SocketException in
+            // (https://learn.microsoft.com/dotnet/api/system.net.sockets.networkstream.readasync);
+            // observed with .NET 10.0.1 on Windows and Linux. Retrying can succeed. Any other
+            // IOException, such as a write to a closed stdout pipe, is not a network failure and is
+            // reported as api_error.
+            case HttpIOException io:
+                return new CliException(ErrorCode.Transient, $"The connection to the Enclave API failed while its response was read: {io.Message}", innerException: io);
+
+            case IOException { InnerException: SocketException } io:
+                return new CliException(ErrorCode.Transient, $"The connection to the Enclave API failed while its response was read: {io.Message}", innerException: io);
 
             // HttpClient reports its timeout (HttpClient.Timeout, 100 seconds by default) as a
             // TaskCanceledException whose inner exception is a TimeoutException (.NET 5 and later).

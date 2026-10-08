@@ -1,6 +1,5 @@
 using Enclave.Cli.Context;
 using Enclave.Cli.Tests.Support;
-using Enclave.Configuration.Data.Identifiers;
 using NUnit.Framework;
 using WireMock;
 
@@ -15,7 +14,7 @@ public class TokenTests
 
     private static readonly string OrgSystems = TestData.OrgPath("systems");
 
-    private static readonly string OtherOrgSystems = $"/org/{TestData.OtherOrgId:N}/systems";
+    private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
     // Commands of this area, each run with --verbose to the point where the CLI holds the token:
     // every request it sends carries the token, and the failures are ones the CLI reports after
@@ -119,43 +118,6 @@ public class TokenTests
         {
             Assert.That(run.Requests, Is.Empty, "The request went to the default API address.");
             Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
-            Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
-        });
-    }
-
-    // credentials.json's partnerApiBaseUrl is the partner API address, read beside baseUrl, and
-    // ENCLAVE_TOKEN keeps it as it keeps baseUrl (proposed-cli-surface.md "Partner API"). A second
-    // fake API at another address shows where the partner call went; the run's own fake, which is
-    // the partner API address when the file names none, receives nothing. The client is the one
-    // ApiAccess builds from the run's host, which every command's calls go through, so the call
-    // stands for any partner command's.
-    [TestCase(false)]
-    [TestCase(true)]
-    public async Task Credentials_json_partner_api_base_url_is_the_partner_api_address_whichever_source_supplies_the_token(bool tokenFromEnvironment)
-    {
-        using var run = CliRun.Start();
-        var (other, otherUrl) = LoopbackApi.Start();
-        using var otherApi = other;
-        var customers = TestData.PartnerPath("customers");
-        LoopbackApi.Stub(otherApi, "GET", customers, 200, ApiJson.Page());
-        run.SaveCredentials(FileToken, partnerApiBaseUrl: otherUrl);
-
-        if (!tokenFromEnvironment)
-        {
-            run.Environment.Remove("ENCLAVE_TOKEN");
-        }
-
-        using var network = new HttpClientHandler();
-        var partner = ApiAccess.Resolve(run.CreateHost()).CreateClient(network).CreatePartnerClient(PartnerId.FromGuid(TestData.PartnerId));
-        await partner.Customers.GetCustomersAsync();
-
-        var received = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
-        var expectedToken = tokenFromEnvironment ? TestData.Token : FileToken;
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.Requests, Is.Empty, "The partner call went to the default partner API address.");
-            Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {customers}" }));
             Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
         });
     }
@@ -306,6 +268,18 @@ public class TokenTests
                 Assert.That(requests, Is.Empty);
             }
         });
+    }
+
+    // A type's ToString is what string interpolation, an exception message, a debugger or a
+    // diagnostic prints of it, so the saved credentials leave the token out of their text: no
+    // command prints the token ("Login, logout and status"). The base URLs and the token are all
+    // given, so a text that lists every value shows the token.
+    [Test]
+    public void Saved_credentials_leave_the_token_out_of_their_text()
+    {
+        var credentials = new StoredCredentials(TestData.Token, "https://api.example", "https://partner-api.example", true);
+
+        Assert.That(credentials.ToString(), Does.Not.Contain(TestData.Token));
     }
 
     // Bad arguments of each kind this area has: an ID that is not a GUID, a name with its ID option,

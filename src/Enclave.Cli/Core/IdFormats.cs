@@ -38,11 +38,16 @@ internal static partial class IdFormats
 
     /// <summary>
     /// An organisation, account or partner ID: a GUID, with hyphens (as the portals show it) or
-    /// without (as the API writes it).
+    /// without (as the API writes it), other than the all-zero GUID.
     /// </summary>
+    // The all-zero GUID names nothing. Enclave.Sdk.Api refuses it with ArgumentException when a
+    // client is built, after the token check (EnclaveClient.CreateOrganisationClient(OrganisationGuid)
+    // and CreatePartnerClient(PartnerId), version 1.1.0), so the ID check refuses it first, as a bad
+    // ID: exit 2, before any call.
     public static IdFormat<Guid> Guid { get; } = new(
-        "a GUID",
-        text => global::System.Guid.TryParseExact(text, "D", out var value) || global::System.Guid.TryParseExact(text, "N", out value)
+        "a GUID other than all zeros",
+        text => (global::System.Guid.TryParseExact(text, "D", out var value) || global::System.Guid.TryParseExact(text, "N", out value))
+            && value != global::System.Guid.Empty
             ? (true, value)
             : (false, global::System.Guid.Empty));
 

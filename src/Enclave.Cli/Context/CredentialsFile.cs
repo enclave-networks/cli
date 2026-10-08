@@ -35,14 +35,14 @@ internal static class CredentialsFile
         {
             if (JsonNode.Parse(text) is not JsonObject file)
             {
-                return new StoredCredentials(null, null, null, IsValid: false);
+                return new StoredCredentials(null, null, null, isValid: false);
             }
 
-            return new StoredCredentials(Text(file, "personalAccessToken"), Text(file, "baseUrl"), Text(file, "partnerApiBaseUrl"), IsValid: true);
+            return new StoredCredentials(Text(file, "personalAccessToken"), Text(file, "baseUrl"), Text(file, "partnerApiBaseUrl"), isValid: true);
         }
         catch (JsonException)
         {
-            return new StoredCredentials(null, null, null, IsValid: false);
+            return new StoredCredentials(null, null, null, isValid: false);
         }
     }
 

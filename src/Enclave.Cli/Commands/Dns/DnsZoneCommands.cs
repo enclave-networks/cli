@@ -49,6 +49,9 @@ internal static class DnsZoneCommands
         var autoDnsTags = verb.Add(CliOptions.TagList("--auto-dns-tags", "Give systems with these tags a name in the zone automatically."));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
+        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZoneCreateValidator.cs:32).
+        verb.Check(context => ListValues.CheckNoRepeats(autoDnsTags.Name, context.Get(autoDnsTags), StringComparer.Ordinal));
+
         verb.SetHandler(async context =>
         {
             var org = await context.GetOrganisationAsync();
@@ -75,6 +78,9 @@ internal static class DnsZoneCommands
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
         verb.AtLeastOne(name, autoDnsTags, notes);
+
+        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZonePatchValidator.cs:28).
+        verb.Check(context => ListValues.CheckNoRepeats(autoDnsTags.Name, context.Get(autoDnsTags), StringComparer.Ordinal));
 
         verb.SetHandler(async context =>
         {

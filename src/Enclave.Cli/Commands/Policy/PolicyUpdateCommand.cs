@@ -30,6 +30,17 @@ internal static class PolicyUpdateCommand
         verb.ExactlyOne(policy, id);
         verb.AtLeastOne(description, notes, senders, receivers, acls, trust, trustIds, gateways, mode, subnetFilter, activeHours);
         verb.Exclusive(trust, trustIds);
+
+        // The API refuses sender tags, receiver tags or trust requirements that hold a value twice
+        // (portal PolicyPatchModelValidator.cs:27-28,42). Trust requirement names match ignoring
+        // case ("Names and IDs"), so two that differ only in case name one requirement.
+        verb.Check(context =>
+        {
+            ListValues.CheckNoRepeats(senders.Name, context.Get(senders), StringComparer.Ordinal);
+            ListValues.CheckNoRepeats(receivers.Name, context.Get(receivers), StringComparer.Ordinal);
+            ListValues.CheckNoRepeats(trust.Name, context.Get(trust), StringComparer.OrdinalIgnoreCase);
+            ListValues.CheckNoRepeats(trustIds.Name, context.Get(trustIds));
+        });
         verb.Check(context =>
         {
             if (!Clears(context.Get(acls)))

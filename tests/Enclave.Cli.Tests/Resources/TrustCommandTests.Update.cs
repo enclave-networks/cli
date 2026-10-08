@@ -282,6 +282,26 @@ public partial class TrustCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["trust", "update", "--id", "5"], ["trust", "update", "--id", "5", "--notes", "Reviewed"], "PATCH", TrustPath(5));
     }
 
+    // trust update does not change a requirement's authority: a new requirement replaces it
+    // ("Command options"). --set-authority is unknown to the command, so it exits 2 before any call,
+    // and `commands trust update` does not list it.
+    [Test]
+    public async Task Trust_update_takes_no_option_that_changes_the_authority()
+    {
+        using var run = CliRun.Start();
+        run.Stub("PATCH", TrustPath(5), json: ApiJson.Trust(5, "entra staff"));
+
+        await CliAssert.RejectedThenAcceptedAsync(
+            run, ["trust", "update", "--id", "5", "--set-authority", "google"], ["trust", "update", "--id", "5", "--notes", "Reviewed"], "PATCH", TrustPath(5));
+
+        var described = await run.RunAsync("commands", "trust", "update");
+        CliAssert.Succeeded(described);
+        var options = JsonAssert.Property(JsonAssert.Property(described.StdoutJson, "commands")[0], "options")
+            .EnumerateArray()
+            .Select(option => JsonAssert.Property(option, "name").GetString());
+        Assert.That(options, Has.Member("--set-authority-uri").And.No.Member("--set-authority"));
+    }
+
     // trust update takes the create flags of the requirement's own type ("Command options"), and
     // each authority takes only its own settings: claims belong to sign-in requirements, and a
     // tenant to azure. The type and authority are known once the requirement is read.

@@ -6,6 +6,11 @@ namespace Enclave.Cli.Tests.Resources;
 
 public class KeyCommandTests
 {
+    // A test whose result depends on the time reads a fixed clock in a time zone made by the test,
+    // TestData.LocalZone, as Contract/TimeInputTests.cs does: UTC+05:30 with no daylight saving,
+    // which a runner set to UTC is not in. The clock reads 20:00 UTC on 14 March 2030.
+    private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
+
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
     // A key whose description starts with the same words is listed first, so a CLI that takes a
@@ -540,11 +545,13 @@ public class KeyCommandTests
     }
 
     // --until takes an RFC 3339 time with its zone, and the expiry is that instant, sent in UTC
-    // (proposed-cli-surface.md "Command options", "Details").
+    // (proposed-cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
+    // in the future.
     [Test]
     public async Task Key_create_until_a_time_with_a_zone_sends_that_instant_in_utc()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", KeysPath, json: ApiJson.Key(12, "contractor laptops"));
 
         var request = await CliAssert.AcceptedAsync(run, "POST", KeysPath, "key", "create", "contractor laptops", "--until", "2036-12-01T12:00:00+02:00");
@@ -575,7 +582,11 @@ public class KeyCommandTests
     // --keep-disconnected without --ephemeral exits 2 (proposed-cli-surface.md "Command options";
     // portal EnrolmentKeyCreateValidator.cs:24). --then revoke is the systems' value, and --uses takes
     // a number. --for with --until, --then without either, and --until in the past exit 2
-    // ("Details"). Each corrected command creates a key.
+    // ("Details"). An expiry past the end of year 9999 is no time the CLI can send
+    // (DateTimeOffset.MaxValue), and 5000000d, about 13,700 years, reaches past it from the fixed
+    // clock in 2030. Each corrected command creates a key. The clock is fixed, so each time is on
+    // the same side of now on every run.
+    [TestCase("--for 5000000d", "--for 14d")]
     [TestCase("--ephemeral --auto-approve", "--ephemeral")]
     [TestCase("--ephemeral --uses 5", "--ephemeral")]
     [TestCase("--keep-disconnected 10m", "--ephemeral --keep-disconnected 10m")]
@@ -590,6 +601,7 @@ public class KeyCommandTests
         ArgumentNullException.ThrowIfNull(rejected);
         ArgumentNullException.ThrowIfNull(corrected);
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", KeysPath, json: ApiJson.Key(12, "ci runners"));
 
         await CliAssert.RejectedThenAcceptedAsync(
@@ -956,15 +968,20 @@ public class KeyCommandTests
 
     // --then takes disable or delete on a key; revoke is the systems' value (proposed-cli-surface.md
     // "Command options"). --for with --until, --then without either, and --until in the past exit 2
-    // ("Details"). Each corrected command is a timed enable of one key.
+    // ("Details"). An expiry past the end of year 9999 is no time the CLI can send
+    // (DateTimeOffset.MaxValue), and 5000000d, about 13,700 years, reaches past it from the fixed
+    // clock in 2030. Each corrected command is a timed enable of one key. The clock is fixed, so
+    // each time is on the same side of now on every run.
     [TestCase("--for 14d --then revoke")]
     [TestCase("--for 14d --until 2036-12-01T10:00:00Z")]
     [TestCase("--then delete")]
     [TestCase("--until 2020-01-01T00:00:00Z")]
+    [TestCase("--for 5000000d")]
     public async Task Key_enable_with_invalid_or_contradicting_timing_flags_exits_2_without_a_request(string flags)
     {
         ArgumentNullException.ThrowIfNull(flags);
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("PUT", $"{KeysPath}/31/enable-until", json: ApiJson.Key(31, "contractor laptops"));
         run.Stub("PUT", $"{KeysPath}/enable", json: ApiJson.Bulk("keysModified", 1));
 

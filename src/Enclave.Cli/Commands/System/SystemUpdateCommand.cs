@@ -38,6 +38,11 @@ internal static class SystemUpdateCommand
             {
                 throw CliErrors.InvalidArgument(option.Name, $"{option.Name} applies to enrolled systems only, so it cannot be given with --pending.");
             }
+
+            if (context.Get(enableGatewayFor) is { } subnets && GatewayRoutes.Repeated(subnets) is { } repeated)
+            {
+                throw CliErrors.InvalidArgument(enableGatewayFor.Name, $"{enableGatewayFor.Name} gives the subnet {repeated} more than once; give each subnet once, with its label.");
+            }
         });
 
         verb.AtLeastOne(description, notes, setTags, addTags, removeTags, enableGatewayFor, disableGateway);

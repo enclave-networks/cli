@@ -24,13 +24,23 @@ internal static class TagSetCommand
         verb.Exclusive(trust, trustId);
         verb.AtLeastOne(name, colour, trust, trustId, notes);
 
+        // The API refuses a tag's trust requirements when they hold one twice (portal
+        // TagCreateModelValidator.cs:18, TagPatchModelValidator.cs:20). Trust requirement names
+        // match ignoring case ("Names and IDs"), so two that differ only in case name one
+        // requirement.
+        verb.Check(context =>
+        {
+            ListValues.CheckNoRepeats(trust.Name, context.Get(trust), StringComparer.OrdinalIgnoreCase);
+            ListValues.CheckNoRepeats(trustId.Name, context.Get(trustId));
+        });
+
         verb.SetHandler(async context =>
         {
             var tagName = context.Get(tag)!;
             var org = await context.GetOrganisationAsync();
 
             var requirements = context.Get(trustId) is { } ids
-                ? ids.Distinct().Select(TrustRequirementId.FromInt).ToArray()
+                ? ids.Select(TrustRequirementId.FromInt).ToArray()
                 : await TrustRequirementIdsAsync(context, org, context.Get(trust), trust.Name);
 
             Task<TagModel> UpdateAsync()

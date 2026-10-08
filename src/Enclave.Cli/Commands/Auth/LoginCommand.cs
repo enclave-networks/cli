@@ -9,6 +9,8 @@ namespace Enclave.Cli.Commands.Auth;
 /// </summary>
 internal static class LoginCommand
 {
+    private const char ByteOrderMark = (char)0xFEFF;
+
     public static CliVerb Create()
     {
         var verb = new CliVerb(
@@ -68,7 +70,18 @@ internal static class LoginCommand
                 throw CliErrors.InvalidArgument("--token-stdin", "--token-stdin reads the token from stdin, and stdin is a terminal. Pipe the token in: enclave-cli login --token-stdin < token-file.");
             }
 
-            var text = (await context.Host.Stdin.ReadToEndAsync(context.CancellationToken)).Trim();
+            // A token file saved with a UTF-8 byte order mark (Windows PowerShell 5.1's Out-File
+            // -Encoding utf8, Microsoft Learn, about_Character_Encoding) starts with U+FEFF when the
+            // reader passes the mark on, as Console.In does on Linux and macOS (dotnet/runtime
+            // release/10.0, src/libraries/System.Console/src/System/ConsolePal.Unix.cs,
+            // GetOrCreateReader, detectEncodingFromByteOrderMarks: false). Trim leaves it, since
+            // U+FEFF is not white space (char.IsWhiteSpace), and in the Authorization header it
+            // fails the request before it is sent: SocketsHttpHandler writes header values as ASCII
+            // and throws HttpRequestException for any other character (dotnet/runtime release/10.0,
+            // src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/HttpConnection.cs,
+            // WriteString). The reader CliHost.FromProcess gives drops the mark itself
+            // (CliHost.StdinReader); this drops it whatever reader the host gives.
+            var text = (await context.Host.Stdin.ReadToEndAsync(context.CancellationToken)).TrimStart(ByteOrderMark).Trim();
 
             return text.Length > 0 ? text : throw CliErrors.TokenMissing("stdin holds no token.");
         }

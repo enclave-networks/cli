@@ -8,6 +8,12 @@ namespace Enclave.Cli.Tests.Resources;
 
 public class SystemCommandTests
 {
+    // A test whose result depends on the time reads a fixed clock in a time zone made by the test,
+    // TestData.LocalZone, as Contract/TimeInputTests.cs does: UTC+05:30 with no daylight saving,
+    // which a runner set to UTC is not in, so reading a time in UTC and reading it in the zone give
+    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone.
+    private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
+
     private static readonly string SystemsPath = TestData.OrgPath("systems");
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
@@ -267,9 +273,54 @@ public class SystemCommandTests
         Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("ABANDONED"));
     }
 
+    // A connected system is being seen now, whatever its lastSeen says, so --not-seen-for never lists
+    // one (proposed-cli-surface.md "Filters"). lastSeen is the time the discovery service last wrote
+    // the system's session (portal Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:63
+    // reads systemSession.LastUpdate, which services
+    // Enclave.Discover/Discovery/PeerSessionReporter.cs:129 sets when it writes the session), and a
+    // system that stays connected can go long without that write. The portal shows lastSeen only for
+    // a disconnected system (portal-spa src/modules/Systems/Columns/Status.tsx, getStatusText). LIVE
+    // has a lastSeen 200 days old, and LIVENEW has none and enrolled 200 days ago, so a CLI that reads
+    // lastSeen or enrolledAt alone lists both.
+    [Test]
+    public async Task System_list_not_seen_for_never_lists_a_connected_system_whatever_its_last_seen()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var systems = ApiJson.Page(
+            SystemSeen("LIVE", "Connected", Now.AddDays(-200)),
+            ApiJson.Altered(SystemNeverSeen("LIVENEW", Now.AddDays(-200)), ("state", "Connected")),
+            SystemSeen("STALE", "Disconnected", Now.AddDays(-100)));
+        run.Stub("GET", SystemsPath, json: systems);
+
+        var result = await run.RunAsync("system", "list", "--not-seen-for", "90d");
+
+        var items = CliAssert.List(result, "system");
+        Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("STALE"));
+    }
+
+    // A duration that reaches back before year 1 names no time the CLI can compare lastSeen with
+    // (DateTimeOffset.MinValue), so it is an argument error that names its option, and exits 2
+    // before any call. From the fixed clock in 2030, 1000000d, about 2,700 years, reaches back
+    // before year 1.
+    [Test]
+    public async Task System_list_not_seen_for_a_duration_reaching_before_year_1_exits_2_without_a_request()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub("GET", SystemsPath, json: ApiJson.Page());
+
+        var rejected = await run.RunAsync("system", "list", "--not-seen-for", "1000000d");
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--not-seen-for"));
+        await CliAssert.AcceptedAsync(run, "GET", SystemsPath, "system", "list", "--not-seen-for", "90d");
+    }
+
     // Example 14: the list --not-seen-for prints is the input of system revoke, which revokes the
-    // listed systems and no others. Both commands run in one sandbox, as a shell pipeline runs them.
-    // The route and result field are those of Enclave.Sdk.Api 1.1.0 SystemsClient.RevokeSystemsAsync.
+    // listed systems and no others; LIVE is connected, so it is not revoked whatever its lastSeen.
+    // Both commands run in one sandbox, as a shell pipeline runs them. The route and result field are
+    // those of Enclave.Sdk.Api 1.1.0 SystemsClient.RevokeSystemsAsync.
     [Test]
     public async Task System_revoke_given_the_list_of_systems_not_seen_for_90_days_revokes_those_systems()
     {
@@ -278,6 +329,7 @@ public class SystemCommandTests
         var systems = ApiJson.Page(
             SystemSeen("STALE1", "Disconnected", now.AddDays(-100)),
             SystemSeen("RECENT", "Disconnected", now.AddDays(-10)),
+            SystemSeen("LIVE", "Connected", now.AddDays(-300)),
             SystemSeen("STALE2", "Disconnected", now.AddDays(-200)),
             SystemNeverSeen("NEWBIE", now.AddHours(-1)));
         run.Stub("GET", SystemsPath, json: systems);
@@ -581,6 +633,32 @@ public class SystemCommandTests
         });
     }
 
+    // The API refuses a route list that holds a subnet twice (portal
+    // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:37,
+    // MustNotHaveDuplicates on Subnet, which compares the strings exactly), so a subnet given to
+    // --enable-gateway-for twice, with a label or without, exits 2 before any call, the read of the
+    // system included. The corrected command gives the subnet once, and reads the system then
+    // patches it.
+    [TestCase("10.0.0.0/16", "10.0.0.0/16=Office")]
+    [TestCase("10.0.0.0/16=Office", "10.0.0.0/16=Office")]
+    [TestCase("10.0.0.0/16", "10.0.0.0/16")]
+    public async Task System_update_enable_gateway_for_a_subnet_given_twice_exits_2_without_a_request(string first, string second)
+    {
+        using var run = CliRun.Start();
+        var path = $"{SystemsPath}/GW001";
+        run.Stub("GET", path, json: ApiJson.System("GW001"));
+        run.Stub("PATCH", path, json: ApiJson.System("GW001"));
+
+        var rejected = await run.RunAsync("system", "update", "GW001", "--enable-gateway-for", first, "--enable-gateway-for", "10.1.0.0/16", "--enable-gateway-for", second);
+        CliAssert.Rejected(run, rejected);
+
+        var corrected = await run.RunAsync("system", "update", "GW001", "--enable-gateway-for", "10.1.0.0/16", "--enable-gateway-for", second);
+        CliAssert.Succeeded(corrected);
+        var patches = run.RequestsTo("PATCH", path);
+        Assert.That(patches, Has.Count.EqualTo(1));
+        Assert.That(SortedSubnets(JsonAssert.Property(patches[0].BodyJson, "GatewayRoutes")), Is.EqualTo("10.0.0.0/16,10.1.0.0/16"));
+    }
+
     // The two gateway flags contradict each other and exit 2 (proposed-cli-surface.md "Command
     // options", "Details").
     [Test]
@@ -684,12 +762,14 @@ public class SystemCommandTests
     }
 
     // --until takes an RFC 3339 time with its zone, and the expiry is that instant, sent in UTC
-    // (proposed-cli-surface.md "Command options", "Details").
+    // (proposed-cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
+    // in the future.
     [TestCase("2036-10-09T17:30:00Z")]
     [TestCase("2036-10-09T13:30:00-04:00")]
     public async Task System_enable_until_a_time_with_a_zone_sends_that_instant_in_utc(string until)
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{SystemsPath}/M4R8T/enable-until";
         run.Stub("PUT", path, json: ApiJson.System("M4R8T"));
 
@@ -705,56 +785,52 @@ public class SystemCommandTests
     }
 
     // A time without a zone is read in the machine's time zone (proposed-cli-surface.md "Command
-    // options"). The CLI runs in the test's process, so TimeZoneInfo.Local is the zone it reads, and
-    // the expected instant holds on a machine in any zone. Example 12, in a later year so that the
-    // time stays in the future.
+    // options"), which the CLI takes from CliHost.Time: here the test's UTC+05:30 zone, where 17:30
+    // is 12:00 UTC, so a CLI that read the time as UTC sends 17:30 UTC. Example 12, in a later year
+    // than the fixed clock so that the time is in the future.
     [Test]
     public async Task System_enable_until_a_time_without_a_zone_reads_it_in_the_local_time_zone()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{SystemsPath}/M4R8T/enable-until";
         run.Stub("PUT", path, json: ApiJson.System("M4R8T"));
-        var local = new DateTime(2036, 10, 9, 17, 30, 0, DateTimeKind.Unspecified);
-        var expected = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, TimeZoneInfo.Local));
 
         var request = await CliAssert.AcceptedAsync(run, "PUT", path, "system", "enable", "M4R8T", "--until", "2036-10-09T17:30");
 
         var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
-            Assert.That(expiry, Is.EqualTo(expected));
+            Assert.That(expiry, Is.EqualTo(new DateTimeOffset(2036, 10, 9, 12, 0, 0, TimeSpan.Zero)));
             Assert.That(expiry.Offset, Is.EqualTo(TimeSpan.Zero));
             Assert.That(JsonAssert.Property(request.BodyJson, "expiryAction").GetString(), Is.EqualTo("Disable"));
         });
     }
 
     // A clock time means its next occurrence in the machine's time zone (proposed-cli-surface.md
-    // "Command options"): 18:00 local time, after the run starts and no more than a day after it
-    // ends. The bound is 25 hours, the longest day when clocks go back.
+    // "Command options"), which the CLI takes from CliHost.Time. The fixed clock reads 01:30 on the
+    // 15th in the test's UTC+05:30 zone, so 18:00 is later that day, 12:30 UTC. A CLI that read the
+    // clock time in UTC sends 18:00 UTC on the 15th.
     [Test]
     public async Task System_enable_until_a_clock_time_sends_its_next_occurrence_in_the_local_time_zone()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{SystemsPath}/M4R8T/enable-until";
         run.Stub("PUT", path, json: ApiJson.System("M4R8T"));
 
-        var before = DateTimeOffset.UtcNow;
         var request = await CliAssert.AcceptedAsync(run, "PUT", path, "system", "enable", "M4R8T", "--until", "18:00");
-        var after = DateTimeOffset.UtcNow;
 
-        var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
-        Assert.Multiple(() =>
-        {
-            Assert.That(TimeZoneInfo.ConvertTime(expiry, TimeZoneInfo.Local).TimeOfDay, Is.EqualTo(TimeSpan.FromHours(18)));
-            Assert.That(expiry, Is.GreaterThan(before));
-            Assert.That(expiry, Is.LessThanOrEqualTo(after.AddHours(25)));
-        });
+        Assert.That(JsonRead.ExpiryDateTime(request.BodyJson), Is.EqualTo(new DateTimeOffset(2030, 3, 15, 12, 30, 0, TimeSpan.Zero)));
     }
 
     // --then takes disable or revoke on a system; delete is the value for keys and policies
     // (proposed-cli-surface.md "Command options"). --for and --until each take a duration or a time.
     // Options that contradict each other exit 2: --for with --until, or --then without either; and
-    // --until in the past exits 2 ("Details"). Each corrected command is a timed enable of one system.
+    // --until in the past exits 2 ("Details"). An expiry past the end of year 9999 is no time the
+    // CLI can send (DateTimeOffset.MaxValue), and 5000000d, about 13,700 years, reaches past it from
+    // the fixed clock in 2030. Each corrected command is a timed enable of one system. The clock is
+    // fixed, so each time is on the same side of now on every run.
     [TestCase("--for 24h --then delete")]
     [TestCase("--for 24h --until 2036-10-09T17:30:00Z")]
     [TestCase("--then revoke")]
@@ -762,10 +838,12 @@ public class SystemCommandTests
     [TestCase("--until 2020-01-01T00:00:00Z")]
     [TestCase("--for tomorrow")]
     [TestCase("--until someday")]
+    [TestCase("--for 5000000d")]
     public async Task System_enable_with_invalid_or_contradicting_timing_flags_exits_2_without_a_request(string flags)
     {
         ArgumentNullException.ThrowIfNull(flags);
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("PUT", $"{SystemsPath}/K7P2Q/enable-until", json: ApiJson.System("K7P2Q"));
         run.Stub("PUT", $"{SystemsPath}/enable", json: ApiJson.Bulk("systemsUpdated", 1));
 

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Enclave.Cli.Tests.Safety;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -24,6 +25,13 @@ public class ErrorTests
     private static readonly string[] ValidationErrors = [ValidationError];
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
+
+    private static readonly string[] IdOptionOnly = ["--id"];
+
+    // An --until that has passed exits 2 too ("Details"), so the bad arguments run on a clock fixed
+    // before the --until they give, which keeps "--for with --until" a contradiction whatever the
+    // date.
+    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2030, 3, 14, 20, 0, 0, TimeSpan.Zero), TestData.LocalZone);
 
     // The items are given by ID, or are an invite's email address, which the API cancels by
     // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api 1.1.0), so no lookup comes first
@@ -52,7 +60,16 @@ public class ErrorTests
         yield return Arguments("a bad ID", "system", "show", "../systems/ABCDE");
         yield return Arguments("a value outside the set", "system", "list", "--sort", "newest");
         yield return Arguments("--for with --until", "policy", "enable", "--id", "42", "--for", "8h", "--until", "2099-01-01T00:00:00Z");
+        yield return Arguments("--id with no IDs", "policy", "delete", "--id", ",");
     }
+
+    // Each bulk command whose IDs go after --id, given an empty value, a lone comma, and commas
+    // around spaces: none holds an ID.
+    public static IEnumerable<TestCaseData> EmptyIdOptions() =>
+        BulkCommand.All
+            .Where(command => command.TakesIdOption)
+            .SelectMany(command => new[] { string.Empty, ",", " , " }
+                .Select(value => new TestCaseData(command, value).SetArgDisplayNames(command.Name, $"--id \"{value}\"")));
 
     // Enclave.Sdk.Api throws EnclaveApiException for application/problem+json responses
     // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0). The error carries the
@@ -194,6 +211,52 @@ public class ErrorTests
         CliAssert.Failed(result, "transient");
     }
 
+    // A connection that fails while the response body is read is a network failure as much as one
+    // refused before any response, and retrying can succeed, so it is transient ("Errors and exit
+    // codes"). The fake answers with headers that promise 1000 bytes of body and sends 10, then
+    // ends the connection: with a FIN, as a server or proxy that stops part-way through does, or
+    // with a RST, as a dropped connection does. Enclave.Sdk.Api reads a page with
+    // HttpClient.GetFromJsonAsync, which returns from SendAsync once the headers arrive and reads
+    // the body after (HttpCompletionOption.ResponseHeadersRead), so the failure comes from the body
+    // read, outside the HttpRequestException that SendAsync throws for a connection that fails
+    // first.
+    [TestCase("ends early")]
+    [TestCase("is reset")]
+    public async Task A_connection_that_fails_while_the_response_body_is_read_exits_6_with_transient(string connection)
+    {
+        using var run = CliRun.Start();
+        using var api = new BrokenBodyApi(reset: connection == "is reset");
+        run.SaveCredentials(TestData.Token, baseUrl: api.Url);
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Failed(result, "transient");
+        Assert.That(api.Requests, Is.EqualTo(new[] { $"GET {SystemsPath}" }));
+    }
+
+    // "Several IDs": a command that takes several items is given them as arguments, after --id, or
+    // as a list on stdin, and only "-" with an empty list succeeds with nothing to do, so a pipeline
+    // fed by an empty list succeeds. An --id that holds no ID names nothing, as a command given no
+    // items does, so it exits 2 before any call. The corrected run proves the command and option
+    // exist and that the rejection withheld the bulk call.
+    [TestCaseSource(nameof(EmptyIdOptions))]
+    public async Task A_bulk_command_given_an_id_option_with_no_ids_exits_2_and_sends_nothing(BulkCommand command, string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        using var run = CliRun.Start();
+        command.StubBulk(run, 1);
+
+        var rejected = await run.RunAsync([.. command.Name.Split(' '), "--id", value]);
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(IdOptionOnly));
+
+        var accepted = await run.RunAsync(command.Args(command.Ids(1)));
+
+        CliAssert.Bulk(accepted, requested: 1, affected: 1);
+        Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
+    }
+
     // Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2),
     // then the call ("Errors and exit codes"). Bad arguments fail the same way with or without a
     // token and an organisation, so the second run has neither, and with neither the CLI makes no
@@ -203,6 +266,8 @@ public class ErrorTests
     {
         using var withContext = CliRun.Start();
         using var withoutContext = CliRun.Start();
+        withContext.Time = Clock;
+        withoutContext.Time = Clock;
         withoutContext.Environment.Remove("ENCLAVE_TOKEN");
         withoutContext.Environment.Remove("ENCLAVE_ORG_ID");
 

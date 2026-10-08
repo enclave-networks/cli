@@ -13,8 +13,9 @@ internal interface IFileStore
 
     /// <summary>
     /// Creates or replaces the file with this text in one step, creating its directory when it is
-    /// missing. With <paramref name="privateToUser"/>, only the current user can read what it
-    /// creates: on Linux and macOS a new directory gets mode 0700 and the file mode 0600.
+    /// missing, readable by the current user only: on Linux and macOS a new directory gets mode
+    /// 0700. With <paramref name="privateToUser"/>, only the current user can read the file: on Linux
+    /// and macOS it gets mode 0600.
     /// </summary>
     void WriteText(string path, string text, bool privateToUser);
 

@@ -54,6 +54,21 @@ internal static class JsonRead
         string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetInt32().ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>
+    /// The GUID a JSON string holds, in any form Guid.TryParse reads, or null for any other value.
+    /// </summary>
+    // GUIDs are compared as GUIDs: the API writes them as 32 hex digits, people type them
+    // hyphenated, and the CLI may print either.
+    public static Guid? GuidOf(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), CultureInfo.InvariantCulture, out var guid) ? guid : null;
+
+    /// <summary>
+    /// The GUID in the "id" property of a JSON object, as <see cref="GuidOf"/> reads it, or null when
+    /// the value is not an object or has no "id".
+    /// </summary>
+    public static Guid? IdOf(JsonElement obj) =>
+        obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty("id", out var id) ? GuidOf(id) : null;
+
+    /// <summary>
     /// The expiryDateTime of a timed enable body (AutoExpireModel) as a point in time.
     /// </summary>
     public static DateTimeOffset ExpiryDateTime(JsonElement body) =>

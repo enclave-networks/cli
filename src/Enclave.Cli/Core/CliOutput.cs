@@ -72,12 +72,6 @@ internal sealed class CliOutput
         WriteAsync(result, cancellationToken);
 
     /// <summary>
-    /// Prints {}, the output of a call whose API response has no body.
-    /// </summary>
-    public Task WriteNoBodyAsync(CancellationToken cancellationToken = default) =>
-        WriteAsync(new JsonObject(), cancellationToken);
-
-    /// <summary>
     /// Prints text as it is. Only help prints text; every other output is JSON.
     /// </summary>
     public Task WriteTextAsync(string text)
