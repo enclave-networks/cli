@@ -1,0 +1,258 @@
+name: CI
+
+# Pull requests use the pull_request event, under which a pull request from a fork runs with a
+# read-only token and no secrets, so its code cannot write to this repository. The release job is
+# the only job with write access, and it runs only for pushes to main.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # YEAR.MONTH.DAY.RUN, the scheme other Enclave products use, without leading zeros. It is worked
+  # out once here so every job, archive and the release tag share it, even across midnight.
+  version:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          version="$(date -u '+%Y.%-m.%-d').$GITHUB_RUN_NUMBER"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            version="$version-pr.$PR_NUMBER"
+          fi
+          echo "Version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+  test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # Tests in the Pending category state behaviour the CLI does not meet
+      # (tests/Enclave.Cli.Tests/Support/TestCategory.cs), so CI runs every other test.
+      - name: Test
+        run: dotnet test enclave-cli.slnx -c Release --filter "TestCategory!=Pending"
+
+  build:
+    name: build (${{ matrix.rid }})
+    needs: version
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+          - rid: win-arm64
+            os: windows-11-arm
+          - rid: osx-x64
+            os: macos-15-intel
+          - rid: osx-arm64
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      RID: ${{ matrix.rid }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Publish
+        run: dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
+
+      - name: Smoke test
+        run: |
+          exe=publish/enclave-cli
+          if [ "$RUNNER_OS" = "Windows" ]; then exe=publish/enclave-cli.exe; fi
+          sh .github/scripts/smoke-test.sh "$exe" "$VERSION"
+
+      # Artifact uploads do not keep file permissions, so the executable is packed into an archive
+      # first; tar keeps its executable bit for macOS.
+      - name: Package (zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "enclave-cli-$env:VERSION-$env:RID.zip"
+          Compress-Archive -Path publish/enclave-cli.exe, LICENSE -DestinationPath $archive
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+
+      - name: Package (tar.gz)
+        if: runner.os != 'Windows'
+        run: |
+          archive="enclave-cli-$VERSION-$RID.tar.gz"
+          cp LICENSE publish/
+          tar -czf "$archive" -C publish enclave-cli LICENSE
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
+      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
+      # an earlier attempt of this job uploaded.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.ARCHIVE }}
+          archive: false
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 2
+
+  # Linux. Each binary is built on a runner of its CPU, like the Windows and macOS ones, and smoke
+  # tested inside a stock container of the oldest distribution it supports: AlmaLinux 8 (RHEL 8,
+  # glibc 2.28) for glibc, Alpine 3.22 for musl. A self-contained single-file binary takes its glibc
+  # requirement from Microsoft's runtime (glibc 2.27 or later for .NET 10,
+  # https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md), so the runner's
+  # newer glibc does not raise it; running the binary on the oldest distribution proves that.
+  build-linux:
+    name: build (${{ matrix.rid }})
+    needs: version
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            os: ubuntu-latest
+            image: almalinux:8
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+            image: almalinux:8
+          - rid: linux-musl-x64
+            os: ubuntu-latest
+            image: alpine:3.22
+          - rid: linux-musl-arm64
+            os: ubuntu-24.04-arm
+            image: alpine:3.22
+    runs-on: ${{ matrix.os }}
+    env:
+      RID: ${{ matrix.rid }}
+      IMAGE: ${{ matrix.image }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Publish
+        run: dotnet publish src/Enclave.Cli/Enclave.Cli.csproj -c Release -r "$RID" -p:Version="$VERSION" -o publish
+
+      # .NET needs libstdc++ (https://learn.microsoft.com/dotnet/core/install/linux-alpine#dependencies),
+      # which the stock Alpine image lacks and a machine running .NET apps has.
+      - name: Smoke test
+        run: |
+          docker run --rm -e VERSION -v "$PWD:/src:ro" -w /src "$IMAGE" sh -euc '
+            if command -v apk >/dev/null; then apk add --no-cache libstdc++ >/dev/null; fi
+            sh .github/scripts/smoke-test.sh publish/enclave-cli "$VERSION"
+          '
+
+      # Artifact uploads do not keep file permissions; tar keeps the executable bit.
+      - name: Package (tar.gz)
+        run: |
+          archive="enclave-cli-$VERSION-$RID.tar.gz"
+          cp LICENSE publish/
+          tar -czf "$archive" -C publish enclave-cli LICENSE
+          echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
+
+      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
+      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
+      # an earlier attempt of this job uploaded.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.ARCHIVE }}
+          archive: false
+          overwrite: true
+          if-no-files-found: error
+          retention-days: 2
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [version, test, build, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      # download-artifact v8 unzips an artifact served as a zip, which would unpack the Windows
+      # archives; skip-decompress keeps every artifact as the file that was uploaded
+      # (https://github.com/actions/download-artifact/releases/tag/v8.0.0).
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: enclave-cli-*
+          path: downloaded
+          merge-multiple: true
+          skip-decompress: true
+
+      # Checks for the exact file each build job uploads, one per RID in the build matrices, so a
+      # missing or renamed file stops the release.
+      - name: Collect release files
+        run: |
+          mkdir release
+          find downloaded -type f -name "enclave-cli-$VERSION-*" -exec mv {} release/ \;
+          expected=""
+          for rid in win-x64 win-arm64; do
+            expected="$expected enclave-cli-$VERSION-$rid.zip"
+          done
+          for rid in linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64; do
+            expected="$expected enclave-cli-$VERSION-$rid.tar.gz"
+          done
+          missing=0
+          for file in $expected; do
+            if [ ! -f "release/$file" ]; then
+              echo "::error::missing release file $file"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ] || [ "$(find release -type f | wc -l)" -ne 8 ]; then
+            ls -laR downloaded release
+            exit 1
+          fi
+          cd release
+          sha256sum enclave-cli-* > SHA256SUMS
+          cat SHA256SUMS
+
+      # Fails if the tag already exists, so a re-run leaves a published release as it was.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "v$VERSION" release/*
+          --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --title "enclave-cli $VERSION"
+          --generate-notes

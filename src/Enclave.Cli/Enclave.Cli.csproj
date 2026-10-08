@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>enclave-cli</AssemblyName>
+    <RootNamespace>Enclave.Cli</RootNamespace>
+
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+
+    <!--
+      Without invariant mode, .NET on Linux needs libicu installed and fails to start when it is
+      missing (https://learn.microsoft.com/dotnet/core/runtime-config/globalization). Agents often run
+      the CLI in minimal containers that lack it. Invariant mode suits the CLI, whose output is
+      culture-independent.
+    -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    A build for a specific runtime (dotnet publish -r <rid>) produces the release form: one
+    self-contained executable that needs no .NET install on the target machine.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Enclave.Sdk.Api" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Enclave.Cli.Tests" />
+  </ItemGroup>
+
+</Project>
