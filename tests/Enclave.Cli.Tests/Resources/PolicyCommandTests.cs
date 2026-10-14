@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -16,10 +17,6 @@ namespace Enclave.Cli.Tests.Resources;
 /// </summary>
 public partial class PolicyCommandTests
 {
-    private const string None = "(none)";
-
-    private const string Empty = "(empty)";
-
     // An --until that has passed exits 2 ("Details"), so a test that gives a fixed --until time runs
     // on a clock fixed before it, in TestData.LocalZone, which keeps its answer the same whatever the
     // date. The clock reads 20:00 UTC on 14 January 2030, the day before those --until times.
@@ -74,7 +71,7 @@ public partial class PolicyCommandTests
         var request = run.SingleRequest();
         Assert.Multiple(() =>
         {
-            Assert.That(SearchTerms(request), Is.EqualTo(StateDisabled));
+            Assert.That(SearchTerms.Of(request.QueryValue("search")), Is.EqualTo(StateDisabled));
             Assert.That(request.QueryValue("include_disabled"), Is.EqualTo("true").IgnoreCase);
             Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("23"));
         });
@@ -89,7 +86,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "list", "--state", "enabled");
 
         CliAssert.List(result, "policy");
-        Assert.That(SearchTerms(run.SingleRequest()), Is.EqualTo(StateEnabled));
+        Assert.That(SearchTerms.Of(run.SingleRequest().QueryValue("search")), Is.EqualTo(StateEnabled));
     }
 
     // On policy list the tags search key matches sender or receiver tags, and several values with no
@@ -104,7 +101,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "list", "--tag", "web,db");
 
         CliAssert.List(result, "policy");
-        Assert.That(SearchTerms(run.SingleRequest()), Is.EqualTo(TagsWebAndDb));
+        Assert.That(SearchTerms.Of(run.SingleRequest().QueryValue("search")), Is.EqualTo(TagsWebAndDb));
     }
 
     // --filter is sent as typed and the filter flags are added to it as search keys, so they
@@ -118,7 +115,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "list", "--filter", "database", "--tag", "web", "--state", "enabled");
 
         CliAssert.List(result, "policy");
-        var terms = SearchTerms(run.SingleRequest());
+        var terms = SearchTerms.Of(run.SingleRequest().QueryValue("search"));
         Assert.Multiple(() =>
         {
             Assert.That(terms, Has.Length.EqualTo(3));
@@ -128,7 +125,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
+    // Enclave.Sdk.Api 1.2.0 writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
     // the value is compared ignoring case.
     [Test]
     public async Task Policy_list_with_include_disabled_asks_the_api_for_disabled_policies()
@@ -276,7 +273,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "show", "../tags");
 
         CliAssert.Failed(result, "invalid_argument");
-        Assert.That(run.Calls(), Has.All.EqualTo("GET " + PoliciesPath));
+        Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo("GET " + PoliciesPath));
     }
 
     // Example 31. A command that takes several items always makes the bulk call, also for one item,
@@ -294,7 +291,7 @@ public partial class PolicyCommandTests
         CliAssert.Bulk(result, 1, 1);
         var bulk = run.RequestsTo("PUT", BulkPath(verb));
         Assert.That(bulk, Has.Count.EqualTo(1));
-        Assert.That(Ids(bulk[0]), Is.EqualTo("42"));
+        Assert.That(bulk[0].SortedBodyIds("policyIds"), Is.EqualTo("42"));
     }
 
     // Names match exactly, ignoring case ("Names and IDs").
@@ -308,7 +305,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "disable", "Web To DB");
 
         CliAssert.Bulk(result, 1, 1);
-        Assert.That(Ids(run.RequestsTo("PUT", BulkPath("disable"))[0]), Is.EqualTo("42"));
+        Assert.That(run.RequestsTo("PUT", BulkPath("disable"))[0].SortedBodyIds("policyIds"), Is.EqualTo("42"));
     }
 
     // Name lookups ask for disabled items too, since enable takes a disabled item by name
@@ -329,7 +326,7 @@ public partial class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(lookups.Select(lookup => lookup.QueryValue("include_disabled")), Has.All.EqualTo("true").IgnoreCase);
-            Assert.That(Ids(run.RequestsTo("PUT", BulkPath("enable"))[0]), Is.EqualTo("23"));
+            Assert.That(run.RequestsTo("PUT", BulkPath("enable"))[0].SortedBodyIds("policyIds"), Is.EqualTo("23"));
         });
     }
 
@@ -345,7 +342,7 @@ public partial class PolicyCommandTests
         CliAssert.Bulk(result, 2, 2);
         var bulk = run.RequestsTo("PUT", BulkPath("disable"));
         Assert.That(bulk, Has.Count.EqualTo(1));
-        Assert.That(Ids(bulk[0]), Is.EqualTo("17,42"));
+        Assert.That(bulk[0].SortedBodyIds("policyIds"), Is.EqualTo("17,42"));
     }
 
     // Example 35. --id takes a comma list and makes no lookup.
@@ -364,7 +361,7 @@ public partial class PolicyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(BulkPath(verb)));
-            Assert.That(Ids(request), Is.EqualTo("42,43,57"));
+            Assert.That(request.SortedBodyIds("policyIds"), Is.EqualTo("42,43,57"));
         });
     }
 
@@ -382,7 +379,7 @@ public partial class PolicyCommandTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(CandidateIds(error), Is.Empty);
+            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
             Assert.That(run.RequestsTo("PUT", BulkPath("disable")), Is.Empty);
         });
     }
@@ -401,7 +398,7 @@ public partial class PolicyCommandTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(CandidateIds(error), Is.EqualTo("4201,4302"));
+            Assert.That(NameLookup.CandidateIds(error), Is.EqualTo("4201,4302"));
             Assert.That(run.RequestsTo("PUT", BulkPath("disable")), Is.Empty);
         });
     }
@@ -412,7 +409,7 @@ public partial class PolicyCommandTests
     public async Task Policy_disable_with_org_acts_in_that_organisation()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.Stub("GET", OtherOrgPoliciesPath, json: ApiJson.Page(ApiJson.Policy(42, "web to db")));
         run.StubBulk("PUT", OtherOrgPoliciesPath + "/disable", "policiesUpdated", 1);
 
@@ -423,7 +420,7 @@ public partial class PolicyCommandTests
         Assert.That(bulk, Has.Count.EqualTo(1));
         Assert.Multiple(() =>
         {
-            Assert.That(Ids(bulk[0]), Is.EqualTo("42"));
+            Assert.That(bulk[0].SortedBodyIds("policyIds"), Is.EqualTo("42"));
             Assert.That(run.Requests.Where(request => request.Path.StartsWith(TestData.OrgPath(), StringComparison.Ordinal)), Is.Empty);
         });
     }
@@ -442,7 +439,7 @@ public partial class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Path, Is.EqualTo(OtherOrgPoliciesPath + "/disable"));
-            Assert.That(Ids(request), Is.EqualTo("42"));
+            Assert.That(request.SortedBodyIds("policyIds"), Is.EqualTo("42"));
         });
     }
 
@@ -525,6 +522,29 @@ public partial class PolicyCommandTests
             run, ["policy", "enable", "--id", "42,43", "--for", "8h"], ["policy", "enable", "--id", "42", "--for", "8h"], "PUT", EnableUntilPath(42));
     }
 
+    // --for and --until take one item ("Several IDs"), and a policy named twice is one item: names
+    // match whole and ignoring case ("Names and IDs"), so contractors and CONTRACTORS name the same
+    // policy. The command makes the timed enable of that policy, once.
+    [TestCase("contractors", "contractors")]
+    [TestCase("contractors", "CONTRACTORS")]
+    public async Task Policy_enable_for_a_duration_takes_one_policy_named_twice(string first, string second)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", PoliciesPath, json: ApiJson.Page(DisabledPolicy(23, "contractors"), ApiJson.Policy(24, "contractors (old)")));
+        run.Stub("PUT", EnableUntilPath(23), json: ApiJson.Policy(23, "contractors"));
+        run.StubBulk("PUT", BulkPath("enable"), "policiesUpdated", 1);
+
+        var result = await run.RunAsync("policy", "enable", first, second, "--for", "8h");
+
+        CliAssert.Succeeded(result);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.RequestsTo("PUT", EnableUntilPath(23)), Has.Count.EqualTo(1));
+            Assert.That(run.RequestsTo("PUT", BulkPath("enable")), Is.Empty);
+            Assert.That(result.StdoutJson.GetProperty("id").GetInt32(), Is.EqualTo(23));
+        });
+    }
+
     // --then takes disable or delete on policies; revoke is the system's name for deleting
     // ("Command options").
     [Test]
@@ -577,11 +597,11 @@ public partial class PolicyCommandTests
         CliAssert.Bulk(result, 1, 1);
         var delete = run.RequestsTo("DELETE", PoliciesPath);
         Assert.That(delete, Has.Count.EqualTo(1));
-        Assert.That(Ids(delete[0]), Is.EqualTo("17"));
+        Assert.That(delete[0].SortedBodyIds("policyIds"), Is.EqualTo("17"));
     }
 
-    // Example 54. affected below requested is still success: the IDs were unknown or already gone,
-    // and a re-run is safe ("Several IDs").
+    // Example 54. affected below requested is a success: the IDs were unknown or already gone, and a
+    // re-run is safe ("Several IDs").
     [Test]
     public async Task Policy_delete_with_ids_reports_what_the_api_deleted_and_exits_0()
     {
@@ -595,12 +615,12 @@ public partial class PolicyCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(Ids(request), Is.EqualTo("17,18"));
+            Assert.That(request.SortedBodyIds("policyIds"), Is.EqualTo("17,18"));
         });
     }
 
-    // Example 54. The lookup is a read a change depends on, so it still runs; only the delete is
-    // withheld ("Dry run").
+    // Example 54. The lookup is a read a change depends on, so it runs under --dry-run; only the
+    // delete is withheld ("Dry run").
     [Test]
     public async Task Policy_delete_by_description_with_dry_run_prints_the_delete_and_sends_only_the_lookup()
     {
@@ -610,11 +630,11 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "delete", "old vpn", "--dry-run");
 
-        var request = DryRunRequest(result, "DELETE", PoliciesPath);
+        var request = DryRunOutput.RequestInTestOrg(result, "DELETE", PoliciesPath);
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "policyIds")), Is.EqualTo("17"));
-            Assert.That(run.Calls(), Has.All.EqualTo("GET " + PoliciesPath));
+            Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo("GET " + PoliciesPath));
         });
     }
 
@@ -626,7 +646,7 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "delete", "--id", "17", "--dry-run");
 
-        var request = DryRunRequest(result, "DELETE", PoliciesPath);
+        var request = DryRunOutput.RequestInTestOrg(result, "DELETE", PoliciesPath);
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "policyIds")), Is.EqualTo("17"));
@@ -646,7 +666,7 @@ public partial class PolicyCommandTests
         var result = await run.RunAsync("policy", "disable", "-");
 
         CliAssert.Bulk(result, 2, 2);
-        Assert.That(Ids(run.SingleRequest()), Is.EqualTo("42,43"));
+        Assert.That(run.SingleRequest().SortedBodyIds("policyIds"), Is.EqualTo("42,43"));
     }
 
     // Keys and policies both have integer IDs, so the list's kind is what stops a key list deleting
@@ -669,11 +689,6 @@ public partial class PolicyCommandTests
 
     private static string EnableUntilPath(int id) => PolicyPath(id) + "/enable-until";
 
-    // Examples give a policy both ways, by its description and by --id ("Names and IDs"), and the
-    // command must send the same change either way.
-    private static string[] Target(bool byDescription, string description, int id) =>
-        byDescription ? [description] : ["--id", id.ToString(CultureInfo.InvariantCulture)];
-
     // ApiJson.Policy with some properties replaced, each given as JSON text, so the body keeps the
     // shape HarnessTests proves Enclave.Sdk.Api reads.
     private static string PolicyWith(int id, string description, params (string Name, string Json)[] changes)
@@ -690,54 +705,6 @@ public partial class PolicyCommandTests
 
     private static string DisabledPolicy(int id, string description) =>
         PolicyWith(id, description, ("isEnabled", "false"), ("state", "\"Disabled\""));
-
-    // Sorted, since the order of a bulk call's IDs does not change what it does.
-    private static string Ids(RecordedRequest request) =>
-        string.Join(",", request.BodyIds("policyIds").Order(StringComparer.Ordinal));
-
-    // The API splits the search text at whitespace (portal BaseSearchKeyService.GetTokens), so the
-    // order of the terms is not part of the requirement; each term is the exact search text the
-    // "Filters" table gives.
-    private static string[] SearchTerms(RecordedRequest request) =>
-        (request.QueryValue("search") ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-    // The IDs of the candidates a name lookup error carries, sorted. For no match the candidates
-    // hold nothing ("Errors and exit codes"), so a missing, null or empty list all read as "".
-    private static string CandidateIds(JsonElement error)
-    {
-        if (!error.TryGetProperty("candidates", out var candidates) || candidates.ValueKind == JsonValueKind.Null)
-        {
-            return string.Empty;
-        }
-
-        return string.Join(",", candidates.EnumerateArray().Select(candidate => JsonAssert.Property(candidate, "id").GetInt32()).Order().Select(id => id.ToString(CultureInfo.InvariantCulture)));
-    }
-
-    // The output form "Dry run" gives: { "dryRun": true, "org": { id, name }, "requests": [...] },
-    // with requests a list. Each command here sends one change, so the list holds one request.
-    // CliRun names the organisation by ID (ENCLAVE_ORG_ID), and then no lookup gives its name, which
-    // is null.
-    private static JsonElement DryRunRequest(CliResult result, string method, string path)
-    {
-        CliAssert.Succeeded(result);
-        var output = result.StdoutJson;
-        var org = JsonAssert.Property(output, "org");
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var request = requests[0];
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo(method));
-            Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(path));
-        });
-
-        return request;
-    }
 
     // Ports are compared without spaces: the API reads "8000-8100" and "8000 - 8100" alike and
     // writes the second (portal AclConversionExtensions.TryParsePorts,
@@ -756,36 +723,4 @@ public partial class PolicyCommandTests
     // are tried in ("Command options").
     private static string Gateways(JsonElement gateways) =>
         string.Join("; ", gateways.EnumerateArray().Select(gateway => $"{Text(gateway, "systemId")}:{JsonRead.StringList(JsonAssert.Property(gateway, "routes"))}"));
-
-    private static string Set(params string[] entries) => string.Join("; ", entries.Order(StringComparer.Ordinal));
-
-    // Names match ignoring case, since PATCH bodies key the top level in PascalCase
-    // (JsonAssert.Property). Missing and null read as (none), an unset label; an empty string reads
-    // as (empty), since an empty label is sent as null ("Details"); any other JSON kind reads as
-    // json:<raw>, so a boolean or number never passes for text.
-    private static string Text(JsonElement obj, string name)
-    {
-        foreach (var property in obj.EnumerateObject())
-        {
-            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            return property.Value.ValueKind switch
-            {
-                JsonValueKind.Null => None,
-                JsonValueKind.String => property.Value.GetString() is { Length: > 0 } text ? text : Empty,
-                _ => "json:" + property.Value.GetRawText(),
-            };
-        }
-
-        return None;
-    }
-
-    // Absent, null and [] all leave a setting unset. A general policy must have no gateways, subnet
-    // filters or traffic direction (portal PolicyCreateModelValidator.cs:47-52).
-    private static bool IsUnset(JsonElement body, string name) =>
-        Text(body, name) == None
-        || (body.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array && value.GetArrayLength() == 0);
 }

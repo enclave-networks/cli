@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Partner;
 
 // Every ID is checked before any call, and one bad ID exits 2 naming it (proposed-cli-surface.md
 // "ID checks"). Organisation IDs (a partner's customers included), account IDs and partner IDs are
-// GUIDs. Enclave.Sdk.Api 1.1.0 puts customer and account IDs into the partner API's paths as their
+// GUIDs. Enclave.Sdk.Api 1.2.0 puts customer and account IDs into the partner API's paths as their
 // typed IDs write them (CustomersClient.CustomerRoute), so a value that is not a GUID never reaches
 // a path; "../x" is the value that matters most, since a path holding it unchecked would send the
 // request to another resource. A rejection alone does not show the command exists, so each ID case
@@ -149,11 +149,12 @@ public class PartnerSafetyTests
     // personal access tokens do not expire (portal Enclave.Accounts TokensApiController.cs:105).
     // Each token test also requires the command to succeed, so a command that printed nothing
     // because it did nothing does not pass, and to send exactly the requests the command table
-    // gives, each carrying the token, which shows the CLI held the token it left out. create under
+    // gives, each carrying the token, which shows the CLI held the token it left out. Under
+    // --dry-run the report must also show the change the command withheld ("Dry run"). create under
     // --dry-run is the one run that sends no request: it reads nothing first, and its change is
-    // withheld ("Dry run"). The report it prints is what shows it ran.
+    // withheld. The report it prints is what shows it ran.
     [TestCaseSource(nameof(CustomerCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls)
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls, string? withheldChange)
     {
         using var run = PartnerApiFake.StartWithPartner();
 
@@ -166,12 +167,14 @@ public class PartnerSafetyTests
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
+        AssertReportedChange(result, withheldChange);
     }
 
-    // --verbose adds diagnostics to stderr, each request's method and URL among them ("Details"), so
-    // stderr is not empty, and it holds no error.
+    // --verbose adds diagnostics to stderr as JSON lines, { "verbose": "…" }, each request's method
+    // and URL among them ("Details"), so stderr is not empty, and every line on it is a diagnostic:
+    // none is an error, and none is text a caller reading stderr as JSON cannot parse.
     [TestCaseSource(nameof(CustomerCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args, string[] calls)
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args, string[] calls, string? withheldChange)
     {
         using var run = PartnerApiFake.StartWithPartner();
 
@@ -182,10 +185,11 @@ public class PartnerSafetyTests
         {
             Assert.That(result.ExitCode, Is.Zero, result.ToString());
             Assert.That(result.Stderr, Is.Not.Empty);
-            Assert.That(StderrErrorCodes(result), Is.Empty, result.ToString());
+            Assert.That(result.StderrJson.Select(JsonRead.PropertyNameList), Is.All.EqualTo("verbose"), result.ToString());
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
+        AssertReportedChange(result, withheldChange);
     }
 
     // partner use changes only cli.json, so it has no dry run. The partner command run afterwards,
@@ -258,55 +262,42 @@ public class PartnerSafetyTests
 
     // Each partner customer command alone and, where it changes something through the API, under
     // --dry-run, with the calls it sends: all of them alone, and under --dry-run the reads before
-    // its change.
+    // its change, with the change it withholds as "METHOD path".
     private static IEnumerable<TestCaseData> CustomerCommandRuns()
     {
         foreach (var command in PartnerCommandTests.Commands)
         {
             var calls = command.Calls(byName: true);
 
-            yield return Run(command.ByName(), calls);
+            yield return Run(command.ByName(), calls, null);
 
             if (command.Changes)
             {
-                yield return Run([.. command.ByName(), "--dry-run"], calls[..^1]);
+                yield return Run([.. command.ByName(), "--dry-run"], calls[..^1], calls[^1]);
             }
         }
     }
 
-    private static TestCaseData Run(string[] args, string[] calls) =>
-        new TestCaseData(args, calls).SetArgDisplayNames(string.Join(' ', args));
+    private static TestCaseData Run(string[] args, string[] calls, string? withheldChange) =>
+        new TestCaseData(args, calls, withheldChange).SetArgDisplayNames(string.Join(' ', args));
 
-    // The error codes of the stderr lines that are CLI errors, { "error": { "code", ... } }. The form
-    // of --verbose diagnostics is not part of the CLI contract, so lines that are not JSON are
-    // skipped.
-    private static string[] StderrErrorCodes(CliResult result)
+    // A dry run's report lists the change it withheld, which the case gives as "METHOD path" ("Dry
+    // run"). A run without --dry-run prints the command's own output, which has no report.
+    private static void AssertReportedChange(CliResult result, string? withheldChange)
     {
-        var codes = new List<string>();
-
-        foreach (var line in result.Stderr.Split('\n'))
+        if (withheldChange is null)
         {
-            JsonElement json;
-
-            try
-            {
-                json = JsonRead.Parse(line);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            if (json.ValueKind == JsonValueKind.Object
-                && json.TryGetProperty("error", out var error)
-                && error.ValueKind == JsonValueKind.Object
-                && error.TryGetProperty("code", out var code)
-                && code.ValueKind == JsonValueKind.String)
-            {
-                codes.Add(code.GetString()!);
-            }
+            return;
         }
 
-        return [.. codes];
+        var output = result.StdoutJson;
+        var requests = JsonAssert.Property(output, "requests");
+        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
+        var url = new Uri(JsonAssert.Property(requests[0], "url").GetString()!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True, result.ToString());
+            Assert.That($"{JsonAssert.Property(requests[0], "method").GetString()} {url.AbsolutePath}", Is.EqualTo(withheldChange), result.ToString());
+        });
     }
 }

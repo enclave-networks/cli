@@ -7,7 +7,7 @@ internal static class TestCategory
 {
     // Tests in this category state behaviour from proposed-cli-surface.md that the CLI does not
     // meet. CI runs every test outside it (.github/workflows/ci.yml, --filter "TestCategory!=Pending"),
-    // so a pull request shows whether behaviour that is built still works. A fixture or test leaves
+    // so a pull request fails when it breaks behaviour the CLI meets. A fixture or test leaves
     // the category once the CLI meets it, and from then on CI guards it.
     public const string Pending = "Pending";
 }

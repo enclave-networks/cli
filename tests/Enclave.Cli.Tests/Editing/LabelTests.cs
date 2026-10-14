@@ -17,7 +17,8 @@ namespace Enclave.Cli.Tests.Editing;
 // description of its gatewayAllowedIpRanges entry, and a gateway subnet's is the name of its
 // gatewayRoutes entry (portal PolicyGatewayAllowedIpRange.cs, SystemGatewayRouteModel.cs). Which
 // gateway routes stay, and their weights, are tested with system update; here every route the
-// system has is given again, so only labels differ.
+// system has is given again, so only labels differ. The labels of ACL rules, examples 24 and 81,
+// are tested with policy update in Resources/PolicyCommandTests.Update.cs.
 public class LabelTests
 {
     private const string PolicyById = "policy update --id 64 --set-subnet-filter";
@@ -113,47 +114,12 @@ public class LabelTests
 
         var result = await run.RunAsync("policy", "update", "staff to office LAN", "--set-subnet-filter", "10.0.0.0/16", "--set-subnet-filter", "10.3.0.0/16", "--dry-run");
 
-        CliAssert.Succeeded(result);
-        var output = result.StdoutJson;
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var ranges = JsonAssert.Property(JsonAssert.Property(requests[0], "body"), "GatewayAllowedIpRanges");
+        var printed = DryRunOutput.RequestInTestOrg(result, "PATCH", PolicyPath);
+        var ranges = JsonAssert.Property(JsonAssert.Property(printed, "body"), "GatewayAllowedIpRanges");
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests.Select(request => request.Method), Is.Not.Empty.And.All.EqualTo("GET"));
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(JsonAssert.Property(requests[0], "method").GetString(), Is.EqualTo("PATCH"));
-            Assert.That(JsonAssert.Property(requests[0], "url").GetString(), Does.EndWith(PolicyPath));
             Assert.That(Entries(ranges, "ipRange", "description"), Is.EqualTo("10.0.0.0/16=Office LAN|10.3.0.0/16"));
-        });
-    }
-
-    // Example 81 in proposed-cli-surface.md. An ACL rule stays when its protocol and ports are given
-    // again, so tcp:443 keeps the label "HTTPS"; tcp:8443 is new and has none, and tcp:8000-8100 is
-    // left out and goes.
-    [Test]
-    public async Task Set_acl_keeps_the_label_of_a_rule_that_stays_and_a_new_rule_has_none()
-    {
-        using var run = CliRun.Start();
-        var path = TestData.OrgPath("policies/57");
-        var policy = ArtifactsPolicy();
-        run.StubPages(TestData.OrgPath("policies"), 200, policy);
-        run.Stub("GET", path, json: policy);
-        run.Stub("PATCH", path, json: policy);
-
-        var result = await run.RunAsync("policy", "update", "build to artifacts", "--set-acl", "tcp:443", "--set-acl", "tcp:8443");
-
-        CliAssert.Succeeded(result);
-        var patches = run.RequestsTo("PATCH", path);
-        Assert.That(patches, Has.Count.EqualTo(1));
-        var body = patches[0].BodyJson;
-        var rules = JsonAssert.Property(body, "Acls").EnumerateArray()
-            .Select(rule => Entry($"{JsonAssert.Property(rule, "protocol").GetString()!.ToUpperInvariant()}:{JsonAssert.Property(rule, "ports").GetString()}", rule, "description"))
-            .Order(StringComparer.Ordinal);
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.PropertyNameList(body), Is.EqualTo("Acls").IgnoreCase);
-            Assert.That(string.Join("|", rules), Is.EqualTo("TCP:443=HTTPS|TCP:8443"));
         });
     }
 
@@ -263,17 +229,6 @@ public class LabelTests
 
         system["gatewayRoutes"] = routes;
         return system.ToJsonString();
-    }
-
-    // Policy 57, "build to artifacts", allowing TCP 443 labelled "HTTPS" and TCP 8000-8100 labelled
-    // "Artifact uploads" (portal PolicyAclModel.cs; the protocol is written by its enum name).
-    private static string ArtifactsPolicy()
-    {
-        var policy = JsonNode.Parse(ApiJson.Policy(57, "build to artifacts"))!.AsObject();
-        policy["acls"] = new JsonArray(
-            new JsonObject { ["protocol"] = "Tcp", ["ports"] = "443", ["description"] = "HTTPS" },
-            new JsonObject { ["protocol"] = "Tcp", ["ports"] = "8000-8100", ["description"] = "Artifact uploads" });
-        return policy.ToJsonString();
     }
 
     // One list a flag replaces: the command up to the flag, the flag, the path the item is read

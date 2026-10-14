@@ -48,14 +48,10 @@ public class CreateDefaultsTests
 
         var result = await run.RunAsync("dns", "create-hostname", "db.internal", "--dry-run");
 
-        CliAssert.Succeeded(result);
-        var requests = JsonAssert.Property(result.StdoutJson, "requests");
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var body = JsonAssert.Property(requests[0], "body");
+        var body = JsonAssert.Property(DryRunOutput.RequestInTestOrg(result, "POST", Records), "body");
         Assert.Multiple(() =>
         {
             Assert.That(run.RequestsTo("POST", Records), Is.Empty);
-            Assert.That(JsonAssert.Property(requests[0], "method").GetString(), Is.EqualTo("POST"));
             Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("db"));
             Assert.That(JsonAssert.Property(body, "zoneId").GetInt32(), Is.EqualTo(4));
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));

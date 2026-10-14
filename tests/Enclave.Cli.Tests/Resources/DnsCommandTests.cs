@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
@@ -19,6 +18,12 @@ public class DnsCommandTests
     private static readonly string Zones = TestData.OrgPath("dns/zones");
 
     private static readonly string Records = TestData.OrgPath("dns/records");
+
+    private static readonly string[] ZoneCreateFields = ["name", "notes", "autoDnsTags"];
+
+    // The fields of DnsRecordCreateModel (portal
+    // Enclave.Api/Modules/SystemManagement/Dns/Models/DnsRecordCreateModel.cs).
+    private static readonly string[] RecordCreateFields = ["name", "zoneId", "type", "tags", "systems", "notes"];
 
     [Test]
     public async Task Dns_show_prints_the_organisation_dns_summary()
@@ -127,7 +132,9 @@ public class DnsCommandTests
     }
 
     // Example 29 in proposed-cli-surface.md. A zone is created by name, so there is nothing to look
-    // up.
+    // up. A create sends every field of DnsZoneCreateModel (portal
+    // Enclave.Api/Modules/SystemManagement/Dns/Models/DnsZoneCreateModel.cs; "Create and update"),
+    // notes null when --notes is left out.
     [Test]
     public async Task Dns_create_zone_posts_the_name_and_auto_dns_tags_and_prints_the_created_zone()
     {
@@ -143,8 +150,10 @@ public class DnsCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("POST"));
             Assert.That(request.Path, Is.EqualTo(Zones));
-            Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("internal"));
-            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "autoDnsTags")), Is.EqualTo("web"));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(ZoneCreateFields));
+            Assert.That(body.GetProperty("name").GetString(), Is.EqualTo("internal"));
+            Assert.That(JsonRead.StringList(body.GetProperty("autoDnsTags")), Is.EqualTo("web"));
+            Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(JsonAssert.Property(result.StdoutJson, "id").GetInt32(), Is.EqualTo(4));
         });
     }
@@ -161,9 +170,34 @@ public class DnsCommandTests
         var body = run.SingleRequest().BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("lab"));
-            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "autoDnsTags")), Is.EqualTo("web,api"));
-            Assert.That(JsonAssert.Property(body, "notes").GetString(), Is.EqualTo("Lab systems"));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(ZoneCreateFields));
+            Assert.That(body.GetProperty("name").GetString(), Is.EqualTo("lab"));
+            Assert.That(JsonRead.StringList(body.GetProperty("autoDnsTags")), Is.EqualTo("web,api"));
+            Assert.That(body.GetProperty("notes").GetString(), Is.EqualTo("Lab systems"));
+        });
+    }
+
+    // A create sends an empty list for a list flag left out (proposed-cli-surface.md "Details"), so
+    // the API's own default never decides which systems get a name in the zone.
+    [Test]
+    public async Task Dns_create_zone_without_auto_dns_tags_sends_an_empty_list()
+    {
+        using var run = CliRun.Start();
+        run.Stub("POST", Zones, json: ApiJson.Zone(5, "lab"));
+
+        var result = await run.RunAsync("dns", "create-zone", "lab");
+
+        CliAssert.Succeeded(result);
+        var request = run.SingleRequest();
+        var body = request.BodyJson;
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.Method, Is.EqualTo("POST"));
+            Assert.That(request.Path, Is.EqualTo(Zones));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(ZoneCreateFields));
+            Assert.That(body.GetProperty("name").GetString(), Is.EqualTo("lab"));
+            Assert.That(body.GetProperty("autoDnsTags").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -191,11 +225,17 @@ public class DnsCommandTests
         });
     }
 
+    // The command prints the zone the API answers the patch with. The fake answers with an ID and a
+    // record count the request does not carry, and with the zone's name in another case from the
+    // one sent, so output copied from the request does not match; names are read exactly, as an
+    // agent reads them.
     [Test]
     public async Task Dns_update_zone_sends_the_name_and_notes_given_and_prints_the_updated_zone()
     {
         using var run = CliRun.Start();
-        run.Stub("PATCH", ZonePath("4"), json: ApiJson.Zone(4, "corp"));
+        var answer = JsonNode.Parse(ApiJson.Zone(4, "Corp"))!.AsObject();
+        answer["recordCount"] = 12;
+        run.Stub("PATCH", ZonePath("4"), json: answer.ToJsonString());
 
         var result = await run.RunAsync("dns", "update-zone", "--id", "4", "--name", "corp", "--notes", "Renamed");
 
@@ -210,7 +250,9 @@ public class DnsCommandTests
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(fields).IgnoreCase);
             Assert.That(JsonAssert.Property(body, "Name").GetString(), Is.EqualTo("corp"));
             Assert.That(JsonAssert.Property(body, "Notes").GetString(), Is.EqualTo("Renamed"));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "name").GetString(), Is.EqualTo("corp"));
+            Assert.That(result.StdoutJson.GetProperty("id").GetInt32(), Is.EqualTo(4));
+            Assert.That(result.StdoutJson.GetProperty("name").GetString(), Is.EqualTo("Corp"));
+            Assert.That(result.StdoutJson.GetProperty("recordCount").GetInt32(), Is.EqualTo(12));
         });
     }
 
@@ -278,7 +320,7 @@ public class DnsCommandTests
 
     // Example 62 in proposed-cli-surface.md. --zone takes the zone's name, looked up with one call,
     // and --zone-id its ID, which needs no lookup ("Names and IDs"); either way every page asks the
-    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api 1.1.0).
+    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api 1.2.0).
     [TestCase("dns list-hostnames --zone internal", true)]
     [TestCase("dns list-hostnames --zone-id 4", false)]
     public async Task Dns_list_hostnames_in_a_zone_asks_the_api_for_that_zone_only(string commandLine, bool lookup)
@@ -300,7 +342,7 @@ public class DnsCommandTests
     }
 
     // Example 16 in proposed-cli-surface.md. --filter is sent as typed, as the API's search
-    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api 1.1.0).
+    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api 1.2.0).
     [Test]
     public async Task Dns_list_hostnames_sends_the_filter_as_the_api_search()
     {
@@ -396,14 +438,16 @@ public class DnsCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
-            Assert.That(run.Requests.Select(request => request.Method), Is.All.EqualTo("GET"));
+            Assert.That(run.Requests.Select(request => request.Method), Is.Not.Empty.And.All.EqualTo("GET"));
             Assert.That(run.Requests.Select(request => request.Path), Has.None.EqualTo(RecordPath("7")).And.None.EqualTo(RecordPath("9")));
         });
     }
 
     // Example 15 in proposed-cli-surface.md. The zone is found with one zone list call; the API
     // takes the record name within the zone and the zone's ID (portal DnsRecordCreateModel), and
-    // ENCLAVE is the only record type it has (portal DnsRecordTypeFormatConverter.cs:12).
+    // ENCLAVE is the only record type it has (portal DnsRecordTypeFormatConverter.cs:12). A create
+    // sends every field, and --tags, the list flag left out, as an empty list ("Create and update",
+    // "Details").
     [Test]
     public async Task Dns_create_hostname_posts_the_record_to_the_zone_its_name_ends_in()
     {
@@ -418,6 +462,8 @@ public class DnsCommandTests
         var body = run.Requests[^1].BodyJson;
         Assert.Multiple(() =>
         {
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(RecordCreateFields));
+            Assert.That(body.GetProperty("tags").GetRawText(), Is.EqualTo("[]"));
             Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("db"));
             Assert.That(JsonAssert.Property(body, "zoneId").GetInt32(), Is.EqualTo(4));
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));
@@ -568,11 +614,14 @@ public class DnsCommandTests
 
     // The API cannot move a record between zones, so a new name in another zone exits 2
     // (proposed-cli-surface.md "Details"). db.lab is in lab, db2 is in no zone, and db2.eu.internal
-    // is in eu.internal, the longest zone it ends in, although it also ends in internal.
-    [TestCase("db.lab")]
-    [TestCase("db2")]
-    [TestCase("db2.eu.internal")]
-    public async Task Dns_update_hostname_name_outside_the_hostname_zone_exits_2_without_a_change(string hostname)
+    // is in eu.internal, the longest zone it ends in, although it also ends in internal. The error
+    // names --name and repeats no part of the value given, as no CLI error does, since a value can
+    // be a token passed by mistake. Each case checks stderr for a part of its value that a message
+    // could quote: the whole value, or the zone it ends in, which is not the hostname's own zone.
+    [TestCase("db.lab", "db.lab")]
+    [TestCase("db2", "db2")]
+    [TestCase("db2.eu.internal", "eu.internal")]
+    public async Task Dns_update_hostname_name_outside_the_hostname_zone_exits_2_naming_only_the_option_without_a_change(string hostname, string partOfValue)
     {
         using var run = CliRun.Start();
         StubZones(run);
@@ -582,8 +631,13 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "update-hostname", "--id", "7", "--name", hostname);
 
-        CliAssert.Failed(result, "invalid_argument");
-        Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Is.Empty);
+        var error = CliAssert.Failed(result, "invalid_argument");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Is.Empty);
+            Assert.That(JsonRead.PropertyNameList(error.GetProperty("errors")), Is.EqualTo("--name"));
+            Assert.That(result.Stderr, Does.Not.Contain(partOfValue));
+        });
     }
 
     // A command that takes several items looks each name up with one list call and sends one bulk
@@ -715,6 +769,36 @@ public class DnsCommandTests
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
             Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo(UnknownSystemDetail));
             Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Has.Count.EqualTo(1));
+        });
+    }
+
+    // dns update-hostname exits 5 only for the problem type dns-record-not-found
+    // (proposed-cli-surface.md "Errors and exit codes"). A 404 with no body, such as a proxy in front
+    // of the API sends, or with another problem type does not say the hostname was not found, so
+    // each exits 1 api_error with the status. zone-not-found is a type the API sends for a zone
+    // (portal DnsController.cs:352-359).
+    [TestCase(null)]
+    [TestCase("zone-not-found")]
+    public async Task Dns_update_hostname_answered_404_without_the_hostname_problem_type_exits_1_api_error(string? problemType)
+    {
+        using var run = CliRun.Start();
+
+        if (problemType is null)
+        {
+            run.Stub("PATCH", RecordPath("7"), 404);
+        }
+        else
+        {
+            run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, Problem(404, problemType, "Not Found", "No such DNS item."));
+        }
+
+        var result = await run.RunAsync("dns", "update-hostname", "--id", "7", "--notes", "Reviewed");
+
+        var error = CliAssert.Failed(result, "api_error");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
+            Assert.That(run.SingleRequest().Call, Is.EqualTo($"PATCH {RecordPath("7")}"));
         });
     }
 
@@ -856,20 +940,8 @@ public class DnsCommandTests
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        CliAssert.Succeeded(result);
-        var output = result.StdoutJson;
-        var org = JsonAssert.Property(output, "org");
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(JsonAssert.Property(requests[0], "method").GetString(), Is.EqualTo(method));
-            Assert.That(JsonAssert.Property(requests[0], "url").GetString(), Does.EndWith(TestData.OrgPath(suffix)));
-        });
+        DryRunOutput.RequestInTestOrg(result, method, TestData.OrgPath(suffix));
+        Assert.That(run.Requests, Is.Empty);
     }
 
     // The zone lookup is a read the change depends on, so it runs, and only the POST is withheld
@@ -884,16 +956,11 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "create-hostname", "db.internal", "--dry-run");
 
-        CliAssert.Succeeded(result);
-        var requests = JsonAssert.Property(result.StdoutJson, "requests");
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var body = JsonAssert.Property(requests[0], "body");
+        var body = JsonAssert.Property(DryRunOutput.RequestInTestOrg(result, "POST", Records), "body");
         Assert.Multiple(() =>
         {
             Assert.That(run.RequestsTo("GET", Zones), Is.Not.Empty);
             Assert.That(run.RequestsTo("POST", Records), Is.Empty);
-            Assert.That(JsonAssert.Property(requests[0], "method").GetString(), Is.EqualTo("POST"));
-            Assert.That(JsonAssert.Property(requests[0], "url").GetString(), Does.EndWith(Records));
             Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("db"));
             Assert.That(JsonAssert.Property(body, "zoneId").GetInt32(), Is.EqualTo(4));
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));

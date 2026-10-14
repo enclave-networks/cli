@@ -91,7 +91,7 @@ public class SeveralIdsTests
         CliAssert.Bulk(result, requested: count, affected: affected.Sum());
         Assert.Multiple(() =>
         {
-            Assert.That(command.IdsSent(run), Is.EqualTo(Batches(ids)));
+            Assert.That(command.IdsSent(run), Is.EqualTo(BulkCommand.Batches(ids)));
             Assert.That(run.Requests, Has.Count.EqualTo(affected.Length));
         });
     }
@@ -108,7 +108,7 @@ public class SeveralIdsTests
         var result = await run.RunAsync(command.StdinArgs());
 
         CliAssert.Bulk(result, requested: 450, affected: affected.Sum());
-        Assert.That(command.IdsSent(run), Is.EqualTo(Batches(ids)));
+        Assert.That(command.IdsSent(run), Is.EqualTo(BulkCommand.Batches(ids)));
     }
 
     // A failed call stops the command, so nothing more is sent after a failure. The counts of the
@@ -132,7 +132,7 @@ public class SeveralIdsTests
         {
             Assert.That(Count(error, "requested"), Is.EqualTo(200));
             Assert.That(Count(error, "affected"), Is.EqualTo(190));
-            Assert.That(command.IdsSent(run), Is.EqualTo(Batches(ids[..400])));
+            Assert.That(command.IdsSent(run), Is.EqualTo(BulkCommand.Batches(ids[..400])));
         });
     }
 
@@ -216,7 +216,7 @@ public class SeveralIdsTests
         CliAssert.Bulk(result, requested: 250, affected: 250);
         Assert.That(
             string.Join("|", run.RequestsTo("PUT", path).Select(request => string.Join(",", request.BodyIds("systemIds")))),
-            Is.EqualTo(Batches(ids)));
+            Is.EqualTo(BulkCommand.Batches(ids)));
     }
 
     // Example 35 in proposed-cli-surface.md. --id gives IDs, so no lookup precedes the call.
@@ -267,8 +267,8 @@ public class SeveralIdsTests
     // policies the name matched, so the caller can pick one by ID without another call
     // (proposed-cli-surface.md "Names and IDs", "Errors and exit codes"). "old vpn" matches two
     // policies that differ only in case; "no such policy" matches none.
-    [TestCase("no such policy", "[]")]
-    [TestCase("old vpn", "[17,18]")]
+    [TestCase("no such policy", "")]
+    [TestCase("old vpn", "17,18")]
     public async Task Policy_delete_exits_2_with_the_candidates_and_deletes_nothing_when_a_name_matches_no_policy_or_several(string name, string candidateIds)
     {
         using var run = CliRun.Start();
@@ -285,7 +285,7 @@ public class SeveralIdsTests
             Assert.That(candidates.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
             Assert.That(run.RequestsTo("DELETE", policies), Is.Empty);
         });
-        Assert.That(CandidateIds(candidates), Is.EqualTo(candidateIds));
+        Assert.That(NameLookup.CandidateIds(error), Is.EqualTo(candidateIds));
     }
 
     // Duplicate IDs are removed whether given as arguments, with --id or through "-", and the rest
@@ -418,15 +418,6 @@ public class SeveralIdsTests
         450 => [200, 150, 40],
         _ => throw new ArgumentOutOfRangeException(nameof(count), count, "No counts for this number of IDs."),
     };
-
-    // The IDs of each call joined with commas, and the calls joined with "|", for IDs sent in calls
-    // of 200 in the order given: the form BulkCommand.IdsSent reads the requests in.
-    private static string Batches(string[] ids) =>
-        string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));
-
-    // The IDs of the candidates in an error, in ascending order, as "[a,b]".
-    private static string CandidateIds(JsonElement candidates) =>
-        "[" + string.Join(",", candidates.EnumerateArray().Select(candidate => JsonAssert.Property(candidate, "id").GetInt32()).Order()) + "]";
 
     // The bulk counts sit in the error object beside "code" (proposed-cli-surface.md "Several
     // IDs"). A count that is missing or not a number reads as null, which no expected count equals.

@@ -9,6 +9,11 @@ namespace Enclave.Cli;
 /// </summary>
 internal sealed class CliHost
 {
+    /// <summary>
+    /// Production's Enclave API address, which the CLI calls when credentials.json names none.
+    /// </summary>
+    public const string ApiUrl = "https://api.enclave.io";
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     public required Func<string, string?> GetEnvironmentVariable { get; init; }
@@ -40,6 +45,16 @@ internal sealed class CliHost
     // without a zone is read in the system's time zone (proposed-cli-surface.md "Command options",
     // "Details"), so a test fixes both here to get one answer on any machine.
     public required TimeProvider Time { get; init; }
+
+    /// <summary>
+    /// Creates the handler beneath the CLI's own (ApiRequestHandler) that sends each request to the
+    /// network; null gives HttpClientHandler.
+    /// </summary>
+    // A test seam, which FromProcess leaves null. A fake API on loopback answers every request it
+    // gets, so it cannot produce a failure such as HttpClient's timeout, and a run whose partner API
+    // address is left at production's needs a network that sends nothing. Each command's
+    // ApiRequestHandler disposes the handler this creates.
+    internal Func<HttpMessageHandler>? CreateNetworkHandler { get; init; }
 
     // The CLI reads stdin and writes redirected stdout and stderr as UTF-8 on every OS, so a list one
     // run prints reads back the same in the next, non-ASCII names included, and other programs get
@@ -88,7 +103,7 @@ internal sealed class CliHost
             HomeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             Stdin = StdinReader(Console.OpenStandardInput()),
             StdinIsTerminal = !Console.IsInputRedirected,
-            DefaultApiUrl = new Uri("https://api.enclave.io"),
+            DefaultApiUrl = new Uri(ApiUrl),
             Files = new DiskFileStore(),
             Time = TimeProvider.System,
         };

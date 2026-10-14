@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
-using WireMock;
 
 namespace Enclave.Cli.Tests.Auth;
 
@@ -21,7 +20,7 @@ public class LoginTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.1.0), which the
+    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.2.0), which the
     // CLI must not change (AGENTS.md "CLI contract"). The file can also hold partnerApiBaseUrl, which
     // login keeps when it is there and never adds.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
@@ -144,7 +143,7 @@ public class LoginTests
 
         var result = await run.RunAsync("login");
 
-        var checks = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().Select(request => $"{request.Method} {request.Path}").ToArray();
+        var checks = LoopbackApi.Received(otherApi).Select(request => request.Call).ToArray();
 
         CliAssert.Succeeded(result);
         var credentials = SavedCredentials(run);
@@ -207,7 +206,7 @@ public class LoginTests
     public async Task Login_prints_the_organisations_the_token_can_see_as_an_org_list()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
 
         var result = await run.RunAsync("login");
 
@@ -259,7 +258,7 @@ public class LoginTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
         run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
 
@@ -281,7 +280,7 @@ public class LoginTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
         run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
         CliAssert.Succeeded(await run.RunAsync("org", "use", "--id", TestData.OtherOrgId.ToString()));
@@ -303,7 +302,7 @@ public class LoginTests
     // login writes credentials.json after its check passes, so a token the API refuses is never
     // saved: a saved bad token makes every later command fail. Enclave.Sdk.Api raises
     // EnclaveApiException only for problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0), so the plain cases, a proxy
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0), so the plain cases, a proxy
     // or server answering without problem details, reach the CLI as HttpRequestException, which
     // the CLI maps to the same codes ("Errors and exit codes"). 403 means the token lacks
     // ReadOrgList, which the check needs.
@@ -356,8 +355,8 @@ public class LoginTests
 
     // login never prompts, and with no token it exits 3 token_missing; an empty ENCLAVE_TOKEN counts
     // as unset ("Login, logout and status"). Without --token-stdin, stdin is not a token source:
-    // stdin holds a valid token in every case, so a CLI that read it, or waited on a terminal, logs
-    // in.
+    // redirected, stdin holds a valid token, so a CLI that read it logs in, and as a terminal any
+    // read of it fails the run (CliRun.StdinIsTerminal).
     [TestCase(true, false)]
     [TestCase(false, false)]
     [TestCase(false, true)]
@@ -385,8 +384,9 @@ public class LoginTests
     }
 
     // Reading a terminal waits for someone to type, and login never prompts: --token-stdin with
-    // stdin a terminal exits 2 ("Login, logout and status"). The text on stdin is a valid token, so
-    // a CLI that read the terminal anyway logs in.
+    // stdin a terminal exits 2 ("Login, logout and status"). While stdin is a terminal, any read of
+    // it fails the run (CliRun.StdinIsTerminal), so the rejection shows login refused without
+    // reading.
     [Test]
     public async Task Login_token_stdin_exits_2_without_reading_stdin_when_stdin_is_a_terminal()
     {
@@ -439,9 +439,6 @@ public class LoginTests
     }
 
     private static string OneOrg() => ApiJson.Orgs((TestData.OrgId, TestData.OrgName));
-
-    private static string BothOrgs() =>
-        ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName));
 
     private static JsonElement SavedCredentials(CliRun run) =>
         JsonRead.Parse(run.Files.ReadText(run.CredentialsPath) ?? throw new AssertionException("login wrote no credentials.json."));

@@ -23,7 +23,7 @@ internal static class TagCommand
     private static CliVerb List()
     {
         var verb = new CliVerb("list", "List the tags, reading every page.", CommandScope.Organisation);
-        var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var sort = verb.Add(CliOptions.Enum("--sort", "The order to list tags in.", TagQuerySortOrder.Alphabetical, TagQuerySortOrder.RecentlyUsed, TagQuerySortOrder.ReferencedSystems));
 
         verb.SetHandler(async context =>
@@ -80,7 +80,7 @@ internal static class TagCommand
             var org = await context.GetOrganisationAsync();
 
             // The bulk delete takes tag names or refs (TagsClient.DeleteTagsAsync, Enclave.Sdk.Api
-            // 1.1.0). Every name has passed the tag rule, which no ref ("ref:" and hex digits) meets,
+            // 1.2.0). Every name has passed the tag rule, which no ref ("ref:" and hex digits) meets,
             // so each is read as a name.
             var result = await Bulk.RunAsync(names, batch => org.Client.Tags.DeleteTagsAsync([.. batch]));
             await context.Output.WriteBulkAsync(result, context.CancellationToken);

@@ -20,14 +20,10 @@ public class IdCheckTests
     // Until, which keeps each case's answer the same whatever the date.
     private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
 
-    private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
-
-    private static readonly Guid CustomerOrgId = new("6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b");
-
     // proposed-cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
     // exits 2 naming it and sends nothing. Put into a URL path unescaped, this ID would send DELETE
     // org/<id>/systems/ABCDE and revoke system ABCDE, since .NET resolves ".." when it combines the
-    // path with the base address; Enclave.Sdk.Api 1.1.0 escapes it (ClientBase.PathSegment), and the
+    // path with the base address; Enclave.Sdk.Api 1.2.0 escapes it (ClientBase.PathSegment), and the
     // check does not depend on that. Every route the ID could reach is answered, so any request it
     // caused would be recorded.
     [Test]
@@ -145,7 +141,7 @@ public class IdCheckTests
     public async Task Org_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
 
         var rejected = await run.RunAsync("org", "use", "--id", "not-a-guid");
 
@@ -189,7 +185,7 @@ public class IdCheckTests
     public async Task Use_exits_2_for_the_all_zero_guid_and_saves_nothing(string noun)
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         var valid = noun == "org" ? TestData.OtherOrgId : TestData.PartnerId;
 
         var rejected = await run.RunAsync(noun, "use", "--id", AllZeroGuid);
@@ -269,7 +265,7 @@ public class IdCheckTests
     {
         using var run = CliRun.Start();
         var path = TestData.OrgPath("systems/disable");
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.StubBulk("PUT", path, "systemsUpdated", 1);
 
         var rejected = await run.RunAsync("system", "disable", "ABCDE", "AB/CD", "--org", TestData.OrgName);
@@ -367,18 +363,18 @@ public class IdCheckTests
         yield return Case("trust update --id ../5", ["trust", "update", "--id", "../5", "--description", "uk only"], ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only"));
 
         // Organisations and accounts: GUIDs. RemoveUserAsync takes the account ID as a string
-        // (Enclave.Sdk.Api 1.1.0, OrganisationScopedClient.RemoveUserAsync), so the path carries
+        // (Enclave.Sdk.Api 1.2.0, OrganisationScopedClient.RemoveUserAsync), so the path carries
         // whichever GUID form the CLI passes.
         yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
-        yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
-        yield return Case("org remove-user --id ../invites", ["org", "remove-user", "--id", "../invites"], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
+        yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", TestData.PartnerStaffAccountId], "DELETE", $"users/{TestData.PartnerStaffAccountGuid:N}", ApiJson.User(TestData.PartnerStaffAccountGuid, "sam@example.com"), otherPathSuffix: $"users/{TestData.PartnerStaffAccountGuid:D}");
+        yield return Case("org remove-user --id ../invites", ["org", "remove-user", "--id", "../invites"], ["org", "remove-user", "--id", TestData.PartnerStaffAccountId], "DELETE", $"users/{TestData.PartnerStaffAccountGuid:N}", ApiJson.User(TestData.PartnerStaffAccountGuid, "sam@example.com"), otherPathSuffix: $"users/{TestData.PartnerStaffAccountGuid:D}");
 
         // The all-zero GUID has a GUID's form and names nothing: no organisation or account has it.
         // It is refused in either form a GUID is read in, with hyphens and without.
         yield return Case("system list --org-id all zeros", ["system", "list", "--org-id", AllZeroGuid], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id 32 zeros", ["system", "list", "--org-id", Guid.Empty.ToString("N")], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
-        yield return Case("org remove-user --id all zeros", ["org", "remove-user", "--id", AllZeroGuid], ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), otherPathSuffix: $"users/{AccountId:D}");
+        yield return Case("org remove-user --id all zeros", ["org", "remove-user", "--id", AllZeroGuid], ["org", "remove-user", "--id", TestData.PartnerStaffAccountId], "DELETE", $"users/{TestData.PartnerStaffAccountGuid:N}", ApiJson.User(TestData.PartnerStaffAccountGuid, "sam@example.com"), otherPathSuffix: $"users/{TestData.PartnerStaffAccountGuid:D}");
     }
 
     // A path starting with "/" is a full path; any other is below the test organisation's path.
@@ -403,7 +399,7 @@ public class IdCheckTests
     private static IEnumerable<TestCaseData> PartnerIdCases()
     {
         var partner = TestData.PartnerId.ToString();
-        var customer = CustomerOrgId.ToString();
+        var customer = TestData.CustomerOrgId;
 
         yield return PartnerCase("--partner-id not-a-guid", ["partner", "customer", "list", "--partner-id", "not-a-guid"], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");
         yield return PartnerCase("--partner-id ../customers", ["partner", "customer", "list", "--partner-id", "../customers"], ["partner", "customer", "list", "--partner-id", partner], $"GET {TestData.PartnerPath("customers")}");

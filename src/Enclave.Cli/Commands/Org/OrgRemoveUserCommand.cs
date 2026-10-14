@@ -17,6 +17,7 @@ internal static class OrgRemoveUserCommand
         var id = verb.Add(CliOptions.Id("--id", "The user's account ID.", IdFormats.Guid, "accountId"));
 
         verb.ExactlyOne(email, id);
+        OrgCommand.RefuseBlankEmail(verb, email, context => context.Get(email));
 
         verb.SetHandler(async context =>
         {
@@ -30,16 +31,16 @@ internal static class OrgRemoveUserCommand
             else
             {
                 // GetOrganisationUsersAsync returns every user in one response
-                // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so the address is matched in
+                // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.2.0), so the address is matched in
                 // that one list.
                 var users = await org.Client.GetOrganisationUsersAsync();
                 accountId = NameLookup.Match([context.Get(email)!], users, user => user.EmailAddress, user => user.Id, email.Name, "user")[0].Id;
             }
 
             // One account named by ID or email address: a 404 means it is not a member, exit 5
-            // ("Several IDs"). Enclave.Sdk.Api 1.1.0 checks the status of this response, so a
-            // failure without problem details is reported too ("`Enclave.Sdk.Api` changes",
-            // item 6).
+            // ("Several IDs"). Enclave.Sdk.Api 1.2.0 checks the status of this response before it
+            // reads the body (OrganisationScopedClient.ReadModelAsync), so a failure without problem
+            // details is reported too ("`Enclave.Sdk.Api` changes", item 6).
             //
             // The API answers a removal with the removed user's model (portal
             // OrganisationController.RemoveUser), which RemoveUserAsync returns (Enclave.Sdk.Api

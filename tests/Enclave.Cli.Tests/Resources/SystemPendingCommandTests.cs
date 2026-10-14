@@ -1,4 +1,3 @@
-using System.Globalization;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -17,9 +16,8 @@ public class SystemPendingCommandTests
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
-    // A key whose description starts with the same words is listed first, so a CLI that takes a
-    // partial match, or the first item, finds key 13.
-    private static readonly string BuildAgentsKeys = ApiJson.Page(ApiJson.Key(13, "build agents 2026-04"), ApiJson.Key(12, "build agents"));
+    // The clock the --waiting-for tests give the CLI, so each enrolledAt is a fixed time before it.
+    private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
     // The list's kind is pending-system, so that approve and decline can check a list given to them
     // (proposed-cli-surface.md "Output"). Three systems two to a page take two reads.
@@ -40,7 +38,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api 1.1.0
+    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api 1.2.0
     // UnapprovedSystemsClient.BuildQueryString). Example 3, first command.
     [Test]
     public async Task System_list_pending_key_id_sends_the_enrolment_key_parameter()
@@ -64,7 +62,7 @@ public class SystemPendingCommandTests
     public async Task System_list_pending_key_looks_the_key_up_by_description_and_sends_its_id_as_the_enrolment_key_parameter()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("GET", PendingPath, json: ApiJson.Page(ApiJson.PendingSystem("XYZ12")));
 
         var result = await run.RunAsync("system", "list", "--pending", "--key", "build agents");
@@ -137,7 +135,6 @@ public class SystemPendingCommandTests
     [TestCase("--os linux")]
     [TestCase("--type general")]
     [TestCase("--gateway")]
-    [TestCase("--dns-name db.internal")]
     [TestCase("--not-seen-for 90d")]
     public async Task System_list_pending_with_an_option_only_enrolled_systems_have_exits_2_without_a_request(string flags)
     {
@@ -173,28 +170,33 @@ public class SystemPendingCommandTests
 
     // --waiting-for has no API search key, so the CLI keeps the systems whose enrolledAt is longer ago
     // than the duration, from every page it reads, and total counts the matches
-    // (proposed-cli-surface.md "Filters"). The matches are on both pages, so a CLI that filters one
-    // page misses one.
+    // (proposed-cli-surface.md "Filters"). The matches are on all three pages, so a CLI that filters
+    // one page misses some. The clock is fixed at Now, so 7d reaches back to
+    // 2030-03-07T20:00:00Z exactly: EDGE01, enrolled at that instant, has waited 7 days, which is at
+    // least the duration (the option's description), and NEW01, enrolled one second later, has not.
+    // The systems enrolled in 2030, so the matches follow from the clock the test gives the CLI and
+    // from no other.
     [Test]
     public async Task System_list_pending_waiting_for_keeps_the_systems_waiting_longer_and_counts_only_them_in_total()
     {
         using var run = CliRun.Start();
-        var now = DateTime.UtcNow;
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.StubPages(
             PendingPath,
             2,
-            Waiting("OLD01", now.AddDays(-10)),
-            Waiting("NEW01", now.AddDays(-2)),
-            Waiting("NEW02", now.AddHours(-1)),
-            Waiting("OLD02", now.AddDays(-30)));
+            Waiting("OLD01", "2030-03-04T20:00:00Z"),
+            Waiting("NEW01", "2030-03-07T20:00:01Z"),
+            Waiting("NEW02", "2030-03-14T19:00:00Z"),
+            Waiting("EDGE01", "2030-03-07T20:00:00Z"),
+            Waiting("OLD02", "2030-02-12T20:00:00Z"));
 
         var result = await run.RunAsync("system", "list", "--pending", "--waiting-for", "7d");
 
         var items = CliAssert.List(result, "pending-system");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("OLD01,OLD02"));
-            Assert.That(run.PagesRequested(PendingPath), Is.EqualTo("0,1"));
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("OLD01,EDGE01,OLD02"));
+            Assert.That(run.PagesRequested(PendingPath), Is.EqualTo("0,1,2"));
         });
     }
 
@@ -241,13 +243,14 @@ public class SystemPendingCommandTests
     }
 
     // Example 5: the list --waiting-for prints is the input of system decline, which declines the
-    // systems waiting more than a week and no others.
+    // systems waiting more than a week and no others. The clock is fixed at Now: OLD01 and OLD02
+    // have waited 10 and 30 days, and NEW01 2 days.
     [Test]
     public async Task System_decline_given_the_systems_waiting_more_than_a_week_declines_those_systems()
     {
         using var run = CliRun.Start();
-        var now = DateTime.UtcNow;
-        var waiting = ApiJson.Page(Waiting("OLD01", now.AddDays(-10)), Waiting("NEW01", now.AddDays(-2)), Waiting("OLD02", now.AddDays(-30)));
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var waiting = ApiJson.Page(Waiting("OLD01", "2030-03-04T20:00:00Z"), Waiting("NEW01", "2030-03-12T20:00:00Z"), Waiting("OLD02", "2030-02-12T20:00:00Z"));
         run.Stub("GET", PendingPath, json: waiting);
         run.StubBulk("DELETE", PendingPath, "systemsDeclined", 2);
 
@@ -285,7 +288,7 @@ public class SystemPendingCommandTests
     }
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update").
-    // Enclave.Sdk.Api 1.1.0 keys the patch body by UnapprovedSystemPatchModel's property names
+    // Enclave.Sdk.Api 1.2.0 keys the patch body by UnapprovedSystemPatchModel's property names
     // (PatchClient.Set). The output is the model the API returned.
     [Test]
     public async Task System_update_pending_sends_the_description_notes_and_tags_to_the_waiting_system()
@@ -405,7 +408,7 @@ public class SystemPendingCommandTests
 
     // approve and decline act on waiting systems only (proposed-cli-surface.md "Commands"), in one
     // bulk call for any number of systems ("Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api 1.1.0 UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
+    // Enclave.Sdk.Api 1.2.0 UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
     // approve succeeds when some systems were not approved (portal UnapprovedSystemsController.cs:
     // 170-177), so the API counts one of the two and the output carries its count.
     [TestCase("approve", "PUT", "unapproved-systems/approve", "systemsApproved")]
@@ -431,9 +434,7 @@ public class SystemPendingCommandTests
     }
 
     // enrolledAt is a DateTime in UnapprovedSystemSummaryModel, written as ApiJson writes those, in
-    // UTC with Z.
-    private static string Waiting(string systemId, DateTime enrolledAt) =>
-        ApiJson.Altered(
-            ApiJson.PendingSystem(systemId),
-            ("enrolledAt", enrolledAt.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture)));
+    // UTC with Z; each test gives it in that form.
+    private static string Waiting(string systemId, string enrolledAt) =>
+        ApiJson.Altered(ApiJson.PendingSystem(systemId), ("enrolledAt", enrolledAt));
 }

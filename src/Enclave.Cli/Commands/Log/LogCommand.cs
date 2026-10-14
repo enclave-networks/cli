@@ -27,9 +27,9 @@ internal static class LogCommand
         var limit = verb.Add(CliOptions.Number("--limit", "How many entries to print; 100 when neither --limit nor --since is given.", minimum: 1));
         var since = verb.Add(CliOptions.Time("--since", "Print every entry back to this time: a duration (24h) or a time.", allowDuration: true));
         var until = verb.Add(CliOptions.Time("--until", "Leave out entries newer than this time: a duration (1h) or a time.", allowDuration: true));
-        var user = verb.Add(CliOptions.Text("--user", "Entries by this user, matched whole and ignoring case.", "email"));
+        var user = verb.Add(CliOptions.Filter("--user", "Entries by this user, matched whole and ignoring case.", "email"));
         var level = verb.Add(CliOptions.ChoiceList("--level", "Entries at these levels.", ("information", ActivityLogLevel.Information), ("warning", ActivityLogLevel.Warning), ("error", ActivityLogLevel.Error)));
-        var filter = verb.Add(CliOptions.Text("--filter", "Entries whose message contains this text, ignoring case."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Entries whose message contains this text, ignoring case."));
 
         verb.SetHandler(async context =>
         {
@@ -68,14 +68,19 @@ internal static class LogCommand
     // ("Details").
     //
     // A page is the entries after skipping those on the pages before it, so an entry written while
-    // the CLI reads moves the older entries down and the next page begins with entries already read.
-    // Every entry the next page holds that is newer than the oldest entry read is one of those, and
-    // so is an entry with the same time that is already read; both are dropped. The log entry model
-    // has no ID (portal LogEntryModel.cs), so an entry is known by all its fields: two entries alike
-    // in every field and in time, to the millisecond the API keeps, that a page boundary falls
-    // between print once. That takes the same message for the same user from the same address twice
-    // in one millisecond, and losing the second copy is acceptable where printing entries twice
-    // whenever the log is written to during a read is not.
+    // the CLI reads moves the older entries down, and a later page can begin with entries already
+    // read. The API also stores entries in batches every 2 seconds, each with the time of its own
+    // event (portal Enclave.ActivityLog/ActivityLogSink.cs:16-17,25,100), so an entry stored late can
+    // land among the entries already read, newer than the oldest of them. An entry on a later page
+    // is dropped only when it is one already read; every other entry is printed, and the entries
+    // print newest first, so one stored late takes its place by time. The keys of every page read
+    // are kept, since enough entries written during a read move an entry more than a page on, and
+    // they take memory in step with the entries read. The log entry model has no ID (portal
+    // LogEntryModel.cs), so an entry is known by all its fields: two distinct entries alike in every
+    // field and in time, to the millisecond the API keeps, that fall on different pages print once.
+    // That takes the same message for the same user from the same address twice in one
+    // millisecond, and losing the second copy is acceptable where printing entries twice whenever
+    // the log is written to during a read is not.
     private static async Task<List<LogEntryModel>> ReadAsync(
         ILogsClient logs,
         DateTimeOffset? since,
@@ -86,7 +91,7 @@ internal static class LogCommand
         CancellationToken cancellationToken)
     {
         var entries = new List<LogEntryModel>();
-        var read = new ReadSoFar();
+        var read = new HashSet<EntryKey>();
         int? page = 0;
 
         while (page is { } current)
@@ -98,7 +103,7 @@ internal static class LogCommand
             {
                 var key = EntryKey.Of(entry);
 
-                if (read.Holds(key))
+                if (read.Contains(key))
                 {
                     continue;
                 }
@@ -107,7 +112,7 @@ internal static class LogCommand
 
                 if (since is { } from && key.Time < from)
                 {
-                    return entries;
+                    return NewestFirst(entries);
                 }
 
                 if ((until is { } to && key.Time > to) || !matches(entry))
@@ -119,11 +124,11 @@ internal static class LogCommand
 
                 if (entries.Count == limit)
                 {
-                    return entries;
+                    return NewestFirst(entries);
                 }
             }
 
-            read.Add(onThisPage);
+            read.UnionWith(onThisPage);
             page = response.Metadata.NextPage;
 
             // A next page that does not move forwards would read the same pages forever.
@@ -133,8 +138,12 @@ internal static class LogCommand
             }
         }
 
-        return entries;
+        return NewestFirst(entries);
     }
+
+    // A stable sort, so entries with one time keep the order the API gave them.
+    private static List<LogEntryModel> NewestFirst(List<LogEntryModel> entries) =>
+        [.. entries.OrderByDescending(entry => AsUtc(entry.TimeStamp))];
 
     // The logs API has no filters, so --user, --level and --filter apply to the entries read
     // ("Command options"): --user matches the whole userName and --filter part of the message, each
@@ -163,36 +172,5 @@ internal static class LogCommand
     {
         public static EntryKey Of(LogEntryModel entry) =>
             new(AsUtc(entry.TimeStamp), entry.Level, entry.Message, entry.UserName, entry.IpAddress);
-    }
-
-    // The oldest time read on the pages before this one, and the entries read with that time.
-    private sealed class ReadSoFar
-    {
-        private readonly HashSet<EntryKey> _atOldest = [];
-
-        private DateTimeOffset? _oldest;
-
-        // Whether an entry on a later page is one read already: newer than the oldest entry read, or
-        // with that time and read.
-        public bool Holds(EntryKey key) =>
-            _oldest is { } oldest && (key.Time > oldest || (key.Time == oldest && _atOldest.Contains(key)));
-
-        public void Add(IReadOnlyList<EntryKey> page)
-        {
-            if (page.Count == 0)
-            {
-                return;
-            }
-
-            var oldest = page.Min(key => key.Time);
-
-            if (oldest != _oldest)
-            {
-                _atOldest.Clear();
-                _oldest = oldest;
-            }
-
-            _atOldest.UnionWith(page.Where(key => key.Time == oldest));
-        }
     }
 }

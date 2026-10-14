@@ -11,7 +11,7 @@ internal static class PolicyShowCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("show", "Show a policy.", CommandScope.Organisation);
-        var description = verb.Add(CliArguments.OptionalText("policy", "The policy's description, matched whole and ignoring case."));
+        var description = verb.Add(CliArguments.OptionalName("policy", "The policy's description, matched whole and ignoring case.", "a policy's description"));
         var id = verb.Add(CliOptions.Id("--id", "The policy's ID.", IdFormats.Int32));
 
         verb.ExactlyOne(description, id);

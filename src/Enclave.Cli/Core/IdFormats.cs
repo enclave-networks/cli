@@ -6,18 +6,26 @@ namespace Enclave.Cli.Core;
 /// <summary>
 /// The ID forms of proposed-cli-surface.md "ID checks". Every ID is checked against its form before
 /// any call, so a malformed one exits 2 with an error that names it, and nothing is sent.
-/// Enclave.Sdk.Api 1.1.0 escapes the IDs it takes as text in URL paths (ClientBase.PathSegment) and
+/// Enclave.Sdk.Api 1.2.0 escapes the IDs it takes as text in URL paths (ClientBase.PathSegment) and
 /// takes the others as numbers or GUIDs, so an ID such as "../systems/ABCDE" cannot move a request
 /// to another route either.
 /// </summary>
 internal static partial class IdFormats
 {
     /// <summary>
-    /// A system ID: ASCII letters and digits.
+    /// A system ID: ASCII letters and digits, read in upper case.
     /// </summary>
+    // The API makes system IDs from upper-case letters and digits (portal
+    // Enclave.Configuration/HashIdProvider.cs:39, with the sdk repository's
+    // Enclave.Sdk.Security.Abstractions/SecurityConstants.cs:13). Its system routes upper-case the ID
+    // they are given (portal Enclave.Api/Modules/SystemManagement/Systems/Handlers/
+    // SingleSystemQueryHandler.cs:45, BulkSystemUpdateHandler.cs:56), and the policy gateway check
+    // compares it exactly (Policies/Validators/PolicyGatewayValidator.cs:49), so gw001 names no
+    // gateway there. Reading the ID in upper case gives every request and every duplicate check the
+    // form the API stores, and `system disable ABCDE abcde` names one system.
     public static IdFormat<string> System { get; } = new(
         "letters and digits",
-        text => (text.Length > 0 && text.All(char.IsAsciiLetterOrDigit), text));
+        text => (text.Length > 0 && text.All(char.IsAsciiLetterOrDigit), text.ToUpperInvariant()));
 
     /// <summary>
     /// A key, policy, zone, hostname or trust requirement ID: a whole number that fits in 32 bits
@@ -42,7 +50,7 @@ internal static partial class IdFormats
     /// </summary>
     // The all-zero GUID names nothing. Enclave.Sdk.Api refuses it with ArgumentException when a
     // client is built, after the token check (EnclaveClient.CreateOrganisationClient(OrganisationGuid)
-    // and CreatePartnerClient(PartnerId), version 1.1.0), so the ID check refuses it first, as a bad
+    // and CreatePartnerClient(PartnerId), version 1.2.0), so the ID check refuses it first, as a bad
     // ID: exit 2, before any call.
     public static IdFormat<Guid> Guid { get; } = new(
         "a GUID other than all zeros",

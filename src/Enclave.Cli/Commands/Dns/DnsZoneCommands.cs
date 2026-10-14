@@ -45,8 +45,8 @@ internal static class DnsZoneCommands
     public static CliVerb Create()
     {
         var verb = new CliVerb("create-zone", "Create a DNS zone and print it.", CommandScope.Organisation, changes: true);
-        var name = verb.Add(CliArguments.Text("zone", "The zone's name, such as internal."));
-        var autoDnsTags = verb.Add(CliOptions.TagList("--auto-dns-tags", "Give systems with these tags a name in the zone automatically."));
+        var name = verb.Add(CliArguments.Name("zone", "The zone's name, such as internal.", "a zone's name"));
+        var autoDnsTags = verb.Add(CliOptions.TagList("--auto-dns-tags", "Give systems with these tags a name in the zone automatically.", needsEntries: true));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
         // The API refuses automatic DNS tags that hold a tag twice (portal DnsZoneCreateValidator.cs:32).
@@ -73,7 +73,11 @@ internal static class DnsZoneCommands
     public static CliVerb Update()
     {
         var (verb, zone, id) = ForZone("update-zone", "Change a zone and print it.", changes: true);
-        var name = verb.Add(CliOptions.Text("--name", "The zone's new name.", "name"));
+        // The API refuses a blank zone name (portal
+        // Enclave.Api/Modules/SystemManagement/Dns/Validators/DnsZonePatchValidator.cs:16-22,
+        // NotEmpty when set) and takes empty notes (same file, 24-25, MaximumLength only), which
+        // clear them.
+        var name = verb.Add(CliOptions.NonBlank("--name", "The zone's new name.", "a zone's name", "name"));
         var autoDnsTags = verb.Add(CliOptions.TagList("--set-auto-dns-tags", "Replace the tags whose systems get a name in the zone automatically; \"\" removes them all."));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
@@ -135,7 +139,7 @@ internal static class DnsZoneCommands
     private static (CliVerb Verb, Argument<string?> Zone, Option<int?> Id) ForZone(string name, string description, bool changes)
     {
         var verb = new CliVerb(name, description, CommandScope.Organisation, changes);
-        var zone = verb.Add(CliArguments.OptionalText("zone", "The zone's name, matched whole and ignoring case."));
+        var zone = verb.Add(CliArguments.OptionalName("zone", "The zone's name, matched whole and ignoring case.", "a zone's name"));
         var id = verb.Add(CliOptions.Id("--id", "The zone's ID.", IdFormats.Int32));
 
         verb.ExactlyOne(zone, id);

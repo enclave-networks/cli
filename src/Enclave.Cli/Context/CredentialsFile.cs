@@ -8,7 +8,7 @@ namespace Enclave.Cli.Context;
 /// ~/.enclave/credentials.json, which holds the token and the API's base URL, and the partner API's
 /// base URL where it is not production's. The file belongs to Enclave.Sdk.Api, which reads
 /// personalAccessToken, baseUrl and partnerApiBaseUrl from it, ignoring case
-/// (EnclaveClient.ReadCredentialsFile, version 1.1.0); the CLI keeps that format.
+/// (EnclaveClient.ReadCredentialsFile, version 1.2.0); the CLI keeps that format.
 /// </summary>
 internal static class CredentialsFile
 {

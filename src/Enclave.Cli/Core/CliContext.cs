@@ -112,7 +112,7 @@ internal sealed class CliContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(access);
 
-        return access.CreateClient(_handler ??= new ApiRequestHandler(Output, DryRun));
+        return access.CreateClient(_handler ??= new ApiRequestHandler(Output, DryRun, Host.CreateNetworkHandler?.Invoke()));
     }
 
     /// <summary>
@@ -234,7 +234,7 @@ internal sealed class CliContext : IDisposable
     }
 
     // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions; the caller owns it
-    // (EnclaveClientOptions.HttpMessageHandler, Enclave.Sdk.Api 1.1.0). The clients built here live
+    // (EnclaveClientOptions.HttpMessageHandler, Enclave.Sdk.Api 1.2.0). The clients built here live
     // for one command, so the handler goes with the context.
     public void Dispose() => _handler?.Dispose();
 }

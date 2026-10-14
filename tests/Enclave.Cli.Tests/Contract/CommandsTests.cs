@@ -150,7 +150,7 @@ public class CommandsTests
     // row's --waiting-for, and the options every organisation command takes.
     private static readonly string[] SystemListOptions =
     [
-        "--filter", "--tag", "--state", "--os", "--type", "--gateway", "--key", "--key-id", "--dns-name", "--not-seen-for",
+        "--filter", "--tag", "--state", "--os", "--type", "--gateway", "--key", "--key-id", "--not-seen-for",
         "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id", "--verbose",
     ];
 
@@ -169,9 +169,13 @@ public class CommandsTests
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
 
-    // Each case names options the command must list and options it must not, so a command that
-    // lists options it does not take fails as well as one that misses its own ("Command options").
-    // The lists are space-separated to keep the cases on one line each.
+    // Each case names options the command must list and options it must not ("Command options").
+    // The test adds the options every command of its kind takes ("Options on every command"):
+    // --verbose, --org and --org-id for a command that acts within an organisation, and --dry-run
+    // for one that changes something. The command must list exactly those, so a command that lists
+    // an option it does not take fails as well as one that misses its own. The options it must not
+    // list are likely mistakes, named so that a case listing one shows. The lists are
+    // space-separated to keep the cases on one line each.
     public static IEnumerable<TestCaseData> OptionSets()
     {
         yield return Options("system list", string.Join(' ', SystemListOptions), "--dry-run --partner-id --limit --id");
@@ -195,7 +199,7 @@ public class CommandsTests
         yield return Options("dns update-hostname", "--id --name --set-tags --add-tags --remove-tags --set-systems --notes --dry-run", "--tags --systems");
         yield return Options("trust list", "--filter --type --sort", "--dry-run");
         yield return Options("trust create", "--notes --authority --tenant --authority-uri --client-id --audience --claim --allow-ip --block-ip --allow-country --block-country --dry-run", "--description");
-        yield return Options("trust update", "--id --description --notes --set-claim --set-allow-ip --set-block-ip --set-allow-country --set-block-country --dry-run", "--claim --allow-ip --allow-country");
+        yield return Options("trust update", "--id --description --notes --set-tenant --set-authority-uri --set-client-id --set-audience --set-claim --set-allow-ip --set-block-ip --set-allow-country --set-block-country --dry-run", "--claim --allow-ip --allow-country --set-authority");
         yield return Options("org update", "--name --website --phone --dry-run --org --org-id", "--limit");
         yield return Options("org use", "--id", "--dry-run");
         yield return Options("org remove-user", "--id --dry-run", "--limit");
@@ -213,7 +217,7 @@ public class CommandsTests
         yield return Options("commands", "--search-keys --pending --org --org-id --verbose", "--dry-run --partner-id");
     }
 
-    // The lists whose search keys Enclave.Sdk.Api 1.1.0 reads (GetSearchKeysAsync on
+    // The lists whose search keys Enclave.Sdk.Api 1.2.0 reads (GetSearchKeysAsync on
     // ISystemsClient, IUnapprovedSystemsClient, IEnrolmentKeysClient, IPoliciesClient and
     // ITagsClient), each with the route the call takes and a body for the fake API to serve there
     // ("Details"). --pending chooses the systems waiting for approval, as it does on system list.
@@ -353,9 +357,14 @@ public class CommandsTests
         Assert.That(entries, Does.ContainKey(command));
 
         var names = OptionNames(entries[command]);
+        var expected = present
+            .Append("--verbose")
+            .Concat(OrganisationCommands.Contains(command) ? ["--org", "--org-id"] : [])
+            .Concat(ChangeCommands.Contains(command) ? ["--dry-run"] : [])
+            .Distinct(StringComparer.Ordinal);
         Assert.Multiple(() =>
         {
-            Assert.That(names, Is.SupersetOf(present));
+            Assert.That(names, Is.EquivalentTo(expected));
             Assert.That(names.Intersect(absent, StringComparer.Ordinal), Is.Empty);
         });
     }
@@ -696,7 +705,7 @@ public class CommandsTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
         run.Stub("GET", TestData.OtherOrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
 
@@ -710,7 +719,7 @@ public class CommandsTests
     public async Task Commands_search_keys_reads_the_search_keys_of_the_organisation_the_options_choose(string option, string value, string[] calls)
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
         run.Stub("GET", TestData.OtherOrgPath("enrolment-keys/meta/search-keys"), json: ApiJson.KeySearchKeys());
 

@@ -62,7 +62,7 @@ internal static class KeyBulkCommands
     }
 
     // One key makes the bulk call too, so the output is { requested, affected } however many keys
-    // are given ("Several IDs"); Enclave.Sdk.Api 1.1.0 IEnrolmentKeysClient.DeleteAsync, the
+    // are given ("Several IDs"); Enclave.Sdk.Api 1.2.0 IEnrolmentKeysClient.DeleteAsync, the
     // single delete, is left unused.
     public static CliVerb Delete()
     {
@@ -80,7 +80,7 @@ internal static class KeyBulkCommands
     private static (CliVerb Verb, Argument<IReadOnlyList<string>> Keys, Option<IReadOnlyList<int>?> Ids) Several(string name, string description)
     {
         var verb = new CliVerb(name, $"{description} Takes key descriptions, IDs after --id, or \"-\" to read a list from stdin, and prints {{ requested, affected }}.", CommandScope.Organisation, changes: true);
-        var keys = verb.Add(CliArguments.Many("key", "A key's description, matched whole and ignoring case."));
+        var keys = verb.Add(CliArguments.Names("key", "A key's description, matched whole and ignoring case.", "a key's description"));
         var ids = verb.Add(CliOptions.IdList("--id", "Key IDs, separated by commas.", IdFormats.Int32));
 
         verb.Exclusive(keys, ids);

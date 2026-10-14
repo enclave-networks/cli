@@ -25,11 +25,11 @@ internal static class KeyCreateCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("create", "Create an enrolment key, sending every setting, and print it with its secret.", CommandScope.Organisation, changes: true);
-        var description = verb.Add(CliArguments.Text("description", "The key's description."));
+        var description = verb.Add(CliArguments.Name("description", "The key's description.", "a key's description"));
         var ephemeral = verb.Add(CliOptions.Flag("--ephemeral", "Make an ephemeral key: its systems approve automatically, uses are unlimited, and a system is removed after it disconnects."));
         var autoApprove = verb.Add(CliOptions.Flag("--auto-approve", "Approve systems that enrol with the key automatically."));
         var uses = verb.Add(CliOptions.Number("--uses", "How many systems can enrol with the key; unlimited when left out.", minimum: 1));
-        var tags = verb.Add(CliOptions.TagList("--tags", "Tags for the systems that enrol with the key."));
+        var tags = verb.Add(CliOptions.TagList("--tags", "Tags for the systems that enrol with the key.", needsEntries: true));
         var allowIp = verb.Add(CliOptions.Labelled("--allow-ip", "Allow enrolment only from this range.", "range"));
         var keepDisconnected = verb.Add(CliOptions.Duration("--keep-disconnected", "With --ephemeral: keep a system this long after it disconnects; 30m when left out."));
         var timing = KeyTiming.AddTo(verb);

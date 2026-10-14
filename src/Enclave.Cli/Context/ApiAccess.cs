@@ -91,7 +91,7 @@ internal sealed class ApiAccess
     /// has none, which is null outside tests.
     /// </summary>
     // Enclave.Sdk.Api builds the partner API's HttpClient with the EnclaveClient, from
-    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.1.0), so a
+    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.2.0), so a
     // value that is not a URL would fail every command with a UriFormatException. It is checked here
     // so the error names the file and the setting.
     public static Uri? PartnerApiBaseUrlFrom(CliHost host, StoredCredentials? stored)

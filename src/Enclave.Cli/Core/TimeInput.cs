@@ -233,15 +233,40 @@ internal sealed partial class TimeInput
         // time with no occurrence that close is reported as not existing in the local time zone.
         for (var days = 0; Math.Abs(days) <= 2; days += step)
         {
-            var candidate = FromLocal(today.AddDays(days).Add(_clock.ToTimeSpan()), zone);
+            var candidates = Occurrences(today.AddDays(days).Add(_clock.ToTimeSpan()), zone)
+                .Where(instant => forwards ? instant > now : instant <= now)
+                .ToArray();
 
-            if (candidate is { } instant && (forwards ? instant > now : instant <= now))
+            if (candidates.Length > 0)
             {
-                return instant;
+                return forwards ? candidates.Min() : candidates.Max();
             }
         }
 
         return null;
+    }
+
+    // A clock time names its next occurrence, or its latest at or before now, so in the hour repeated
+    // when daylight saving ends both of its occurrences are candidates: at 01:15 on the night the
+    // clocks go back from 02:00, the next 01:30 is the one 15 minutes away, which reading the time as
+    // standard time alone would skip. TimeZoneInfo.GetAmbiguousTimeOffsets gives the UTC offsets an
+    // ambiguous time can have, in no defined order, and reads a DateTime of DateTimeKind.Unspecified
+    // as a time in the zone it is called on
+    // (https://learn.microsoft.com/dotnet/api/system.timezoneinfo.getambiguoustimeoffsets, .NET 10,
+    // Remarks). A time in a daylight saving gap has no occurrence.
+    private static IEnumerable<DateTimeOffset> Occurrences(DateTime local, TimeZoneInfo zone)
+    {
+        if (zone.IsInvalidTime(local))
+        {
+            return [];
+        }
+
+        if (zone.IsAmbiguousTime(local))
+        {
+            return zone.GetAmbiguousTimeOffsets(local).Select(offset => new DateTimeOffset(local, offset).ToUniversalTime());
+        }
+
+        return [new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone), TimeSpan.Zero)];
     }
 
     [GeneratedRegex(@"^([0-9]+)([mhd])\z", RegexOptions.CultureInvariant)]

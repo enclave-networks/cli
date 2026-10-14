@@ -17,11 +17,16 @@ internal static class SystemUpdateCommand
     {
         var verb = new CliVerb("update", "Change a system's description, notes, tags or gateway routes, or with --pending a waiting system's description, notes or tags, and print the system.", CommandScope.Organisation, changes: true);
         var systemId = verb.Add(CliArguments.Id("systemId", "The system's ID.", IdFormats.System));
+        // A system's description and notes are optional: the API takes them empty, for an enrolled
+        // and a waiting system (portal Enclave.Api/Modules/SystemManagement:
+        // Systems/Validators/SystemPatchModelValidator.cs:15 and 23,
+        // UnapprovedSystems/Validators/UnapprovedSystemPatchModelValidator.cs:13, MaximumLength
+        // only), so "" clears them (proposed-cli-surface.md "Details").
         var description = verb.Add(CliOptions.Text("--description", "The system's description."));
         var notes = verb.Add(CliOptions.Text("--notes", "The system's notes."));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the system's tags; \"\" removes them all."));
-        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the system's others."));
-        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the system's others."));
+        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the system's others.", needsEntries: true));
+        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the system's others.", needsEntries: true));
         var enableGatewayFor = verb.Add(CliOptions.Labelled("--enable-gateway-for", "Make the system a gateway for this subnet, replacing the subnets a user entered.", "subnet"));
         var disableGateway = verb.Add(CliOptions.Flag("--disable-gateway", "Stop the system acting as a gateway."));
         var pending = verb.Add(CliOptions.Flag("--pending", "Update a system waiting for approval."));
@@ -39,9 +44,11 @@ internal static class SystemUpdateCommand
                 throw CliErrors.InvalidArgument(option.Name, $"{option.Name} applies to enrolled systems only, so it cannot be given with --pending.");
             }
 
-            if (context.Get(enableGatewayFor) is { } subnets && GatewayRoutes.Repeated(subnets) is { } repeated)
+            // The option checks no format, so its value can be a token passed by mistake, and the
+            // error names the option alone, as no CLI error repeats a value (CliOptions).
+            if (context.Get(enableGatewayFor) is { } subnets && GatewayRoutes.RepeatsASubnet(subnets))
             {
-                throw CliErrors.InvalidArgument(enableGatewayFor.Name, $"{enableGatewayFor.Name} gives the subnet {repeated} more than once; give each subnet once, with its label.");
+                throw CliErrors.InvalidArgument(enableGatewayFor.Name, $"{enableGatewayFor.Name} gives a subnet more than once, and the API refuses a route list that holds a subnet twice; give each subnet once, with its label.");
             }
         });
 

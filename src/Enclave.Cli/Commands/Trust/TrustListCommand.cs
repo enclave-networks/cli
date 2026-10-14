@@ -12,7 +12,7 @@ internal static class TrustListCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("list", "List the trust requirements, reading every page.", CommandScope.Organisation);
-        var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
 
         // The search values are the API's TrustRequirementType names, which the type search key
         // reads ("Filters"; portal TrustRequirementSearchKeyService.BuildFilterAsync).

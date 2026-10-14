@@ -1,3 +1,4 @@
+using System.CommandLine;
 using System.Text.Json.Nodes;
 using Enclave.Api.Modules.AccountManagement.PublicAccount.Models;
 using Enclave.Cli.Core;
@@ -19,6 +20,28 @@ internal static class OrganisationResolver
     /// The source status reports when the token sees one organisation and nothing else chose it.
     /// </summary>
     public const string OnlyOrganisation = "only-organisation";
+
+    /// <summary>
+    /// Refuses an empty or blank organisation name given to <paramref name="option"/>, --org, with
+    /// the verb's other argument checks.
+    /// </summary>
+    public static void RefuseBlankName(CliVerb verb, Option<string?> option)
+    {
+        ArgumentNullException.ThrowIfNull(option);
+
+        RefuseBlankName(verb, option, context => context.Get(option));
+    }
+
+    /// <summary>
+    /// Refuses an empty or blank organisation name given to <paramref name="argument"/>, such as
+    /// org use's name, with the verb's other argument checks.
+    /// </summary>
+    public static void RefuseBlankName(CliVerb verb, Argument<string?> argument)
+    {
+        ArgumentNullException.ThrowIfNull(argument);
+
+        RefuseBlankName(verb, argument, context => context.Get(argument));
+    }
 
     /// <summary>
     /// The organisation the command line, the environment or cli.json chooses, before any lookup;
@@ -142,6 +165,23 @@ internal static class OrganisationResolver
                 ["name"] = organisation.OrgName,
             })
             .ToArray());
+    }
+
+    // An empty or blank name names no organisation. Passed on, it would cost the lookup a name makes
+    // and then match nothing, and that lookup needs the token, so the same command line would exit 3
+    // without a token and 2 with one. Refused with the other argument checks, it exits 2 before the
+    // token and any call whatever the token (proposed-cli-surface.md "Errors and exit codes").
+    private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value)
+    {
+        ArgumentNullException.ThrowIfNull(verb);
+
+        verb.Check(context =>
+        {
+            if (value(context) is { } name && string.IsNullOrWhiteSpace(name))
+            {
+                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes an organisation name, and the value given is blank.");
+            }
+        });
     }
 
     // A default in a shape org use does not save, such as an ID given as a bare string, names no

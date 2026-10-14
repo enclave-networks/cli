@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -16,10 +17,6 @@ namespace Enclave.Cli.Tests.Resources;
 /// </summary>
 public partial class TrustCommandTests
 {
-    private const string None = "(none)";
-
-    private const string Empty = "(empty)";
-
     private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");
 
     private static readonly string[] PublicIpTypeTerm = ["type:PublicIp"];
@@ -55,7 +52,7 @@ public partial class TrustCommandTests
         var items = CliAssert.List(result, "trust");
         Assert.Multiple(() =>
         {
-            Assert.That(SearchTerms(run.SingleRequest()), Is.EqualTo(PublicIpTypeTerm));
+            Assert.That(SearchTerms.Of(run.SingleRequest().QueryValue("search")), Is.EqualTo(PublicIpTypeTerm));
             Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("5"));
         });
     }
@@ -71,7 +68,7 @@ public partial class TrustCommandTests
         var result = await run.RunAsync("trust", "list", "--filter", "staff", "--type", "user-auth");
 
         CliAssert.List(result, "trust");
-        var terms = SearchTerms(run.SingleRequest());
+        var terms = SearchTerms.Of(run.SingleRequest().QueryValue("search"));
         Assert.Multiple(() =>
         {
             Assert.That(terms, Has.Length.EqualTo(2));
@@ -210,7 +207,7 @@ public partial class TrustCommandTests
         CliAssert.Bulk(result, 1, 1);
         var delete = run.RequestsTo("DELETE", TrustsPath);
         Assert.That(delete, Has.Count.EqualTo(1));
-        Assert.That(Ids(delete[0]), Is.EqualTo("5"));
+        Assert.That(delete[0].SortedBodyIds("requirementIds"), Is.EqualTo("5"));
     }
 
     [Test]
@@ -226,7 +223,7 @@ public partial class TrustCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(Ids(request), Is.EqualTo("5,9"));
+            Assert.That(request.SortedBodyIds("requirementIds"), Is.EqualTo("5,9"));
         });
     }
 
@@ -244,7 +241,7 @@ public partial class TrustCommandTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(CandidateIds(error), Is.Empty);
+            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
             Assert.That(run.RequestsTo("DELETE", TrustsPath), Is.Empty);
         });
     }
@@ -263,7 +260,7 @@ public partial class TrustCommandTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(CandidateIds(error), Is.EqualTo("5,6"));
+            Assert.That(NameLookup.CandidateIds(error), Is.EqualTo("5,6"));
             Assert.That(run.RequestsTo("DELETE", TrustsPath), Is.Empty);
         });
     }
@@ -279,7 +276,7 @@ public partial class TrustCommandTests
         var result = await run.RunAsync("trust", "delete", "-");
 
         CliAssert.Bulk(result, 2, 2);
-        Assert.That(Ids(run.SingleRequest()), Is.EqualTo("3,4"));
+        Assert.That(run.SingleRequest().SortedBodyIds("requirementIds"), Is.EqualTo("3,4"));
     }
 
     // Policies and trust requirements both have integer IDs, so the list's kind is what stops a
@@ -306,53 +303,15 @@ public partial class TrustCommandTests
 
         var result = await run.RunAsync("trust", "delete", "--id", "5", "--dry-run");
 
-        CliAssert.Succeeded(result);
-        var output = result.StdoutJson;
-        var org = JsonAssert.Property(output, "org");
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var request = requests[0];
+        var request = DryRunOutput.RequestInTestOrg(result, "DELETE", TrustsPath);
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo("DELETE"));
-            Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(TrustsPath));
             Assert.That(JsonRead.IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "requirementIds")), Is.EqualTo("5"));
         });
     }
 
     private static string TrustPath(int id) => TestData.OrgPath("trust-requirements/" + id.ToString(CultureInfo.InvariantCulture));
-
-    // Examples give a trust requirement both ways, by its description and by --id ("Names and IDs"),
-    // and the command must send the same change either way.
-    private static string[] Target(bool byDescription, string description, int id) =>
-        byDescription ? [description] : ["--id", id.ToString(CultureInfo.InvariantCulture)];
-
-    // Sorted, since the order of a bulk call's IDs does not change what it does.
-    private static string Ids(RecordedRequest request) =>
-        string.Join(",", request.BodyIds("requirementIds").Order(StringComparer.Ordinal));
-
-    // The API splits the search text at whitespace (portal BaseSearchKeyService.GetTokens), so the
-    // order of the terms is not part of the requirement; each term is the exact search text the
-    // "Filters" table gives.
-    private static string[] SearchTerms(RecordedRequest request) =>
-        (request.QueryValue("search") ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-    // The IDs of the candidates a name lookup error carries, sorted. For no match the candidates
-    // hold nothing ("Errors and exit codes"), so a missing, null or empty list all read as "".
-    private static string CandidateIds(JsonElement error)
-    {
-        if (!error.TryGetProperty("candidates", out var candidates) || candidates.ValueKind == JsonValueKind.Null)
-        {
-            return string.Empty;
-        }
-
-        return string.Join(",", candidates.EnumerateArray().Select(candidate => JsonAssert.Property(candidate, "id").GetInt32()).Order().Select(id => id.ToString(CultureInfo.InvariantCulture)));
-    }
 
     // ApiJson.Trust as a public IP requirement holding these conditions, written as the API stores
     // them: every value a string, isBlocked "true" or "false" (portal TrustRequirementSettingsModel
@@ -414,31 +373,4 @@ public partial class TrustCommandTests
     // Sorted, since a sign-in token must carry every claim whatever their order.
     private static string Claims(JsonElement conditions) =>
         Set(conditions.EnumerateArray().Select(condition => $"{Text(condition, "claim")}={Text(condition, "value")}").ToArray());
-
-    private static string Set(params string[] entries) => string.Join("; ", entries.Order(StringComparer.Ordinal));
-
-    // Names match ignoring case, since PATCH bodies key the top level in PascalCase
-    // (JsonAssert.Property). Missing and null read as (none), an unset label; an empty string reads
-    // as (empty), since an empty label is sent as null ("Details"); any other JSON kind reads as
-    // json:<raw>, so a boolean never passes for the string "true" the API reads
-    // (TrustRequirementSettingsModel).
-    private static string Text(JsonElement obj, string name)
-    {
-        foreach (var property in obj.EnumerateObject())
-        {
-            if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            return property.Value.ValueKind switch
-            {
-                JsonValueKind.Null => None,
-                JsonValueKind.String => property.Value.GetString() is { Length: > 0 } text ? text : Empty,
-                _ => "json:" + property.Value.GetRawText(),
-            };
-        }
-
-        return None;
-    }
 }

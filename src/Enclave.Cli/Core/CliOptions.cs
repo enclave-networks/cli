@@ -27,6 +27,49 @@ internal static class CliOptions
         };
 
     /// <summary>
+    /// Free text a list filters by, such as --filter, log --user or the name system list --key
+    /// looks up, taken as given; null when the option is not given. A value that is empty or only
+    /// white space is a parse error.
+    /// </summary>
+    // A blank filter filters by nothing. Read as the filter left out, it would list every item, and
+    // a blank value usually comes from an unset shell variable, so `system list --filter "$NAME" |
+    // enclave-cli system revoke -` would revoke every system (proposed-cli-surface.md "Details").
+    public static Option<string?> Filter(string name, string description, string valueName = "text") =>
+        Single<string?>(name, description, valueName, (text, result) =>
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            result.AddError($"{name} filters the list, and the value given is blank. Give a value, or leave {name} out.");
+            return null;
+        });
+
+    /// <summary>
+    /// Text that has no blank form, taken as given: a new name, such as the full hostname dns
+    /// update-hostname --name takes, or a setting the API refuses blank, such as a tag's colour.
+    /// <paramref name="takes"/> says what it is, for errors: "a full hostname". Null when the option
+    /// is not given. A value that is empty or only white space is a parse error.
+    /// </summary>
+    // A blank name names nothing, as a blank name argument does (CliArguments.Name), and a blank
+    // value the API refuses would reach it after the token is read, so the same command line would
+    // exit 3 without a token and 1 with one. Each command cites the validator that refuses it.
+    // Optional text the API takes empty, such as notes, is a Text option, where "" clears it
+    // (proposed-cli-surface.md "Details").
+    public static Option<string?> NonBlank(string name, string description, string takes, string valueName = "text") =>
+        Single<string?>(name, description, valueName, (text, result) =>
+        {
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+
+            result.AddError($"{name} takes {takes}, and the value given is blank.");
+            return null;
+        });
+
+    /// <summary>
     /// A switch: true when given. It takes no value.
     /// </summary>
     public static Option<bool> Flag(string name, string description) =>
@@ -86,34 +129,36 @@ internal static class CliOptions
 
     /// <summary>
     /// IDs in the given form, separated by commas (--id 42,43,57); the option may also be repeated.
-    /// Null when not given.
+    /// "" gives an empty list, and an empty ID among others ("42,", "42,,43") is a parse error. Null
+    /// when not given. With <paramref name="needsEntries"/>, "" is a parse error too.
     /// </summary>
     /// <typeparam name="T">The ID type.</typeparam>
-    public static Option<IReadOnlyList<T>?> IdList<T>(string name, string description, IdFormat<T> format, string valueName = "ids") =>
-        CommaList(name, description, valueName, (piece, result) =>
-        {
-            if (format.TryParse(piece, out var value))
-            {
-                return (true, value);
-            }
-
-            result.AddError($"{name} takes IDs separated by commas, each {format.Describe}.");
-            return (false, value);
-        });
+    public static Option<IReadOnlyList<T>?> IdList<T>(string name, string description, IdFormat<T> format, string valueName = "ids", bool needsEntries = false) =>
+        CommaList(name, description, valueName, IdPiece(name, format), needsEntries ? NeedsEntries(name) : null);
 
     /// <summary>
     /// Values separated by commas (--tags a,b), taken as given; "" gives an empty list, which a
-    /// --set- flag uses to clear a list. Null when not given.
+    /// --set- flag uses to clear a list, and an empty entry among others is a parse error. Null when
+    /// not given. With <paramref name="needsEntries"/>, "" is a parse error too.
     /// </summary>
-    public static Option<IReadOnlyList<string>?> List(string name, string description, string valueName = "a,b") =>
-        CommaList<string>(name, description, valueName, (piece, _) => (true, piece));
+    public static Option<IReadOnlyList<string>?> List(string name, string description, string valueName = "a,b", bool needsEntries = false) =>
+        CommaList<string>(name, description, valueName, (piece, _) => (true, piece), needsEntries ? NeedsEntries(name) : null);
 
     /// <summary>
     /// Tag names separated by commas, each by the API's tag rule (<see cref="IdFormats.Tag"/>); ""
-    /// gives an empty list. Null when not given.
+    /// gives an empty list, and an empty tag among others is a parse error. Null when not given.
+    /// With <paramref name="needsEntries"/>, "" is a parse error too.
     /// </summary>
-    public static Option<IReadOnlyList<string>?> TagList(string name, string description) =>
-        IdList(name, description, IdFormats.Tag, "a,b");
+    public static Option<IReadOnlyList<string>?> TagList(string name, string description, bool needsEntries = false) =>
+        IdList(name, description, IdFormats.Tag, "a,b", needsEntries);
+
+    /// <summary>
+    /// Tag names a list filters by, separated by commas, each by the API's tag rule
+    /// (<see cref="IdFormats.Tag"/>). Null when not given. A value that holds no tag ("", ",") is a
+    /// parse error, as a blank <see cref="Filter"/> is.
+    /// </summary>
+    public static Option<IReadOnlyList<string>?> TagFilter(string name, string description) =>
+        CommaList(name, description, "a,b", IdPiece(name, IdFormats.Tag), HoldsNothing(name));
 
     /// <summary>
     /// A value that may be given more than once, each whole: --gateway GW001:10.0.0.0/16 --gateway
@@ -131,15 +176,39 @@ internal static class CliOptions
 
     /// <summary>
     /// A value with an optional "=label", which may be given more than once:
-    /// --acl "tcp:5432=PostgreSQL" --acl icmp. Null when not given.
+    /// --acl "tcp:5432=PostgreSQL" --acl icmp. Null when not given. A value that is empty or only
+    /// white space before its label is a parse error, except that with <paramref name="clears"/>,
+    /// for a --set- flag, "" or only white space given alone is the value that clears its list
+    /// (<see cref="ListValues.Clears(IReadOnlyList{LabelledValue})"/>).
     /// </summary>
-    public static Option<IReadOnlyList<LabelledValue>?> Labelled(string name, string description, string valueName) =>
+    // A value with nothing before its label names no range, country, rule or subnet, so it means
+    // nothing, wherever it comes among the values. Dropped, it would shorten the list, and passed
+    // on, it would reach the API after the token is read, which refuses it (portal
+    // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Validators/EnrolmentKeyIpConstraintInputValidator.cs:12,
+    // NotEmpty, for an enrolment key's range) (proposed-cli-surface.md "Details").
+    public static Option<IReadOnlyList<LabelledValue>?> Labelled(string name, string description, string valueName, bool clears = false) =>
         new(name)
         {
             Description = description,
             HelpName = valueName + "[=<label>]",
             Arity = ArgumentArity.OneOrMore,
-            CustomParser = result => result.Tokens.Select(token => LabelledValue.Parse(token.Value)).ToArray(),
+            CustomParser = result =>
+            {
+                var values = result.Tokens.Select(token => LabelledValue.Parse(token.Value)).ToArray();
+
+                if (clears && ListValues.Clears(values))
+                {
+                    return values;
+                }
+
+                if (values.Any(value => string.IsNullOrWhiteSpace(value.Value)))
+                {
+                    result.AddError($"Each {name} takes a {valueName}, and one given is blank.");
+                    return null;
+                }
+
+                return values;
+            },
         };
 
     /// <summary>
@@ -215,9 +284,11 @@ internal static class CliOptions
 
     /// <summary>
     /// Values from a fixed set, separated by commas (--level warning,error), matched ignoring case.
-    /// Null when not given.
+    /// Null when not given. A value that holds no choice ("", ",") is a parse error.
     /// </summary>
     /// <typeparam name="T">The value each choice stands for.</typeparam>
+    // The list names the values a command keeps, as log --level keeps the entries at those levels,
+    // so one with no value keeps nothing, and is refused as a blank Filter is.
     public static ChoiceOption<IReadOnlyList<T>?> ChoiceList<T>(string name, string description, params (string Value, T Result)[] choices)
     {
         var option = new ChoiceOption<IReadOnlyList<T>?>(name, choices.Select(choice => choice.Value).ToArray())
@@ -229,9 +300,14 @@ internal static class CliOptions
 
         option.CustomParser = result =>
         {
+            if (Pieces(result, name) is not { } pieces)
+            {
+                return null;
+            }
+
             var values = new List<T>();
 
-            foreach (var piece in Pieces(result))
+            foreach (var piece in pieces)
             {
                 var match = choices.Where(choice => string.Equals(piece, choice.Value, StringComparison.OrdinalIgnoreCase)).ToArray();
 
@@ -242,6 +318,12 @@ internal static class CliOptions
                 }
 
                 values.Add(match[0].Result);
+            }
+
+            if (values.Count == 0)
+            {
+                result.AddError(HoldsNothing(name));
+                return null;
             }
 
             return values;
@@ -316,7 +398,10 @@ internal static class CliOptions
             CustomParser = result => parse(result.Tokens[0].Value, result),
         };
 
-    private static Option<IReadOnlyList<T>?> CommaList<T>(string name, string description, string valueName, Func<string, ArgumentResult, (bool Valid, T Value)> parse) =>
+    // A list whose empty value means nothing refuses it with the message noEntries gives: a list a
+    // list command filters by (HoldsNothing), which would then filter by nothing, and a list that
+    // needs entries (NeedsEntries).
+    private static Option<IReadOnlyList<T>?> CommaList<T>(string name, string description, string valueName, Func<string, ArgumentResult, (bool Valid, T Value)> parse, string? noEntries = null) =>
         new(name)
         {
             Description = description,
@@ -324,9 +409,14 @@ internal static class CliOptions
             Arity = ArgumentArity.OneOrMore,
             CustomParser = result =>
             {
+                if (Pieces(result, name) is not { } pieces)
+                {
+                    return null;
+                }
+
                 var values = new List<T>();
 
-                foreach (var piece in Pieces(result))
+                foreach (var piece in pieces)
                 {
                     var (valid, value) = parse(piece, result);
 
@@ -338,14 +428,62 @@ internal static class CliOptions
                     values.Add(value);
                 }
 
+                if (noEntries is not null && values.Count == 0)
+                {
+                    result.AddError(noEntries);
+                    return null;
+                }
+
                 return values;
             },
         };
 
-    // Spaces around a piece are dropped so "web, db" reads as two values, and empty pieces are
-    // dropped so --set-tags "" gives the empty list that clears a list (proposed-cli-surface.md
-    // "Details"). An option that needs at least one value checks for the empty list where it is
-    // read, as Items.ReadAsync does for --id.
-    private static IEnumerable<string> Pieces(ArgumentResult result) =>
-        result.Tokens.SelectMany(token => token.Value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+    private static Func<string, ArgumentResult, (bool Valid, T Value)> IdPiece<T>(string name, IdFormat<T> format) =>
+        (piece, result) =>
+        {
+            if (format.TryParse(piece, out var value))
+            {
+                return (true, value);
+            }
+
+            result.AddError($"{name} takes IDs separated by commas, each {format.Describe}.");
+            return (false, value);
+        };
+
+    private static string HoldsNothing(string name) =>
+        $"{name} filters the list, and the value given names nothing. Give at least one value, or leave {name} out.";
+
+    // An empty list means something only where it clears a list, as a --set- flag's does
+    // (proposed-cli-surface.md "Details"). A create sends an empty list for a list flag left out,
+    // and --add-tags or --remove-tags with no tag changes nothing, so on those flags the empty list
+    // sets and changes nothing. Taken, it would act as the flag left out, which an empty value is
+    // never read as, since it usually comes from an unset shell variable ("Details").
+    private static string NeedsEntries(string name) =>
+        $"{name} takes at least one value, and the value given holds none. Give a value, or leave {name} out.";
+
+    // Spaces around a piece are dropped so "web, db" reads as two values. A value that is "" or only
+    // white space, given once or with the option repeated, holds no pieces, so --set-tags "" gives
+    // the empty list that clears a list (proposed-cli-surface.md "Details"). Any other empty piece
+    // ("web,", "web,,db", ",", or "" given beside another value of the option) is a parse error:
+    // dropped, it would shorten the list without a word, and an empty entry usually comes from an
+    // unset shell variable, as in `--trust "uk only,$EXTRA"` ("Details"). An option whose empty list
+    // means nothing refuses it: a filter or a list that needs entries as it is parsed (CommaList,
+    // ChoiceList), and --id where it is read (Items.ReadAsync). Null after an error.
+    private static string[]? Pieces(ArgumentResult result, string name)
+    {
+        if (result.Tokens.All(token => string.IsNullOrWhiteSpace(token.Value)))
+        {
+            return [];
+        }
+
+        var pieces = result.Tokens.SelectMany(token => token.Value.Split(',', StringSplitOptions.TrimEntries)).ToArray();
+
+        if (pieces.Any(piece => piece.Length == 0))
+        {
+            result.AddError($"{name} takes values separated by commas, and the value given holds an empty one.");
+            return null;
+        }
+
+        return pieces;
+    }
 }

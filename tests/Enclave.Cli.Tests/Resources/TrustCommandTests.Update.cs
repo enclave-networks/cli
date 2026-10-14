@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -9,7 +10,7 @@ namespace Enclave.Cli.Tests.Resources;
 // settings object, configuration and conditions together (portal TrustRequirementPatchModel), so a
 // --set- flag reads the requirement first and replaces only the conditions or setting of its own
 // kind: the rest, and the labels of entries that stay, go back as they were ("Calls per command").
-// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set, version 1.1.0).
+// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set, version 1.2.0).
 
 /// <summary>
 /// Tests for trust update.
@@ -36,7 +37,7 @@ public partial class TrustCommandTests
         run.Stub("GET", TrustPath(5), json: trust);
         run.Stub("PATCH", TrustPath(5), json: trust);
 
-        var result = await run.RunAsync(["trust", "update", .. Target(byDescription, "uk only", 5), "--set-allow-country", "GB", "--set-allow-country", "IE"]);
+        var result = await run.RunAsync(["trust", "update", .. NameLookup.Target(byDescription, "uk only", 5), "--set-allow-country", "GB", "--set-allow-country", "IE"]);
 
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", TrustPath(5));
@@ -116,7 +117,7 @@ public partial class TrustCommandTests
         run.Stub("GET", TrustPath(9), json: trust);
         run.Stub("PATCH", TrustPath(9), json: trust);
 
-        var result = await run.RunAsync(["trust", "update", .. Target(byDescription, "uk and ie", 9), "--set-block-country", "US=No US access"]);
+        var result = await run.RunAsync(["trust", "update", .. NameLookup.Target(byDescription, "uk and ie", 9), "--set-block-country", "US=No US access"]);
 
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", TrustPath(9));
@@ -251,6 +252,139 @@ public partial class TrustCommandTests
             Assert.That(Text(patched, "clientId"), Is.EqualTo("enclave-cli"));
             Assert.That(Text(patched, "aud"), Is.EqualTo("api://enclave"));
             Assert.That(Claims(JsonAssert.Property(settings, "conditions")), Is.EqualTo("hd=example.com"));
+        });
+    }
+
+    // A sign-in setting given only white space carries no value. The API refuses a client ID or
+    // audience that is empty or white space and an authority address that is not https (portal
+    // TrustRequirementSettingsUserAuthValidator.cs:47-49; MustHaveKeyWithValue and KeyNotEmptyIfSet
+    // test string.IsNullOrWhiteSpace, DictionaryValidationExtensions.cs:45,82), and stores a blank
+    // tenant (TrustRequirementSettingsUserAuthValidator.cs:35-38), so each exits 2 as it does on
+    // trust create ("Command options"). okta, jumpcloud, duo and oidc require an https address and a
+    // client ID (same validator, 47-48), so --set-authority-uri "" and --set-client-id "" exit 2 as
+    // well. Arguments are checked before the token and any call ("Errors and exit codes"): the run
+    // with a token answers the read and the patch, so a CLI that went on shows a request, and the
+    // run without a token shows the check comes before the token. The update with a value, run
+    // next, shows the rejection comes from the blank one.
+    [TestCase("oidc", "--set-client-id", "")]
+    [TestCase("oidc", "--set-client-id", " ")]
+    [TestCase("oidc", "--set-authority-uri", "")]
+    [TestCase("oidc", "--set-authority-uri", " ")]
+    [TestCase("oidc", "--set-audience", "  ")]
+    [TestCase("azure", "--set-tenant", " \t ")]
+    public async Task Trust_update_rejects_a_blank_sign_in_setting_before_the_token(string authority, string option, string blank)
+    {
+        using var run = CliRun.Start();
+        using var withoutToken = CliRun.Start();
+        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        var trust = authority == "azure"
+            ? SignInTrust(5, "entra staff", Azure(Tenant))
+            : SignInTrust(5, "sso", new JsonObject { ["authority"] = "oidc", ["authorityUri"] = "https://sso.example.com", ["clientId"] = "enclave-portal", ["aud"] = "api://enclave" });
+        run.Stub("GET", TrustPath(5), json: trust);
+        run.Stub("PATCH", TrustPath(5), json: trust);
+        string[] rejected = ["trust", "update", "--id", "5", option, blank];
+        var value = option switch
+        {
+            "--set-client-id" => "enclave-cli",
+            "--set-authority-uri" => "https://login.example.com",
+            "--set-audience" => "api://enclave-cli",
+            _ => "0f6d2c41-5a8e-4b93-8c27-d1e4f9a3b605",
+        };
+
+        CliAssert.Rejected(run, await run.RunAsync(rejected));
+        CliAssert.Rejected(withoutToken, await withoutToken.RunAsync(rejected));
+
+        CliAssert.Succeeded(await run.RunAsync("trust", "update", "--id", "5", option, value));
+        Assert.That(run.RequestsTo("PATCH", TrustPath(5)), Has.Count.EqualTo(1));
+    }
+
+    // Any --set- list flag given "" clears its list ("Details"). The list of a trust update flag is
+    // the conditions of its own kind ("Command options"), so "" removes those, and the conditions of
+    // other kinds stay with their labels; the read is what keeps them ("Calls per command"). Each
+    // kind has one condition here, so the patch holds the other three.
+    [TestCase("--set-allow-ip", "ip|203.0.113.0/24|false|Office")]
+    [TestCase("--set-block-ip", "ip|203.0.113.66/32|true|Guest Wi-Fi NAT")]
+    [TestCase("--set-allow-country", "country|GB|false|UK offices")]
+    [TestCase("--set-block-country", "country|RU|true|No RU access")]
+    public async Task Trust_update_set_list_flag_given_an_empty_value_removes_only_the_conditions_of_its_kind(string option, string removed)
+    {
+        using var run = CliRun.Start();
+        var trust = PublicIpTrust(
+            10,
+            "office only",
+            ("ip", "203.0.113.0/24", false, "Office"),
+            ("ip", "203.0.113.66/32", true, "Guest Wi-Fi NAT"),
+            ("country", "GB", false, "UK offices"),
+            ("country", "RU", true, "No RU access"));
+        string[] all = ["ip|203.0.113.0/24|false|Office", "ip|203.0.113.66/32|true|Guest Wi-Fi NAT", "country|GB|false|UK offices", "country|RU|true|No RU access"];
+        run.Stub("GET", TrustPath(10), json: trust);
+        run.Stub("PATCH", TrustPath(10), json: trust);
+
+        var result = await run.RunAsync("trust", "update", "--id", "10", option, string.Empty);
+
+        CliAssert.Succeeded(result);
+        var patch = run.RequestsTo("PATCH", TrustPath(10));
+        Assert.That(patch, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(Set(JsonRead.PropertyNames(patch[0].BodyJson)), Is.EqualTo("Settings").IgnoreCase);
+            Assert.That(PatchedConditions(patch[0]), Is.EqualTo(Set([.. all.Where(condition => condition != removed)])));
+        });
+    }
+
+    // As above for --set-claim, the list of a sign-in requirement's claims: "" removes every claim,
+    // and the authority and tenant, which are the configuration, stay.
+    [Test]
+    public async Task Trust_update_set_claim_given_an_empty_value_removes_every_claim_and_keeps_the_configuration()
+    {
+        using var run = CliRun.Start();
+        var trust = SignInTrust(3, "entra staff", Azure(Tenant), ("groups", "engineering"), ("roles", "operator"));
+        run.Stub("GET", TrustPath(3), json: trust);
+        run.Stub("PATCH", TrustPath(3), json: trust);
+
+        var result = await run.RunAsync("trust", "update", "--id", "3", "--set-claim", string.Empty);
+
+        CliAssert.Succeeded(result);
+        var patch = run.RequestsTo("PATCH", TrustPath(3));
+        Assert.That(patch, Has.Count.EqualTo(1));
+        var settings = JsonAssert.Property(patch[0].BodyJson, "Settings");
+        var configuration = JsonAssert.Property(settings, "configuration");
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonAssert.Property(settings, "conditions").ValueKind, Is.EqualTo(JsonValueKind.Array));
+            Assert.That(JsonAssert.Property(settings, "conditions").GetArrayLength(), Is.Zero);
+            Assert.That(Set(JsonRead.PropertyNames(configuration)), Is.EqualTo(Set("authority", "tenantId")));
+            Assert.That(Text(configuration, "authority"), Is.EqualTo("azure"));
+            Assert.That(Text(configuration, "tenantId"), Is.EqualTo(Tenant));
+        });
+    }
+
+    // trust update prints the requirement the API answers the patch with ("Several IDs": a
+    // single-ID command prints the model). The answer differs from the read in usedInPolicies,
+    // modified and conditions, and the patch body holds only Settings, so output built from the
+    // read or the request does not match. Names are read exactly, as an agent reads them.
+    [Test]
+    public async Task Trust_update_prints_the_requirement_the_api_answers_the_patch_with()
+    {
+        using var run = CliRun.Start();
+        var read = PublicIpTrust(5, "uk only", ("country", "GB", false, "UK offices"));
+        var answer = JsonNode.Parse(PublicIpTrust(5, "uk only", ("country", "GB", false, "UK offices"), ("country", "IE", false, null)))!.AsObject();
+        answer["usedInPolicies"] = 3;
+        answer["modified"] = "2026-03-04T10:15:00Z";
+        run.Stub("GET", TrustPath(5), json: read);
+        run.Stub("PATCH", TrustPath(5), json: answer.ToJsonString());
+
+        var result = await run.RunAsync("trust", "update", "--id", "5", "--set-allow-country", "GB", "--set-allow-country", "IE");
+
+        CliAssert.Succeeded(result);
+        var output = result.StdoutJson;
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.RequestsTo("PATCH", TrustPath(5)), Has.Count.EqualTo(1));
+            Assert.That(output.GetProperty("id").GetInt32(), Is.EqualTo(5));
+            Assert.That(output.GetProperty("usedInPolicies").GetInt32(), Is.EqualTo(3));
+            Assert.That(output.GetProperty("modified").GetString(), Does.StartWith("2026-03-04T10:15:00"));
+            Assert.That(output.GetProperty("settings").GetProperty("conditions").GetArrayLength(), Is.EqualTo(2));
         });
     }
 

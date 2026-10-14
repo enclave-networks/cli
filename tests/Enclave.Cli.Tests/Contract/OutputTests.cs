@@ -17,7 +17,7 @@ namespace Enclave.Cli.Tests.Contract;
 // stdout is JSON using the Enclave.Sdk.Api models unchanged, so field names and values match the
 // API (proposed-cli-surface.md "Output"; AGENTS.md "CLI contract"). --help and --version print text
 // for people, and are the only output that is not JSON ("Errors and exit codes"). Lists and their
-// envelope are in ListTests; the output-format options that no longer exist are in
+// envelope are in ListTests; the output-format options the CLI does not have are in
 // ParseErrorTests.
 public class OutputTests
 {

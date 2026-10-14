@@ -98,6 +98,12 @@ internal sealed record RecordedRequest(
             .ToArray();
     }
 
+    /// <summary>
+    /// The IDs <see cref="BodyIds"/> reads, sorted and joined with commas.
+    /// </summary>
+    // Sorted, since the order of a bulk call's IDs or names does not change what it does.
+    public string SortedBodyIds(string field) => string.Join(",", BodyIds(field).Order(StringComparer.Ordinal));
+
     // Records print every public property in ToString, and BodyJson fails the test when the body is
     // not JSON. NUnit calls ToString to describe a value in a failure message, so printing only the
     // captured fields keeps that message from raising a second failure.

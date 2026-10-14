@@ -8,7 +8,7 @@ namespace Enclave.Cli.Tests.Partner;
 // --id` saves in ~/.enclave/cli.json. The organisation is chosen separately: partner commands use
 // the partner, and every other command that acts within an organisation uses the organisation
 // (proposed-cli-surface.md "Context"). A partner customer command calls the partner API under
-// /partner/{partnerId}/ (Enclave.Sdk.Api 1.1.0, PartnerClient), so the tests observe the choice
+// /partner/{partnerId}/ (Enclave.Sdk.Api 1.2.0, PartnerClient), so the tests observe the choice
 // through the partner in the path of the request the command sends, which source's value the ID
 // check sees, and what cli.json holds.
 public class PartnerContextTests
@@ -58,14 +58,14 @@ public class PartnerContextTests
     // partner use records an ID and makes no API call: a personal access token cannot look partners
     // up ("Partner API"). It saves { "partner": { "id" } } in cli.json and prints { "id" } ("Login,
     // logout and status"). It needs no organisation either, so with none chosen and two visible to
-    // the token it still makes no call. The partner command run afterwards shows the saved default
-    // is the one used.
+    // the token it makes no call. The partner command run afterwards shows the saved default is the
+    // one used.
     [Test]
     public async Task Partner_use_saves_the_partner_in_cli_json_and_prints_its_id_without_calling_the_api()
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var use = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
@@ -284,7 +284,7 @@ public class PartnerContextTests
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
         run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var result = await run.RunAsync("partner", "customer", "list");
@@ -302,7 +302,7 @@ public class PartnerContextTests
         run.Environment.Remove("ENCLAVE_ORG_ID");
         run.Environment["ENCLAVE_ORG"] = "Initrode";
         run.Environment[PartnerIdVariable] = TestData.PartnerId.ToString();
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         var result = await run.RunAsync("partner", "customer", "list");
@@ -321,7 +321,7 @@ public class PartnerContextTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         _ = await ChooseTestPartnerAsync(run, source);
         var before = run.Requests.Count;
 
@@ -352,7 +352,7 @@ public class PartnerContextTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         CliAssert.Succeeded(await run.RunAsync("org", "use", "--id", TestData.OrgId.ToString()));
         var before = run.Requests.Count;
 
@@ -371,7 +371,7 @@ public class PartnerContextTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"));
 
         CliAssert.Succeeded(await run.RunAsync("org", "use", "--id", TestData.OrgId.ToString()));
@@ -399,7 +399,7 @@ public class PartnerContextTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        StubTwoOrgs(run);
+        BothOrgs.Stub(run);
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
         CliAssert.Succeeded(await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString()));
@@ -475,11 +475,6 @@ public class PartnerContextTests
                 throw new ArgumentException($"\"{source}\" is not a partner source that can hold a malformed ID.", nameof(source));
         }
     }
-
-    // A command that acts within an organisation and has none chosen makes one lookup call, and
-    // with several organisations exits 2 no_org ("Context").
-    private static void StubTwoOrgs(CliRun run) =>
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
 
     /// <summary>
     /// The named default in cli.json, which holds { "org": { "id", "name" }, "partner": { "id" } }

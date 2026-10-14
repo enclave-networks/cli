@@ -9,6 +9,15 @@ namespace Enclave.Cli.Tests.Storage;
 // ~/.enclave are never read or written.
 public class DiskFileStoreTests
 {
+    private const UnixFileMode UserOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+
+    private const UnixFileMode ReadableByOthers = UserOnly | UnixFileMode.GroupRead | UnixFileMode.OtherRead;
+
+    private const UnixFileMode DirectoryReadableByOthers =
+        UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+        | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+        | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
     private readonly DiskFileStore _store = new();
 
     private string _home;
@@ -86,6 +95,88 @@ public class DiskFileStoreTests
         _store.WriteText(Path.Combine(EnclaveDirectory, "cli.json"), "{}", privateToUser);
 
         Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
+    }
+
+    // ~/.enclave is shared with other Enclave tools, so the CLI sets the mode only of a directory it
+    // creates (proposed-cli-surface.md "Login, logout and status": login and org use create it as
+    // 0700). The directory here is 0755, a mode another tool or a person could have given it, and it
+    // must stay 0755.
+    [Test]
+    public void WriteText_leaves_the_mode_of_an_existing_directory([Values] bool privateToUser)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Windows has no Unix file modes.");
+            return;
+        }
+
+        Directory.CreateDirectory(EnclaveDirectory);
+        File.SetUnixFileMode(EnclaveDirectory, DirectoryReadableByOthers);
+
+        _store.WriteText(CredentialsPath, "{}", privateToUser);
+
+        Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(DirectoryReadableByOthers));
+    }
+
+    // credentials.json holds the token, so login writes it private to the user, and the file is
+    // readable by the user only: 0600 on Linux and macOS ("Login, logout and status"). .NET would
+    // otherwise create it 0666 less the umask, usually 0644 (FileStreamOptions.UnixCreateMode,
+    // .NET 10).
+    [Test]
+    public void WriteText_private_to_the_user_gives_the_file_mode_0600()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Windows has no Unix file modes.");
+            return;
+        }
+
+        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
+
+        Assert.That(File.GetUnixFileMode(CredentialsPath), Is.EqualTo(UserOnly));
+    }
+
+    // A credentials file another tool wrote, or a person created, can be readable by others. Once
+    // the CLI writes a token into it, it is readable by the user only: a file whose mode a rewrite
+    // kept would leave the new token readable by others. The old file is 0644.
+    [Test]
+    public void WriteText_private_to_the_user_over_a_file_readable_by_others_gives_mode_0600()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Ignore("Windows has no Unix file modes.");
+            return;
+        }
+
+        Directory.CreateDirectory(EnclaveDirectory);
+        File.WriteAllText(CredentialsPath, """{ "personalAccessToken": "old" }""");
+        File.SetUnixFileMode(CredentialsPath, ReadableByOthers);
+
+        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
+
+        var mode = File.GetUnixFileMode(CredentialsPath);
+        Assert.Multiple(() =>
+        {
+            Assert.That(mode, Is.EqualTo(UserOnly));
+            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
+        });
+    }
+
+    // login and org use rewrite credentials.json and cli.json, so a write replaces the whole text:
+    // nothing of a longer old file is left after the new text, and no other file is left beside it.
+    [Test]
+    public void WriteText_replaces_the_text_of_an_existing_file([Values] bool privateToUser)
+    {
+        Directory.CreateDirectory(EnclaveDirectory);
+        File.WriteAllText(CredentialsPath, """{ "personalAccessToken": "a much longer old token" }""");
+
+        _store.WriteText(CredentialsPath, "{}", privateToUser);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
+            Assert.That(Directory.GetFileSystemEntries(EnclaveDirectory), Is.EqualTo(new[] { CredentialsPath }));
+        });
     }
 
     // logout deletes credentials.json and reports in its "deleted" field whether there was a file to

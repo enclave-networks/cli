@@ -16,7 +16,13 @@ internal static class TagSetCommand
         var verb = new CliVerb("set", "Update a tag, creating it when it does not exist, which makes it permanent; print the tag.", CommandScope.Organisation, changes: true);
         var tag = verb.Add(CliArguments.Id("tag", "The tag's name.", IdFormats.Tag));
         var name = verb.Add(CliOptions.IdText("--name", "Rename the tag; it must exist.", IdFormats.Tag, "new"));
-        var colour = verb.Add(CliOptions.Text("--colour", "The tag's colour, such as \"#2f80ed\".", "colour"));
+        // The API takes a colour as a hex code with "#", or none (portal
+        // Enclave.Api/Modules/SystemManagement/Tags/Validators/TagPatchModelValidator.cs:14 and
+        // TagCreateModelValidator.cs:14, MustBeValidHexColour, which passes null and
+        // ^#([a-f0-9]{3}){1,2}$ only: TagValidationExtensions.cs:15,28-35), so it refuses a blank
+        // colour, and a blank one exits 2 before the token. --name is a tag name, and IdFormats.Tag
+        // refuses a blank one.
+        var colour = verb.Add(CliOptions.NonBlank("--colour", "The tag's colour, such as \"#2f80ed\".", "a colour", "colour"));
         var trust = verb.Add(CliOptions.List("--trust", "Replace the trust requirements systems with the tag must meet, by description; \"\" removes them all.", "name,..."));
         var trustId = verb.Add(CliOptions.IdList("--trust-id", "Replace the trust requirements systems with the tag must meet, by ID.", IdFormats.Int32));
         var notes = verb.Add(CliOptions.Text("--notes", "The tag's notes."));

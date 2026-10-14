@@ -20,12 +20,12 @@ internal static class PolicyCreateCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("create", "Create a policy, sending every setting, and print it.", CommandScope.Organisation, changes: true);
-        var description = verb.Add(CliArguments.Text("description", "The policy's description."));
-        var senders = verb.Add(CliOptions.TagList("--senders", "The tags of the systems that send."));
-        var receivers = verb.Add(CliOptions.TagList("--receivers", "The tags of the systems that receive."));
+        var description = verb.Add(CliArguments.Name("description", "The policy's description.", "a policy's description"));
+        var senders = verb.Add(CliOptions.TagList("--senders", "The tags of the systems that send.", needsEntries: true));
+        var receivers = verb.Add(CliOptions.TagList("--receivers", "The tags of the systems that receive.", needsEntries: true));
         var acls = verb.Add(CliOptions.Labelled("--acl", "Traffic the policy allows: any, icmp, or tcp or udp with a port or range (tcp:5432, udp:8000-8100). At least one is required.", "protocol[:ports]"));
-        var trust = verb.Add(CliOptions.List("--trust", "Trust requirements the senders must meet, by description.", "name,..."));
-        var trustIds = verb.Add(CliOptions.IdList("--trust-id", "Trust requirements the senders must meet, by ID.", IdFormats.Int32));
+        var trust = verb.Add(CliOptions.List("--trust", "Trust requirements the senders must meet, by description.", "name,...", needsEntries: true));
+        var trustIds = verb.Add(CliOptions.IdList("--trust-id", "Trust requirements the senders must meet, by ID.", IdFormats.Int32, needsEntries: true));
         var gateways = verb.Add(CliOptions.Repeated("--gateway", "Make a gateway policy: the senders reach these routes through this system.", "systemId:route,..."));
         var mode = verb.Add(CliOptions.Choice("--mode", "With --gateway: which of several gateways carries a system's traffic; balanced when left out.", PolicyGateways.Modes));
         var subnetFilter = verb.Add(CliOptions.Labelled("--subnet-filter", "With --gateway: narrow the addresses the senders may reach through the gateway.", "range"));

@@ -99,6 +99,48 @@ public class ReplaceListTests
         });
     }
 
+    // The API refuses a tag list that holds a tag twice (portal
+    // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:20,
+    // UnapprovedSystemPatchModelValidator.cs:16), and the tag flags send the list with each tag once
+    // (proposed-cli-surface.md "Command options"), so web given twice to --set-tags is sent once. The
+    // tags are compared as a collection that counts each copy, so a list with web twice fails.
+    [TestCaseSource(nameof(TagLists))]
+    public async Task Set_tags_given_a_tag_twice_sends_it_once(string[] command, string path, string item)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", path, json: item);
+        run.Stub("PATCH", path, json: item);
+
+        var result = await run.RunAsync([.. command, "--set-tags", "web,db,web"]);
+
+        CliAssert.Succeeded(result);
+        var request = run.SingleRequest();
+        string[] tags = ["web", "db"];
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.Method, Is.EqualTo("PATCH"));
+            Assert.That(request.Path, Is.EqualTo(path));
+            Assert.That(JsonAssert.Strings(JsonAssert.Property(request.BodyJson, "Tags")), Is.EquivalentTo(tags));
+        });
+    }
+
+    // As above, for a tag added that the item already has: the item is tagged web, legacy and prod,
+    // and --add-tags web leaves each of them once.
+    [TestCaseSource(nameof(TagLists))]
+    public async Task Add_tags_given_a_tag_the_item_has_sends_it_once(string[] command, string path, string item)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", path, json: item);
+        run.Stub("PATCH", path, json: item);
+
+        var result = await run.RunAsync([.. command, "--add-tags", "web"]);
+
+        CliAssert.Succeeded(result);
+        Assert.That(string.Join("|", run.Calls()), Is.EqualTo($"GET {path}|PATCH {path}"));
+        string[] tags = ["web", "legacy", "prod"];
+        Assert.That(JsonAssert.Strings(JsonAssert.Property(run.Requests[^1].BodyJson, "Tags")), Is.EquivalentTo(tags));
+    }
+
     // update is a single-ID command, which exits 5 for an unknown ID (proposed-cli-surface.md
     // "Several IDs"). The read fails, so there is no list to patch.
     [Test]
@@ -129,16 +171,12 @@ public class ReplaceListTests
 
         var result = await run.RunAsync("system", "update", "ABCDE", "--add-tags", "monitoring", "--dry-run");
 
-        CliAssert.Succeeded(result);
-        var requests = JsonAssert.Property(result.StdoutJson, "requests");
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
+        var request = DryRunOutput.RequestInTestOrg(result, "PATCH", path);
         string[] tags = ["web", "prod", "monitoring"];
         Assert.Multiple(() =>
         {
             Assert.That(string.Join("|", run.Calls()), Is.EqualTo($"GET {path}"));
-            Assert.That(JsonAssert.Property(requests[0], "method").GetString(), Is.EqualTo("PATCH"));
-            Assert.That(JsonAssert.Property(requests[0], "url").GetString(), Does.EndWith(path));
-            Assert.That(JsonAssert.Strings(JsonAssert.Property(JsonAssert.Property(requests[0], "body"), "Tags")), Is.EquivalentTo(tags));
+            Assert.That(JsonAssert.Strings(JsonAssert.Property(JsonAssert.Property(request, "body"), "Tags")), Is.EquivalentTo(tags));
         });
     }
 
@@ -149,6 +187,7 @@ public class ReplaceListTests
     {
         yield return TagList("system update", ["system", "update", "ABCDE"], "systems/ABCDE", ApiJson.System("ABCDE"));
         yield return TagList("system update --pending", ["system", "update", "XYZ12", "--pending"], "unapproved-systems/XYZ12", ApiJson.PendingSystem("XYZ12"));
+        yield return TagList("key update", ["key", "update", "--id", "12"], "enrolment-keys/12", ApiJson.Key(12, "build agents"));
         yield return TagList("dns update-hostname", ["dns", "update-hostname", "--id", "7"], "dns/records/7", ApiJson.HostnameRecord(7, "db", 4, "internal"));
     }
 
@@ -157,9 +196,18 @@ public class ReplaceListTests
     {
         yield return Cleared("system update --set-tags", ["system", "update", "ABCDE", "--set-tags", string.Empty], "systems/ABCDE", ApiJson.System("ABCDE"), "Tags");
         yield return Cleared("system update --pending --set-tags", ["system", "update", "XYZ12", "--pending", "--set-tags", string.Empty], "unapproved-systems/XYZ12", ApiJson.PendingSystem("XYZ12"), "Tags");
+        yield return Cleared("key update --set-tags", ["key", "update", "--id", "12", "--set-tags", string.Empty], "enrolment-keys/12", ApiJson.Key(12, "build agents"), "Tags");
         yield return Cleared("dns update-hostname --set-tags", ["dns", "update-hostname", "--id", "7", "--set-tags", string.Empty], "dns/records/7", ApiJson.HostnameRecord(7, "db", 4, "internal"), "Tags");
         yield return Cleared("dns update-hostname --set-systems", ["dns", "update-hostname", "--id", "7", "--set-systems", string.Empty], "dns/records/7", ApiJson.HostnameRecord(7, "db", 4, "internal"), "Systems");
         yield return Cleared("dns update-zone --set-auto-dns-tags", ["dns", "update-zone", "--id", "4", "--set-auto-dns-tags", string.Empty], "dns/zones/4", ApiJson.Zone(4, "internal"), "AutoDnsTags");
+
+        // A list cleared has no entries whose labels a read would keep, so --set-acl,
+        // --set-subnet-filter and key update --set-allow-ip given "" make no read ("Calls per
+        // command").
+        yield return Cleared("key update --set-allow-ip", ["key", "update", "--id", "12", "--set-allow-ip", string.Empty], "enrolment-keys/12", ApiJson.Key(12, "build agents"), "IpConstraints");
+        yield return Cleared("policy update --set-acl", ["policy", "update", "--id", "64", "--set-acl", string.Empty], "policies/64", ApiJson.Policy(64, "staff to office LAN"), "Acls");
+        yield return Cleared("policy update --set-subnet-filter", ["policy", "update", "--id", "64", "--set-subnet-filter", string.Empty], "policies/64", ApiJson.Policy(64, "staff to office LAN"), "GatewayAllowedIpRanges");
+        yield return Cleared("policy update --set-gateway", ["policy", "update", "--id", "64", "--set-gateway", string.Empty], "policies/64", ApiJson.Policy(64, "staff to office LAN"), "Gateways");
     }
 
     private static TestCaseData TagList(string name, string[] command, string suffix, string item) =>

@@ -17,7 +17,7 @@ public class OptionValueTests
     // Each --sort value with the API enum member it names: SystemQuerySortMode,
     // EnrolmentKeySortOrder, PolicySortOrder, TagQuerySortOrder and TrustRequirementSortOrder in the
     // portal's Enclave.Configuration.Data/Modules/*/Enums, and UnapprovedSystemQuerySortMode in
-    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api 1.1.0 writes
+    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api 1.2.0 writes
     // the member name into the sort parameter (each list client's BuildQueryString).
     public static IEnumerable<TestCaseData> SortValues()
     {
@@ -72,14 +72,14 @@ public class OptionValueTests
         var systems = TestData.OrgPath("systems");
         var systemsPage = ApiJson.Page(ApiJson.System("ABCDE"));
 
-        yield return Outside("system list --sort newest", "system list --sort recently-connected", "GET", systems, systemsPage);
-        yield return Outside("system list --pending --sort recently-connected", "system list --pending --sort recently-enrolled", "GET", TestData.OrgPath("unapproved-systems"), ApiJson.Page(ApiJson.PendingSystem("ABCDE")));
-        yield return Outside("system list --state online", "system list --state connected", "GET", systems, systemsPage);
-        yield return Outside("system list --os macos", "system list --os mac", "GET", systems, systemsPage);
-        yield return Outside("key list --approval auto", "key list --approval automatic", "GET", TestData.OrgPath("enrolment-keys"), ApiJson.Page(ApiJson.Key(12)));
-        yield return Outside("trust list --type ip", "trust list --type public-ip", "GET", TestData.OrgPath("trust-requirements"), ApiJson.Page(ApiJson.Trust(5)));
-        yield return Outside("system enable ABCDE --for 8h --then delete", "system enable ABCDE --for 8h --then revoke", "PUT", SystemEnableUntilPath, ApiJson.System("ABCDE"));
-        yield return Outside("policy enable --id 42 --for 8h --then revoke", "policy enable --id 42 --for 8h --then delete", "PUT", PolicyEnableUntilPath, ApiJson.Policy(42));
+        yield return CommandCases.RejectedThenCorrected("system list --sort newest", "system list --sort recently-connected", "GET", systems, systemsPage);
+        yield return CommandCases.RejectedThenCorrected("system list --pending --sort recently-connected", "system list --pending --sort recently-enrolled", "GET", TestData.OrgPath("unapproved-systems"), ApiJson.Page(ApiJson.PendingSystem("ABCDE")));
+        yield return CommandCases.RejectedThenCorrected("system list --state online", "system list --state connected", "GET", systems, systemsPage);
+        yield return CommandCases.RejectedThenCorrected("system list --os macos", "system list --os mac", "GET", systems, systemsPage);
+        yield return CommandCases.RejectedThenCorrected("key list --approval auto", "key list --approval automatic", "GET", TestData.OrgPath("enrolment-keys"), ApiJson.Page(ApiJson.Key(12)));
+        yield return CommandCases.RejectedThenCorrected("trust list --type ip", "trust list --type public-ip", "GET", TestData.OrgPath("trust-requirements"), ApiJson.Page(ApiJson.Trust(5)));
+        yield return CommandCases.RejectedThenCorrected("system enable ABCDE --for 8h --then delete", "system enable ABCDE --for 8h --then revoke", "PUT", SystemEnableUntilPath, ApiJson.System("ABCDE"));
+        yield return CommandCases.RejectedThenCorrected("policy enable --id 42 --for 8h --then revoke", "policy enable --id 42 --for 8h --then delete", "PUT", PolicyEnableUntilPath, ApiJson.Policy(42));
     }
 
     [TestCaseSource(nameof(SortValues))]
@@ -218,7 +218,4 @@ public class OptionValueTests
 
     private static TestCaseData Variant(string lower, string other, string pathSuffix, string parameter, string expected) =>
         new TestCaseData(lower, other, TestData.OrgPath(pathSuffix), parameter, expected).SetArgDisplayNames(other);
-
-    private static TestCaseData Outside(string rejected, string corrected, string method, string path, string json) =>
-        new TestCaseData(rejected.Split(' '), corrected.Split(' '), method, path, json).SetArgDisplayNames(rejected);
 }

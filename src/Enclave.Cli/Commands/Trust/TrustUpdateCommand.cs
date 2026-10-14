@@ -17,19 +17,23 @@ internal static class TrustUpdateCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("update", "Change a trust requirement and print it. Each --set- flag replaces only the conditions of its own kind.", CommandScope.Organisation, changes: true);
-        var requirement = verb.Add(CliArguments.OptionalText("trust", "The trust requirement's description, matched whole and ignoring case."));
+        var requirement = verb.Add(CliArguments.OptionalName("trust", "The trust requirement's description, matched whole and ignoring case.", "a trust requirement's description"));
         var id = verb.Add(CliOptions.Id("--id", "The trust requirement's ID.", IdFormats.Int32));
-        var description = verb.Add(CliOptions.Text("--description", "The trust requirement's description."));
+        // The API refuses a blank description (portal
+        // Enclave.Api/Modules/SystemManagement/TrustRequirements/Validators/TrustRequirementPatchBasicValidator.cs:15,
+        // NotEmpty when set) and takes empty notes (same file, 17, MaximumLength only), which clear
+        // them.
+        var description = verb.Add(CliOptions.NonBlank("--description", "The trust requirement's description.", "a trust requirement's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The trust requirement's notes."));
         var tenant = verb.Add(CliOptions.Text("--set-tenant", "Replace the Entra ID tenant (azure).", "id"));
         var authorityUri = verb.Add(CliOptions.Text("--set-authority-uri", "Replace the authority's https address (okta, jumpcloud, duo, oidc).", "url"));
         var clientId = verb.Add(CliOptions.Text("--set-client-id", "Replace the client ID (okta, jumpcloud, duo, oidc).", "id"));
         var audience = verb.Add(CliOptions.Text("--set-audience", "Replace the audience (okta, jumpcloud, duo, oidc).", "value"));
         var claims = verb.Add(CliOptions.Repeated("--set-claim", "Replace the required claims.", "claim=value"));
-        var allowIp = verb.Add(CliOptions.Labelled("--set-allow-ip", "Replace the allowed ranges, keeping the labels of ranges that stay.", "range"));
-        var blockIp = verb.Add(CliOptions.Labelled("--set-block-ip", "Replace the blocked ranges, keeping the labels of ranges that stay.", "range"));
-        var allowCountry = verb.Add(CliOptions.Labelled("--set-allow-country", "Replace the allowed countries, keeping the labels of countries that stay.", "code"));
-        var blockCountry = verb.Add(CliOptions.Labelled("--set-block-country", "Replace the blocked countries, keeping the labels of countries that stay.", "code"));
+        var allowIp = verb.Add(CliOptions.Labelled("--set-allow-ip", "Replace the allowed ranges, keeping the labels of ranges that stay.", "range", clears: true));
+        var blockIp = verb.Add(CliOptions.Labelled("--set-block-ip", "Replace the blocked ranges, keeping the labels of ranges that stay.", "range", clears: true));
+        var allowCountry = verb.Add(CliOptions.Labelled("--set-allow-country", "Replace the allowed countries, keeping the labels of countries that stay.", "code", clears: true));
+        var blockCountry = verb.Add(CliOptions.Labelled("--set-block-country", "Replace the blocked countries, keeping the labels of countries that stay.", "code", clears: true));
 
         (Option<string?> Option, string Key)[] settings =
         [
@@ -75,7 +79,21 @@ internal static class TrustUpdateCommand
                 throw CliErrors.InvalidArgument(clientId.Name, "--set-client-id takes the client ID, which the authority requires.");
             }
 
-            if (!Clears(context.Get(claims)))
+            // A setting given only white space carries no value: the API refuses such a client ID or
+            // audience (portal TrustRequirementSettingsUserAuthValidator.cs:48-49, whose
+            // MustHaveKeyWithValue and KeyNotEmptyIfSet test string.IsNullOrWhiteSpace,
+            // DictionaryValidationExtensions.cs:45,82) and stores such a tenant (same validator,
+            // 35-38), so it exits 2 as on trust create. "" alone is left to the handler, where it
+            // removes a setting the authority does not require.
+            foreach (var (option, _) in settings)
+            {
+                if (context.Get(option) is { Length: > 0 } value && string.IsNullOrWhiteSpace(value))
+                {
+                    throw CliErrors.InvalidArgument(option.Name, $"{option.Name} takes a value, and the value given is blank.");
+                }
+            }
+
+            if (!ListValues.Clears(context.Get(claims)))
             {
                 TrustSettings.CheckClaims(claims.Name, context.Get(claims));
             }
@@ -169,7 +187,7 @@ internal static class TrustUpdateCommand
         }
 
         var conditions = context.Get(claims) is { } claimValues
-            ? (Clears(claimValues) ? [] : claimValues.Select(TrustSettings.Claim).ToArray())
+            ? (ListValues.Clears(claimValues) ? [] : claimValues.Select(TrustSettings.Claim).ToArray())
             : current.Settings.Conditions ?? [];
 
         return new TrustRequirementSettingsModel(configuration, conditions);
@@ -192,15 +210,10 @@ internal static class TrustUpdateCommand
         {
             if (context.Get(option) is { } values)
             {
-                conditions = TrustSettings.Replace(conditions, kind, Clears(values) ? [] : values);
+                conditions = TrustSettings.Replace(conditions, kind, ListValues.Clears(values) ? [] : values);
             }
         }
 
         return new TrustRequirementSettingsModel(current.Settings.Configuration, conditions);
     }
-
-    // A --set- list flag given "" alone clears its list ("Details").
-    private static bool Clears(IReadOnlyList<LabelledValue> values) => values is [{ Value.Length: 0, HasLabel: false }];
-
-    private static bool Clears(IReadOnlyList<string>? values) => values is [{ Length: 0 }];
 }

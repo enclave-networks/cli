@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -16,8 +17,20 @@ namespace Enclave.Cli.Tests.Resources;
 /// </summary>
 public partial class PolicyCommandTests
 {
-    // Example 21. A general policy has no gateway settings, and the API rejects a general policy
-    // that has any (portal PolicyCreateModelValidator.cs:47-52).
+    // Every field of PolicyCreateModel (portal Enclave.Api/Modules/SystemManagement/Policies/Models/PolicyCreateModel.cs),
+    // each a setting that changes behaviour or names the policy: the description, the type, the
+    // flags of "Command options" and the traffic direction the CLI sends for a gateway policy.
+    private static readonly string[] PolicyCreateFields =
+    [
+        "type", "description", "isEnabled", "senderTags", "receiverTags", "acls", "gatewayAllowedIpRanges", "gateways",
+        "gatewayTrafficDirection", "gatewayPriority", "notes", "senderTrustRequirements", "autoExpire", "activeHours",
+    ];
+
+    // Example 21. A create sends every setting, with the documented value for a flag left out
+    // ("Create and update"): an empty list for a list flag ("Details"), and null for a setting with
+    // no list. A general policy has no gateway settings, and the API rejects a general policy that
+    // has any (portal PolicyCreateModelValidator.cs:47-52); --mode and --subnet-filter apply to
+    // gateway policies only ("Command options"), so the gateway priority is null too.
     [Test]
     public async Task Policy_create_sends_every_setting_of_a_general_policy()
     {
@@ -29,18 +42,21 @@ public partial class PolicyCommandTests
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(Text(body, "type"), Is.EqualTo("General"));
-            Assert.That(Text(body, "description"), Is.EqualTo("web to db"));
-            Assert.That(JsonAssert.Property(body, "isEnabled").GetBoolean(), Is.True);
-            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "senderTags")), Is.EqualTo("web"));
-            Assert.That(JsonRead.StringList(JsonAssert.Property(body, "receiverTags")), Is.EqualTo("db"));
-            Assert.That(Acls(JsonAssert.Property(body, "acls")), Is.EqualTo("Tcp|5432|(none)"));
-            Assert.That(request.BodyIds("senderTrustRequirements"), Is.Empty);
-            Assert.That(IsUnset(body, "gateways"), Is.True, "gateways");
-            Assert.That(IsUnset(body, "gatewayAllowedIpRanges"), Is.True, "gatewayAllowedIpRanges");
-            Assert.That(IsUnset(body, "gatewayTrafficDirection"), Is.True, "gatewayTrafficDirection");
-            Assert.That(IsUnset(body, "autoExpire"), Is.True, "autoExpire");
-            Assert.That(IsUnset(body, "activeHours"), Is.True, "activeHours");
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(PolicyCreateFields));
+            Assert.That(body.GetProperty("type").GetString(), Is.EqualTo("General"));
+            Assert.That(body.GetProperty("description").GetString(), Is.EqualTo("web to db"));
+            Assert.That(body.GetProperty("isEnabled").GetBoolean(), Is.True);
+            Assert.That(JsonRead.StringList(body.GetProperty("senderTags")), Is.EqualTo("web"));
+            Assert.That(JsonRead.StringList(body.GetProperty("receiverTags")), Is.EqualTo("db"));
+            Assert.That(Acls(body.GetProperty("acls")), Is.EqualTo("Tcp|5432|(none)"));
+            Assert.That(body.GetProperty("senderTrustRequirements").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("gateways").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("gatewayAllowedIpRanges").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("gatewayTrafficDirection").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("gatewayPriority").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("autoExpire").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("activeHours").ValueKind, Is.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -70,7 +86,7 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432", "--dry-run");
 
-        var body = JsonAssert.Property(DryRunRequest(result, "POST", PoliciesPath), "body");
+        var body = JsonAssert.Property(DryRunOutput.RequestInTestOrg(result, "POST", PoliciesPath), "body");
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
@@ -281,7 +297,7 @@ public partial class PolicyCommandTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(CandidateIds(error), Is.Empty);
+            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
             Assert.That(run.RequestsTo("POST", PoliciesPath), Is.Empty);
         });
     }
@@ -289,7 +305,8 @@ public partial class PolicyCommandTests
     // Example 25. --gateway makes a gateway policy whose senders reach the routes through that
     // system, with the traffic direction Exit, the only one the API accepts (portal
     // PolicyCreateModelValidator.cs:56), and the mode Balanced when --mode is left out ("Command
-    // options"). The API rejects receiver tags on an exit gateway policy (same file, 61).
+    // options"). The API rejects receiver tags on an exit gateway policy (same file, 61), and the
+    // list flags left out are sent as empty lists ("Details").
     [Test]
     public async Task Policy_create_with_a_gateway_sends_a_gateway_policy_with_every_gateway_setting()
     {
@@ -302,6 +319,7 @@ public partial class PolicyCommandTests
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(PolicyCreateFields));
             Assert.That(Text(body, "type"), Is.EqualTo("Gateway"));
             Assert.That(JsonAssert.Property(body, "isEnabled").GetBoolean(), Is.True);
             Assert.That(JsonRead.StringList(JsonAssert.Property(body, "senderTags")), Is.EqualTo("staff"));
@@ -589,24 +607,24 @@ public partial class PolicyCommandTests
 
     // Example 22. A clock time without a zone means its next occurrence in the machine's time zone,
     // and the policy is disabled then unless --then says otherwise ("Command options", --until); the
-    // expiry is sent as a UTC instant ("Details"). The CLI runs in this process, so
-    // TimeZoneInfo.Local is the zone it reads; the next occurrence is taken from the clock before
-    // and after the run.
+    // expiry is sent as a UTC instant ("Details"). The clock is fixed at 20:00 UTC on 14 January
+    // 2030, which is 01:30 on the 15th in the test's UTC+05:30 zone, so 18:00 is later that day,
+    // 12:30 UTC. A CLI that read the clock time in UTC sends 18:00 UTC on the 15th, and one that read
+    // the system's clock or zone in place of the ones it is given sends neither instant.
     [Test]
     public async Task Policy_create_until_a_clock_time_expires_at_its_next_local_occurrence_and_disables_the_policy()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", PoliciesPath, json: ApiJson.Policy(70, "support ssh"));
 
-        var before = DateTimeOffset.Now;
         var request = await CliAssert.AcceptedAsync(
             run, "POST", PoliciesPath, "policy", "create", "support ssh", "--senders", "support", "--receivers", "prod", "--acl", "tcp:22", "--until", "18:00");
-        var after = DateTimeOffset.Now;
 
         var autoExpire = JsonAssert.Property(request.BodyJson, "autoExpire");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.ExpiryDateTime(autoExpire), Is.InRange(NextLocalOccurrence(before, 18, 0), NextLocalOccurrence(after, 18, 0)));
+            Assert.That(JsonRead.ExpiryDateTime(autoExpire), Is.EqualTo(new DateTimeOffset(2030, 1, 15, 12, 30, 0, TimeSpan.Zero)));
             Assert.That(JsonRead.ExpiryDateTime(autoExpire).Offset, Is.EqualTo(TimeSpan.Zero));
             Assert.That(Text(autoExpire, "expiryAction"), Is.EqualTo("Disable"));
             Assert.That(Acls(JsonAssert.Property(request.BodyJson, "acls")), Is.EqualTo("Tcp|22|(none)"));
@@ -706,17 +724,4 @@ public partial class PolicyCommandTests
     private static string Clock(JsonElement time) => string.Create(
         CultureInfo.InvariantCulture,
         $"{JsonAssert.Property(time, "hours").GetInt32():D2}:{JsonAssert.Property(time, "minutes").GetInt32():D2}");
-
-    private static DateTimeOffset NextLocalOccurrence(DateTimeOffset after, int hour, int minute)
-    {
-        var local = TimeZoneInfo.ConvertTime(after, TimeZoneInfo.Local);
-        var next = local.Date.AddHours(hour).AddMinutes(minute);
-
-        if (next <= local.DateTime)
-        {
-            next = next.AddDays(1);
-        }
-
-        return new DateTimeOffset(next, TimeZoneInfo.Local.GetUtcOffset(next));
-    }
 }

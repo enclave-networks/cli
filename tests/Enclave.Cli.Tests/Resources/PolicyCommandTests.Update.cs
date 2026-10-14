@@ -1,14 +1,17 @@
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
 // policy update (proposed-cli-surface.md "Command options" and "Create and update"). An update
 // sends only the fields given, as a PolicyPatchModel; Enclave.Sdk.Api keys a PATCH body by the C#
-// property name (PatchClient.Set, version 1.1.0), so the keys are PascalCase. --set-acl and
+// property name (PatchClient.Set, version 1.2.0), so the keys are PascalCase. --set-acl and
 // --set-subnet-filter read the policy first so that entries which stay keep their labels ("Calls
-// per command"); the other flags make no read.
+// per command"); the other flags make no read. The label rules of --set-subnet-filter, examples 75
+// and 77 to 80, are tested in Editing/LabelTests.cs, on the policy by ID and by description and on
+// the system gateway flag that follows the same rules.
 
 /// <summary>
 /// Tests for policy update.
@@ -24,7 +27,7 @@ public partial class PolicyCommandTests
         run.Stub("GET", PoliciesPath, json: ApiJson.Page(ApiJson.Policy(40, "web to db (old)"), ApiJson.Policy(42, "web to db")));
         run.Stub("PATCH", PolicyPath(42), json: ApiJson.Policy(42, "web to db"));
 
-        var result = await run.RunAsync(["policy", "update", .. Target(byDescription, "web to db", 42), "--set-senders", "web,api"]);
+        var result = await run.RunAsync(["policy", "update", .. NameLookup.Target(byDescription, "web to db", 42), "--set-senders", "web,api"]);
 
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", PolicyPath(42));
@@ -50,7 +53,7 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "update", "web to db", "--set-senders", "web,api", "--dry-run");
 
-        var body = JsonAssert.Property(DryRunRequest(result, "PATCH", PolicyPath(42)), "body");
+        var body = JsonAssert.Property(DryRunOutput.RequestInTestOrg(result, "PATCH", PolicyPath(42)), "body");
         Assert.Multiple(() =>
         {
             Assert.That(Keys(body), Is.EqualTo("SenderTags").IgnoreCase);
@@ -102,7 +105,7 @@ public partial class PolicyCommandTests
         run.Stub("GET", PolicyPath(57), json: BuildToArtifactsPolicy());
         run.Stub("PATCH", PolicyPath(57), json: ApiJson.Policy(57, "build to artifacts"));
 
-        var result = await run.RunAsync(["policy", "update", .. Target(byDescription, "build to artifacts", 57), "--set-acl", "tcp:443", "--set-acl", "tcp:8000-8100"]);
+        var result = await run.RunAsync(["policy", "update", .. NameLookup.Target(byDescription, "build to artifacts", 57), "--set-acl", "tcp:443", "--set-acl", "tcp:8000-8100"]);
 
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", PolicyPath(57));
@@ -114,7 +117,9 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 81: tcp:443 keeps its label, and tcp:8443 is new, so it has none ("Command options").
+    // Example 81: an ACL rule stays when its protocol and ports are given again, so tcp:443 keeps
+    // its label; tcp:8443 is new, so it has none, sent as a null description; and the rules left out
+    // go ("Command options", "Details").
     [Test]
     public async Task Policy_update_gives_a_new_acl_no_label()
     {
@@ -128,7 +133,15 @@ public partial class PolicyCommandTests
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", PolicyPath(57));
         Assert.That(patch, Has.Count.EqualTo(1));
-        Assert.That(Acls(JsonAssert.Property(patch[0].BodyJson, "Acls")), Is.EqualTo(Set("Tcp|443|HTTPS", "Tcp|8443|(none)")));
+        var acls = JsonAssert.Property(patch[0].BodyJson, "Acls");
+        Assert.Multiple(() =>
+        {
+            Assert.That(Keys(patch[0].BodyJson), Is.EqualTo("Acls").IgnoreCase);
+            Assert.That(Acls(acls), Is.EqualTo(Set("Tcp|443|HTTPS", "Tcp|8443|(none)")));
+            Assert.That(
+                acls.EnumerateArray().Where(acl => Text(acl, "ports") == "8443").Select(acl => JsonAssert.Property(acl, "description").ValueKind),
+                Is.Not.Empty.And.All.EqualTo(JsonValueKind.Null));
+        });
     }
 
     // --set-trust takes descriptions, looked up like any name ("Names and IDs"), and replaces the
@@ -201,55 +214,6 @@ public partial class PolicyCommandTests
         {
             Assert.That(Keys(request.BodyJson), Is.EqualTo("GatewayPriority").IgnoreCase);
             Assert.That(Text(request.BodyJson, "GatewayPriority"), Is.EqualTo(expected));
-        });
-    }
-
-    // Example 77. 10.0.0.0/16 is given without a label, so it keeps the one it has; 10.2.0.0/16 is
-    // new with its own; 10.1.0.0/16 is not given, so it goes ("Command options").
-    [TestCase(true)]
-    [TestCase(false)]
-    public async Task Policy_update_replaces_the_subnet_filters_and_keeps_the_label_of_a_range_given_without_one(bool byDescription)
-    {
-        using var run = CliRun.Start();
-        var policy = OfficeLanPolicy("""[{ "ipRange": "10.0.0.0/16", "description": "Office LAN" }, { "ipRange": "10.1.0.0/16", "description": "Warehouse" }]""");
-        run.Stub("GET", PoliciesPath, json: ApiJson.Page(policy));
-        run.Stub("GET", PolicyPath(64), json: policy);
-        run.Stub("PATCH", PolicyPath(64), json: policy);
-
-        var result = await run.RunAsync(
-            ["policy", "update", .. Target(byDescription, "staff to office LAN", 64), "--set-subnet-filter", "10.0.0.0/16", "--set-subnet-filter", "10.2.0.0/16=New lab"]);
-
-        CliAssert.Succeeded(result);
-        var patch = run.RequestsTo("PATCH", PolicyPath(64));
-        Assert.That(patch, Has.Count.EqualTo(1));
-        Assert.Multiple(() =>
-        {
-            Assert.That(Keys(patch[0].BodyJson), Is.EqualTo("GatewayAllowedIpRanges").IgnoreCase);
-            Assert.That(Ranges(JsonAssert.Property(patch[0].BodyJson, "GatewayAllowedIpRanges")), Is.EqualTo(Set("10.0.0.0/16|Office LAN", "10.2.0.0/16|New lab")));
-        });
-    }
-
-    // Example 78. A label given replaces the one kept, and an empty label removes it ("Command
-    // options"): it is sent as a null description ("Details").
-    [Test]
-    public async Task Policy_update_relabels_one_subnet_filter_and_removes_the_label_of_another()
-    {
-        using var run = CliRun.Start();
-        var policy = OfficeLanPolicy("""[{ "ipRange": "10.0.0.0/16", "description": "Office LAN" }, { "ipRange": "10.2.0.0/16", "description": "New lab" }]""");
-        run.Stub("GET", PoliciesPath, json: ApiJson.Page(policy));
-        run.Stub("GET", PolicyPath(64), json: policy);
-        run.Stub("PATCH", PolicyPath(64), json: policy);
-
-        var result = await run.RunAsync("policy", "update", "staff to office LAN", "--set-subnet-filter", "10.0.0.0/16=Head office", "--set-subnet-filter", "10.2.0.0/16=");
-
-        CliAssert.Succeeded(result);
-        var patch = run.RequestsTo("PATCH", PolicyPath(64));
-        Assert.That(patch, Has.Count.EqualTo(1));
-        var ranges = JsonAssert.Property(patch[0].BodyJson, "GatewayAllowedIpRanges");
-        Assert.Multiple(() =>
-        {
-            Assert.That(Ranges(ranges), Is.EqualTo(Set("10.0.0.0/16|Head office", "10.2.0.0/16|(none)")));
-            Assert.That(ranges.EnumerateArray().Where(range => Text(range, "ipRange") == "10.2.0.0/16").Select(range => JsonAssert.Property(range, "description").ValueKind), Has.All.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -339,46 +303,6 @@ public partial class PolicyCommandTests
         Assert.That(string.Join(",", patch[0].BodyIds("SenderTrustRequirements")), Is.EqualTo("3"));
     }
 
-    // Example 79. The CLI splits at the first "=", so the label is "VLAN=20 (finance)" ("Command
-    // options").
-    [Test]
-    public async Task Policy_update_keeps_every_equals_sign_after_the_first_in_a_subnet_filter_label()
-    {
-        using var run = CliRun.Start();
-        var policy = OfficeLanPolicy("""[{ "ipRange": "10.0.0.0/16", "description": "Office LAN" }, { "ipRange": "10.2.0.0/16", "description": "New lab" }]""");
-        run.Stub("GET", PoliciesPath, json: ApiJson.Page(policy));
-        run.Stub("GET", PolicyPath(64), json: policy);
-        run.Stub("PATCH", PolicyPath(64), json: policy);
-
-        var result = await run.RunAsync("policy", "update", "staff to office LAN", "--set-subnet-filter", "10.0.0.0/16=VLAN=20 (finance)", "--set-subnet-filter", "10.2.0.0/16");
-
-        CliAssert.Succeeded(result);
-        var patch = run.RequestsTo("PATCH", PolicyPath(64));
-        Assert.That(patch, Has.Count.EqualTo(1));
-        Assert.That(Ranges(JsonAssert.Property(patch[0].BodyJson, "GatewayAllowedIpRanges")), Is.EqualTo(Set("10.0.0.0/16|VLAN=20 (finance)", "10.2.0.0/16|New lab")));
-    }
-
-    // Example 80. The reads run, so the printed request shows the kept labels, and the PATCH is not
-    // sent ("Dry run").
-    [Test]
-    public async Task Policy_update_with_dry_run_prints_the_subnet_filters_with_their_kept_labels_and_sends_no_change()
-    {
-        using var run = CliRun.Start();
-        var policy = OfficeLanPolicy("""[{ "ipRange": "10.0.0.0/16", "description": "Office LAN" }, { "ipRange": "10.2.0.0/16", "description": "New lab" }]""");
-        run.Stub("GET", PoliciesPath, json: ApiJson.Page(policy));
-        run.Stub("GET", PolicyPath(64), json: policy);
-        run.Stub("PATCH", PolicyPath(64), json: policy);
-
-        var result = await run.RunAsync("policy", "update", "staff to office LAN", "--set-subnet-filter", "10.0.0.0/16", "--set-subnet-filter", "10.3.0.0/16", "--dry-run");
-
-        var body = JsonAssert.Property(DryRunRequest(result, "PATCH", PolicyPath(64)), "body");
-        Assert.Multiple(() =>
-        {
-            Assert.That(Ranges(JsonAssert.Property(body, "GatewayAllowedIpRanges")), Is.EqualTo(Set("10.0.0.0/16|Office LAN", "10.3.0.0/16|(none)")));
-            Assert.That(run.RequestsTo("PATCH", PolicyPath(64)), Is.Empty);
-        });
-    }
-
     // Example 51. An empty value removes the restriction: the patch sets ActiveHours to null, which
     // PatchClient.Set sends as JSON null ("`Enclave.Sdk.Api` changes", item 3).
     [TestCase(true)]
@@ -389,7 +313,7 @@ public partial class PolicyCommandTests
         run.Stub("GET", PoliciesPath, json: ApiJson.Page(ApiJson.Policy(61, "facilities tablets")));
         run.Stub("PATCH", PolicyPath(61), json: ApiJson.Policy(61, "facilities tablets"));
 
-        var result = await run.RunAsync(["policy", "update", .. Target(byDescription, "facilities tablets", 61), "--set-active-hours", string.Empty]);
+        var result = await run.RunAsync(["policy", "update", .. NameLookup.Target(byDescription, "facilities tablets", 61), "--set-active-hours", string.Empty]);
 
         CliAssert.Succeeded(result);
         var patch = run.RequestsTo("PATCH", PolicyPath(61));
@@ -433,24 +357,10 @@ public partial class PolicyCommandTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(PolicyPath(42)));
     }
 
-    // The patch's keys, sorted, so a test can state the exact set of fields an update sends.
-    private static string Keys(JsonElement body) => Set(JsonRead.PropertyNames(body));
-
     // The rules of examples 24 and 81: tcp:443 and the 8000-8100 range are labelled, and the API
     // writes the range with spaces (portal PolicyModelExtensions.FormatPorts).
     private static string BuildToArtifactsPolicy() => PolicyWith(
         57,
         "build to artifacts",
         ("acls", """[{ "protocol": "Tcp", "ports": "443", "description": "HTTPS" }, { "protocol": "Tcp", "ports": "8000 - 8100", "description": "Artifact store" }, { "protocol": "Udp", "ports": "53", "description": "DNS" }]"""));
-
-    // A gateway policy as the API returns it (portal PolicyModelExtensions.ToModel), with the given
-    // subnet filters.
-    private static string OfficeLanPolicy(string gatewayAllowedIpRanges) => PolicyWith(
-        64,
-        "staff to office LAN",
-        ("type", "\"Gateway\""),
-        ("gateways", """[{ "systemId": "GW001", "systemName": "gateway", "machineName": "gw-01", "routes": [{ "route": "10.0.0.0/16", "gatewayWeight": 0, "gatewayName": "Office LAN" }] }]"""),
-        ("gatewayTrafficDirection", "\"Exit\""),
-        ("gatewayPriority", "\"Balanced\""),
-        ("gatewayAllowedIpRanges", gatewayAllowedIpRanges));
 }

@@ -92,10 +92,11 @@ internal static class DnsLookup
         ArgumentNullException.ThrowIfNull(zones);
 
         // A zone's own name would otherwise be read as a record in a shorter zone it ends in:
-        // eu.internal as the record "eu" in internal.
+        // eu.internal as the record "eu" in internal. These messages leave the hostname out, as no
+        // message repeats a value (CliOptions); the errors key names the option or argument it came from.
         if (zones.Any(zone => string.Equals(zone.Name, hostname, StringComparison.OrdinalIgnoreCase)))
         {
-            throw CliErrors.InvalidArgument(key, $"\"{hostname}\" is the name of a zone. A hostname is a name within a zone, such as db.{hostname}.");
+            throw CliErrors.InvalidArgument(key, "The hostname given is the name of a zone. A hostname is a name within a zone, such as db.internal in the zone internal.");
         }
 
         // The zone is the longest zone name the hostname ends in at a label boundary, so with zones
@@ -105,7 +106,7 @@ internal static class DnsLookup
             .Where(candidate => hostname.Length > candidate.Name.Length + 1
                 && hostname.EndsWith("." + candidate.Name, StringComparison.OrdinalIgnoreCase))
             .MaxBy(candidate => candidate.Name.Length)
-            ?? throw CliErrors.InvalidArgument(key, $"\"{hostname}\" is in none of the organisation's zones. A hostname is written in full and ends in its zone's name, such as db.internal in the zone internal.");
+            ?? throw CliErrors.InvalidArgument(key, "The hostname given is in none of the organisation's zones. A hostname is written in full and ends in its zone's name, such as db.internal in the zone internal.");
 
         return (zone, hostname[..^(zone.Name.Length + 1)]);
     }

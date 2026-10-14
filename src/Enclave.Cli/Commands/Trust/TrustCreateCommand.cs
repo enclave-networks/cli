@@ -14,7 +14,7 @@ internal static class TrustCreateCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("create", "Create a trust requirement and print it: --authority makes a sign-in requirement, --allow-* and --block-* a public IP requirement.", CommandScope.Organisation, changes: true);
-        var description = verb.Add(CliArguments.Text("description", "The trust requirement's description."));
+        var description = verb.Add(CliArguments.Name("description", "The trust requirement's description.", "a trust requirement's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The trust requirement's notes."));
         var authority = verb.Add(CliOptions.ChoiceText("--authority", "Require a sign-in with this authority.", TrustSettings.Authorities));
         var tenant = verb.Add(CliOptions.Text("--tenant", "With --authority azure: the Entra ID tenant.", "id"));
@@ -66,17 +66,20 @@ internal static class TrustCreateCommand
             verb.Requires(option, authority);
         }
 
-        // A setting given "" carries no value. The API refuses an empty authority address, client
-        // ID or audience (portal TrustRequirementSettingsUserAuthValidator.cs:47-49) and stores an
-        // empty tenant, since for azure it checks only which keys the configuration holds (same
-        // file, 35-38). Each exits 2, as --set-client-id "" does on trust update.
+        // A setting given "" or only white space carries no value. The API refuses an authority
+        // address that is not https, and a client ID or audience that is empty or white space
+        // (portal TrustRequirementSettingsUserAuthValidator.cs:47-49, whose MustHaveKeyWithValue and
+        // KeyNotEmptyIfSet test string.IsNullOrWhiteSpace, DictionaryValidationExtensions.cs:45,82),
+        // and stores a blank tenant, since for azure it checks only which keys the configuration
+        // holds (TrustRequirementSettingsUserAuthValidator.cs:35-38). Each exits 2, as
+        // --set-client-id "" does on trust update.
         verb.Check(context =>
         {
             foreach (var (option, _) in settings)
             {
-                if (context.Get(option) is { Length: 0 })
+                if (context.Get(option) is { } value && string.IsNullOrWhiteSpace(value))
                 {
-                    throw CliErrors.InvalidArgument(option.Name, $"{option.Name} takes a value; \"\" sets nothing.");
+                    throw CliErrors.InvalidArgument(option.Name, $"{option.Name} takes a value, and the value given is blank.");
                 }
             }
         });

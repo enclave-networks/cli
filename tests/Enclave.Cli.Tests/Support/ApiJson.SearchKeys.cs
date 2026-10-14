@@ -3,7 +3,7 @@ namespace Enclave.Cli.Tests.Support;
 // The bodies are lists of the API's SearchKey (portal
 // src/Enclave.Configuration.Data/Modules/Search/SearchKey.cs), written as the API writes them: every
 // property, camelCase names, enums by name, and null for a list that is not set (Enclave.Sdk.Api
-// 1.1.0, SearchKeyTests). The keys are taken from the portal's search key services
+// 1.2.0, SearchKeyTests). The keys are taken from the portal's search key services
 // (Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs). Between them they give every property
 // a value other than its default, so output that drops, renames or rewrites any property differs
 // from the body.

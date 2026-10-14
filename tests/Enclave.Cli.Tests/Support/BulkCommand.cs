@@ -1,6 +1,4 @@
-using Enclave.Cli.Tests.Support;
-
-namespace Enclave.Cli.Tests.Safety;
+namespace Enclave.Cli.Tests.Support;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
 
@@ -25,7 +23,7 @@ public readonly record struct BulkCommand(
     string OtherKind,
     string MalformedId)
 {
-    // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.1.0 (SystemsClient,
+    // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.2.0 (SystemsClient,
     // UnapprovedSystemsClient, EnrolmentKeysClient, PoliciesClient, TagsClient, DnsClient,
     // TrustRequirementsClient) and of the portal's bulk result models. Key delete is
     // EnrolmentKeysClient.BulkDeleteAsync, which reads keysDeleted, where the bulk enable and
@@ -129,4 +127,13 @@ public readonly record struct BulkCommand(
 
         return string.Join("|", BulkCalls(run).Select(request => string.Join(",", request.BodyIds(field))));
     }
+
+    /// <summary>
+    /// The IDs of each call joined with commas, and the calls joined with "|", for IDs sent in calls
+    /// of 200 in the order given: the form <see cref="IdsSent"/> reads the requests in.
+    /// </summary>
+    // The API takes at most 200 IDs per bulk call (proposed-cli-surface.md "Several IDs"; portal
+    // Enclave.Utilities/HardLimits.cs:22, MaxBulkIds).
+    internal static string Batches(string[] ids) =>
+        string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));
 }

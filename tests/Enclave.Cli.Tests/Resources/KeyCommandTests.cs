@@ -13,12 +13,10 @@ public class KeyCommandTests
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
-    // A key whose description starts with the same words is listed first, so a CLI that takes a
-    // partial match, or the first item, finds key 13.
-    private static readonly string BuildAgentsKeys = ApiJson.Page(ApiJson.Key(13, "build agents 2026-04"), ApiJson.Key(12, "build agents"));
-
     // A list reads every page before it prints (proposed-cli-surface.md "Output"), and enrolment key
-    // output includes each key's secret, key ("Output").
+    // output includes each key's secret, key ("Output"). Disabled keys are left out unless
+    // --include-disabled or --state disabled asks for them ("Filters"), so a plain list sends no
+    // include_disabled.
     [Test]
     public async Task Key_list_reads_every_page_and_prints_every_key_with_its_secret_as_a_key_list()
     {
@@ -33,12 +31,13 @@ public class KeyCommandTests
             Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("12,13,14"));
             Assert.That(JsonRead.StringFieldList(items, "key"), Is.EqualTo("SECRET-12,SECRET-13,SECRET-14"));
             Assert.That(run.PagesRequested(KeysPath), Is.EqualTo("0,1"));
+            Assert.That(run.RequestsTo("GET", KeysPath).Select(request => request.QueryValue("include_disabled")), Is.Not.Empty.And.All.Null);
         });
     }
 
     // --filter sends its text as typed, so it takes the API's search syntax as well as plain words
     // (proposed-cli-surface.md "Filters"); uses and enrolled are search keys of portal
-    // EnrolmentKeySearchKeyService.
+    // EnrolmentKeySearchKeyService. The filter leaves disabled keys out, as a plain list does.
     [TestCase("build")]
     [TestCase("uses:<5 enrolled:>10")]
     public async Task Key_list_sends_the_filter_text_as_the_search_exactly_as_typed(string filter)
@@ -48,13 +47,18 @@ public class KeyCommandTests
 
         var request = await CliAssert.AcceptedAsync(run, "GET", KeysPath, "key", "list", "--filter", filter);
 
-        Assert.That(request.QueryValue("search"), Is.EqualTo(filter));
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.QueryValue("search"), Is.EqualTo(filter));
+            Assert.That(request.QueryValue("include_disabled"), Is.Null);
+        });
     }
 
     // Each flag is added to the search in the text the table in proposed-cli-surface.md "Filters"
     // gives it, which is the API's search value where that differs from the CLI's: the API's
     // approval key reads "gated" as Manual and matches nothing for "manual", and its state key reads
-    // "nouses" (portal EnrolmentKeySearchKeyService.BuildFilterAsync).
+    // "nouses" (portal EnrolmentKeySearchKeyService.BuildFilterAsync). Only --state disabled and
+    // --include-disabled ask for disabled keys ("Filters"), so none of these sends include_disabled.
     [TestCase("--tag ci", "tags:ci")]
     [TestCase("--tag build,linux", "tags:build,linux")]
     [TestCase("--approval automatic", "approval:automatic")]
@@ -69,7 +73,11 @@ public class KeyCommandTests
 
         var request = await CliAssert.AcceptedAsync(run, "GET", KeysPath, ["key", "list", .. flags.Split(' ')]);
 
-        Assert.That(request.QueryValue("search"), Is.EqualTo(search));
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.QueryValue("search"), Is.EqualTo(search));
+            Assert.That(request.QueryValue("include_disabled"), Is.Null);
+        });
     }
 
     // Example 47. The API splits the search at whitespace into terms and applies each, whatever their
@@ -110,7 +118,7 @@ public class KeyCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString()
+    // Enclave.Sdk.Api 1.2.0 writes the flag with bool.ToString()
     // (EnrolmentKeysClient.BuildQueryString), which gives "True".
     [Test]
     public async Task Key_list_include_disabled_sends_include_disabled_true()
@@ -192,7 +200,7 @@ public class KeyCommandTests
     public async Task Key_show_by_description_looks_the_key_up_and_prints_it_with_its_secret()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("GET", $"{KeysPath}/12", json: ApiJson.Key(12, "build agents", "SECRET-12"));
         run.Stub("GET", $"{KeysPath}/13", json: ApiJson.Key(13, "build agents 2026-04", "SECRET-13"));
 
@@ -279,7 +287,7 @@ public class KeyCommandTests
         var result = await run.RunAsync("key", "show", "ci runners");
 
         CliAssert.Failed(result, "invalid_argument");
-        Assert.That(run.Requests.Select(request => request.Path), Is.All.EqualTo(KeysPath));
+        Assert.That(run.Requests.Select(request => request.Path), Is.Not.Empty.And.All.EqualTo(KeysPath));
     }
 
     // A name that matches several items exits 2, and the error carries the items that matched as
@@ -296,10 +304,11 @@ public class KeyCommandTests
         var result = await run.RunAsync("key", "show", "build agents");
 
         var error = CliAssert.Failed(result, "invalid_argument");
+        int[] candidates = [12, 13];
         Assert.Multiple(() =>
         {
-            Assert.That(error.GetProperty("candidates").GetArrayLength(), Is.EqualTo(2));
-            Assert.That(run.Requests.Select(request => request.Path), Is.All.EqualTo(KeysPath));
+            Assert.That(error.GetProperty("candidates").EnumerateArray().Select(candidate => candidate.GetProperty("id").GetInt32()), Is.EquivalentTo(candidates));
+            Assert.That(run.Requests.Select(request => request.Path), Is.Not.Empty.And.All.EqualTo(KeysPath));
         });
     }
 
@@ -313,7 +322,7 @@ public class KeyCommandTests
         ArgumentNullException.ThrowIfNull(pathSuffix);
         using var run = CliRun.Start();
         var path = TestData.OrgPath(pathSuffix);
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub(method, path, json: verb == "disable" ? ApiJson.Bulk("keysModified", 1) : ApiJson.Key(12, "build agents"));
         string[] change = verb == "update" ? ["--notes", "rack 5"] : [];
 
@@ -344,27 +353,38 @@ public class KeyCommandTests
     // unlimited uses, -1 ("Command options"; portal EnrolmentKeyCreateModel.UsesRemaining), and a
     // create sends an empty list for a list flag left out ("Details"). The API accepts a retention
     // time on ephemeral keys only (portal EnrolmentKeyCreateValidator.cs:24), and a key without --for
-    // or --until does not expire. The body is Enclave.Sdk.Api's create model in camelCase
-    // (Enclave.Sdk.Api 1.1.0 EnrolmentKeysClient.CreateAsync).
+    // or --until does not expire. The body is Enclave.Sdk.Api's create model in camelCase, every
+    // property written, null ones included (Enclave.Sdk.Api 1.2.0 EnrolmentKeysClient.CreateAsync
+    // with Constants.JsonSerializerOptions, which ignores no property), so it holds exactly the
+    // settings "Command options" gives key create: the description and one field per flag. The
+    // names are read exactly, since a create body is camelCase where a PATCH body is PascalCase.
     [Test]
     public async Task Key_create_sends_a_general_purpose_key_that_requires_approval_and_has_unlimited_uses()
     {
         using var run = CliRun.Start();
         run.Stub("POST", KeysPath, json: ApiJson.Key(12, "build agents 2026-10"));
+        string[] fields =
+        [
+            "description", "type", "approvalMode", "usesRemaining", "tags", "ipConstraints", "disconnectedRetentionMinutes", "notes", "autoExpire",
+        ];
 
         var request = await CliAssert.AcceptedAsync(run, "POST", KeysPath, "key", "create", "build agents 2026-10");
 
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(body, "description").GetString(), Is.EqualTo("build agents 2026-10"));
-            Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("GeneralPurpose"));
-            Assert.That(JsonAssert.Property(body, "approvalMode").GetString(), Is.EqualTo("Manual"));
-            Assert.That(JsonAssert.Property(body, "usesRemaining").GetInt32(), Is.EqualTo(-1));
-            Assert.That(JsonAssert.Property(body, "tags").GetArrayLength(), Is.Zero);
-            Assert.That(JsonAssert.Property(body, "ipConstraints").GetArrayLength(), Is.Zero);
-            Assert.That(body.TryGetProperty("disconnectedRetentionMinutes", out var retention) ? retention.ValueKind : JsonValueKind.Null, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(body.TryGetProperty("autoExpire", out var expiry) ? expiry.ValueKind : JsonValueKind.Null, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(fields));
+            Assert.That(body.GetProperty("description").GetString(), Is.EqualTo("build agents 2026-10"));
+            Assert.That(body.GetProperty("type").GetString(), Is.EqualTo("GeneralPurpose"));
+            Assert.That(body.GetProperty("approvalMode").GetString(), Is.EqualTo("Manual"));
+            Assert.That(body.GetProperty("usesRemaining").GetInt32(), Is.EqualTo(-1));
+            Assert.That(body.GetProperty("tags").ValueKind, Is.EqualTo(JsonValueKind.Array));
+            Assert.That(body.GetProperty("tags").GetArrayLength(), Is.Zero);
+            Assert.That(body.GetProperty("ipConstraints").ValueKind, Is.EqualTo(JsonValueKind.Array));
+            Assert.That(body.GetProperty("ipConstraints").GetArrayLength(), Is.Zero);
+            Assert.That(body.GetProperty("disconnectedRetentionMinutes").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(body.GetProperty("autoExpire").ValueKind, Is.EqualTo(JsonValueKind.Null));
         });
     }
 
@@ -521,8 +541,8 @@ public class KeyCommandTests
     }
 
     // --for makes the key temporary: afterwards it is disabled, or deleted with --then delete
-    // (proposed-cli-surface.md "Command options"). The expected window spans the run, with a second
-    // either side for a CLI that rounds to whole seconds.
+    // (proposed-cli-surface.md "Command options"). The clock is fixed, so the expiry is exactly 14
+    // days after it.
     [TestCase("--for 14d", "Disable")]
     [TestCase("--for 14d --then disable", "Disable")]
     [TestCase("--for 14d --then delete", "Delete")]
@@ -530,16 +550,15 @@ public class KeyCommandTests
     {
         ArgumentNullException.ThrowIfNull(flags);
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.Stub("POST", KeysPath, json: ApiJson.Key(12, "contractor laptops"));
 
-        var before = DateTimeOffset.UtcNow;
         var request = await CliAssert.AcceptedAsync(run, "POST", KeysPath, ["key", "create", "contractor laptops", .. flags.Split(' ')]);
-        var after = DateTimeOffset.UtcNow;
 
         var autoExpire = JsonAssert.Property(request.BodyJson, "autoExpire");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.ExpiryDateTime(autoExpire), Is.InRange(before.AddDays(14).AddSeconds(-1), after.AddDays(14).AddSeconds(1)));
+            Assert.That(JsonRead.ExpiryDateTime(autoExpire), Is.EqualTo(Now.AddDays(14)));
             Assert.That(JsonAssert.Property(autoExpire, "expiryAction").GetString(), Is.EqualTo(action));
         });
     }
@@ -628,7 +647,7 @@ public class KeyCommandTests
     }
 
     // Example 32, second command. --require-approval sets ApprovalMode to Manual; Enclave.Sdk.Api
-    // 1.1.0 keys a patch body by EnrolmentKeyPatchModel's property names (PatchClient.Set), and an
+    // 1.2.0 keys a patch body by EnrolmentKeyPatchModel's property names (PatchClient.Set), and an
     // update sends only the fields given (proposed-cli-surface.md "Create and update"). --id makes no
     // lookup.
     [Test]
@@ -652,7 +671,7 @@ public class KeyCommandTests
     public async Task Key_update_by_description_require_approval_patches_the_key_the_lookup_found()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("PATCH", $"{KeysPath}/12", json: ApiJson.Key(12, "build agents"));
         run.Stub("PATCH", $"{KeysPath}/13", json: ApiJson.Key(13, "build agents 2026-04"));
 
@@ -725,7 +744,7 @@ public class KeyCommandTests
     {
         using var run = CliRun.Start();
         var path = $"{KeysPath}/12";
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("GET", path, json: ApiJson.Key(12, "build agents"));
         run.Stub("PATCH", path, json: ApiJson.Key(12, "build agents"));
         string[] key = byDescription ? ["build agents"] : ["--id", "12"];
@@ -754,7 +773,7 @@ public class KeyCommandTests
     {
         using var run = CliRun.Start();
         var path = $"{KeysPath}/12";
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("GET", path, json: ApiJson.Key(12, "build agents"));
         run.Stub("PATCH", path, json: ApiJson.Key(12, "build agents"));
         string[] key = byDescription ? ["build agents"] : ["--id", "12"];
@@ -863,9 +882,37 @@ public class KeyCommandTests
         });
     }
 
+    // On a general-purpose key, --keep-disconnected is passed to the API, which refuses it
+    // (proposed-cli-surface.md "Details"; portal
+    // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Handlers/EnrolmentKeyModifyHandler.cs:113-118
+    // answers 422 retention-ephemeral-only), so the API's answer, and not a check of the CLI's own,
+    // decides: the patch is sent with the retention, and the refusal is reported as the API's error,
+    // exit 1. The key is given by --id, so no read tells the CLI its type.
+    [Test]
+    public async Task Key_update_keep_disconnected_on_a_general_purpose_key_sends_the_retention_and_reports_the_api_refusal()
+    {
+        using var run = CliRun.Start();
+        var path = $"{KeysPath}/12";
+        run.Stub("GET", path, json: ApiJson.Key(12, "build agents"));
+        run.StubProblem("PATCH", path, 422, "Retention time only supported on Ephemeral keys", "A disconnected retention time can only be specified on enrolment keys of type 'Ephemeral'");
+
+        var result = await run.RunAsync("key", "update", "--id", "12", "--keep-disconnected", "45m");
+
+        var error = CliAssert.Failed(result, "api_error");
+        var patches = run.RequestsTo("PATCH", path);
+        Assert.That(patches, Has.Count.EqualTo(1));
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.PropertyNameList(patches[0].BodyJson), Is.EqualTo("DisconnectedRetentionMinutes"));
+            Assert.That(JsonAssert.Property(patches[0].BodyJson, "DisconnectedRetentionMinutes").GetInt32(), Is.EqualTo(45));
+            Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(422));
+            Assert.That(error.GetProperty("title").GetString(), Is.EqualTo("Retention time only supported on Ephemeral keys"));
+        });
+    }
+
     // A command that takes several items sends them in one bulk call and prints requested and
     // affected (proposed-cli-surface.md "Several IDs"); --id takes several IDs, comma separated.
-    // The calls are Enclave.Sdk.Api 1.1.0 EnrolmentKeysClient's BulkEnableAsync, BulkDisableAsync
+    // The calls are Enclave.Sdk.Api 1.2.0 EnrolmentKeysClient's BulkEnableAsync, BulkDisableAsync
     // and BulkDeleteAsync; delete is the API's bulk route (portal EnrolmentKeysController.cs:295). The
     // API counts two of the three keys, and the output carries its count. Key IDs are JSON numbers.
     [TestCase("enable", "PUT", "enrolment-keys/enable", "keysModified")]
@@ -917,18 +964,16 @@ public class KeyCommandTests
     // Example 49, second command. --for takes one key and calls its enable-until route, since the
     // API's timed enable has no bulk form, and prints the key the API returns (proposed-cli-surface.md
     // "Several IDs"). --then delete is the API's Delete action, and the expiry is sent as a UTC
-    // instant ("Details"). The expected window spans the run, with a second either side for a CLI that
-    // rounds to whole seconds.
+    // instant ("Details"). The clock is fixed, so the expiry is exactly 14 days after it.
     [Test]
     public async Task Key_enable_id_for_a_duration_then_delete_puts_enable_until_with_the_delete_action_and_prints_the_key()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{KeysPath}/31/enable-until";
         run.Stub("PUT", path, json: ApiJson.Key(31, "contractor laptops", "SECRET-31"));
 
-        var before = DateTimeOffset.UtcNow;
         var result = await run.RunAsync("key", "enable", "--id", "31", "--for", "14d", "--then", "delete");
-        var after = DateTimeOffset.UtcNow;
 
         CliAssert.Succeeded(result);
         var request = run.SingleRequest();
@@ -937,7 +982,7 @@ public class KeyCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(path));
-            Assert.That(expiry, Is.InRange(before.AddDays(14).AddSeconds(-1), after.AddDays(14).AddSeconds(1)));
+            Assert.That(expiry, Is.EqualTo(Now.AddDays(14)));
             Assert.That(expiry.Offset, Is.EqualTo(TimeSpan.Zero));
             Assert.That(JsonAssert.Property(request.BodyJson, "expiryAction").GetString(), Is.EqualTo("Delete"));
             Assert.That(result.StdoutJson.GetProperty("id").GetInt32(), Is.EqualTo(31));
@@ -953,6 +998,7 @@ public class KeyCommandTests
     public async Task Key_enable_by_description_finds_a_disabled_key_and_puts_enable_until_for_it()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{KeysPath}/31/enable-until";
         run.Stub("GET", KeysPath, json: ApiJson.Page());
         run.StubWithQuery("GET", KeysPath, "include_disabled", "True", json: ApiJson.Page(DisabledKey(31, "contractor laptops")));

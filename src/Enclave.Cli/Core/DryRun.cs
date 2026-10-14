@@ -53,14 +53,17 @@ internal sealed class DryRun
     /// <summary>
     /// The answer a captured change gets in place of the API's: 200 with the JSON body {}.
     /// </summary>
-    // Every Enclave.Sdk.Api call that changes something either checks the status alone
-    // (RemoveUserAsync, InviteUserAsync, CancelInviteAync), or reads the body into a model or a bulk
-    // result and checks the result is not null (ClientBase.DeserialiseAsync and EnsureNotNull, as
-    // PatchClient.ApplyAsync and CustomersClient.ReadAsync use them; Enclave.Sdk.Api 1.1.0). {} passes
-    // both: it reads as a model whose fields hold their default values, or a bulk count of 0, since
-    // no model has a required member (neither Enclave.Sdk.Api 1.1.0 nor Enclave.Sdk.Api.Data
-    // 304.48.0 uses RequiredMemberAttribute or JsonRequiredAttribute). Every call then completes, so
-    // a bulk command over 200 IDs goes on to show each of its calls.
+    // Every Enclave.Sdk.Api call the CLI makes to change something checks the status, reads the body
+    // into a model or a bulk result, and fails when there is none. Most read it with
+    // ClientBase.DeserialiseAsync and check it with EnsureNotNull, as PatchClient.ApplyAsync and
+    // CustomersClient.ReadAsync do; RemoveUserAsync, InviteUserAsync and CancelInviteAync throw
+    // InvalidOperationException for an empty body or JSON null and deserialise any other
+    // (OrganisationScopedClient.ReadModelAsync, OrganisationScopedClient.cs:158-176; Enclave.Sdk.Api
+    // 1.2.0). {} passes both: it is neither empty nor null, and it reads as a model whose fields hold
+    // their default values, or a bulk count of 0, since no model has a required member (neither
+    // Enclave.Sdk.Api 1.2.0 nor Enclave.Sdk.Api.Data 304.48.0 uses RequiredMemberAttribute or
+    // JsonRequiredAttribute). Every call then completes, so a bulk command over 200 IDs goes on to
+    // show each of its calls.
     //
     // Nothing read from the answer is printed: the command's own output is dropped under --dry-run,
     // and the report holds the captured requests alone. No command builds a request from a change's

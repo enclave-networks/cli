@@ -26,22 +26,19 @@ public readonly record struct ChangeCommand(
     string? ReadResponse = null,
     string? OtherPathSuffix = null)
 {
-    // Declared before All, whose initialiser reads it: static initialisers run in textual order.
-    private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
-
     // Every command in proposed-cli-surface.md "Commands" that changes something through the main
     // API. login, logout and the use commands change local files only, and the partner customer
     // commands use the partner API; they are tested in Partner/. Items are given by ID where the
     // command allows it, so the change is the only request; dns create-hostname finds its zone from
     // the hostname, and tag set reads the tag to choose between the API's update and create calls
-    // ("Dry run"), so those reads are answered. Routes are those of Enclave.Sdk.Api 1.1.0.
+    // ("Dry run"), so those reads are answered. Routes are those of Enclave.Sdk.Api 1.2.0.
     //
-    // RemoveUserAsync takes the account ID as a string (OrganisationScopedClient.cs:91), so the path
+    // RemoveUserAsync takes the account ID as a string (OrganisationScopedClient.cs:92), so the path
     // carries whichever GUID form the CLI passes, and both forms are answered.
     public static IReadOnlyList<ChangeCommand> All { get; } =
     [
         new("org update", ["org", "update", "--name", "Acme Ltd"], "PATCH", string.Empty, ApiJson.OrgProperties("Acme Ltd")),
-        new("org remove-user", ["org", "remove-user", "--id", AccountId.ToString()], "DELETE", $"users/{AccountId:N}", ApiJson.User(AccountId, "sam@example.com"), OtherPathSuffix: $"users/{AccountId:D}"),
+        new("org remove-user", ["org", "remove-user", "--id", TestData.PartnerStaffAccountId], "DELETE", $"users/{TestData.PartnerStaffAccountGuid:N}", ApiJson.User(TestData.PartnerStaffAccountGuid, "sam@example.com"), OtherPathSuffix: $"users/{TestData.PartnerStaffAccountGuid:D}"),
         new("org invite", ["org", "invite", "alex@example.com"], "POST", "invites", ApiJson.Invite("alex@example.com")),
         new("org cancel-invite", ["org", "cancel-invite", "sam@example.com"], "DELETE", "invites", ApiJson.Invite("sam@example.com")),
         new("system update", ["system", "update", "ABCDE", "--description", "web server"], "PATCH", "systems/ABCDE", ApiJson.System("ABCDE", "web server")),

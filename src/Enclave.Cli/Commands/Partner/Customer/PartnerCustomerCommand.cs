@@ -11,7 +11,7 @@ namespace Enclave.Cli.Commands.Partner.Customer;
 /// (proposed-cli-surface.md "Commands", "Partner API"). A customer is an organisation, given by
 /// name or by --org-id, its organisation ID.
 /// </summary>
-// Every call goes through Enclave.Sdk.Api 1.1.0's partner client (IPartnerClient.Customers), one
+// Every call goes through Enclave.Sdk.Api 1.2.0's partner client (IPartnerClient.Customers), one
 // call per command. A customer given by name, an admin given by email address and an invite given
 // by email address each add one read (proposed-cli-surface.md "Calls per command").
 internal static class PartnerCustomerCommand
@@ -72,9 +72,9 @@ internal static class PartnerCustomerCommand
     {
         var verb = new CliVerb("create", "Create a customer, sending every field of the API's customer model, with the partner portal's values for the flags left out.", CommandScope.Partner, changes: true);
         var name = verb.Add(CliArguments.Text("name", "The customer's name."));
-        var owner = verb.Add(CliOptions.Text("--owner", "The email address of the user who will own the customer's organisation.", "email"));
-        var domain = verb.Add(CliOptions.Text("--domain", "The customer's domain.", "domain"));
-        var contact = verb.Add(CliOptions.Text("--contact", "The customer's contact name.", "name"));
+        var owner = EmailOption(verb, "--owner", "The email address of the user who will own the customer's organisation.");
+        var domain = CreateTextOption(verb, "--domain", "The customer's domain.", "domain", "a domain name");
+        var contact = CreateTextOption(verb, "--contact", "The customer's contact name.", "name", "a contact name");
         var systems = verb.Add(CliOptions.Number("--systems", "The number of systems to license, at least 2; 50 when left out.", minimum: 2));
         var gateways = verb.Add(CliOptions.Number("--gateways", "The number of gateways to license; 0 when left out.", minimum: 0));
         var industryDiscount = verb.Add(CliOptions.Flag("--industry-discount", "Request the industry discount."));
@@ -85,7 +85,7 @@ internal static class PartnerCustomerCommand
         verb.SetHandler(async context =>
         {
             // The owner, domain and contact have no portal default and are sent without a value
-            // when left out; Enclave.Sdk.Api 1.1.0 writes every property of the model, so they go as
+            // when left out; Enclave.Sdk.Api 1.2.0 writes every property of the model, so they go as
             // null (ClientBase.CreateJsonContent).
             var model = new CustomerCreateModel
             {
@@ -192,7 +192,7 @@ internal static class PartnerCustomerCommand
         SetHandler(verb, customer, async (context, customers, id) =>
         {
             // GetAdminsAsync returns every owner and admin in one response
-            // (CustomersClient.GetAdminsAsync, Enclave.Sdk.Api 1.1.0), so there are no pages to read.
+            // (CustomersClient.GetAdminsAsync, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
             var admins = await SingleItem.CallAsync(() => customers.GetAdminsAsync(id));
 
             await context.Output.WriteListAsync(ListKind.Admin, admins, context.CancellationToken);
@@ -242,7 +242,7 @@ internal static class PartnerCustomerCommand
         SetHandler(verb, customer, async (context, customers, id) =>
         {
             // GetPendingInvitesAsync returns every invite in one response
-            // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api 1.1.0), so there are no pages
+            // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api 1.2.0), so there are no pages
             // to read.
             var invites = await SingleItem.CallAsync(() => customers.GetPendingInvitesAsync(id));
 
@@ -279,7 +279,7 @@ internal static class PartnerCustomerCommand
     // For a customer the partner does not have, the auto-sync routes answer 204 with no body where
     // the other customer routes answer 404, and Enclave.Sdk.Api reports it by throwing
     // InvalidOperationException (ICustomersClient.EnableAutoSyncAsync and DisableAutoSyncAsync,
-    // CustomersClient.SetAutoSyncAsync, 1.1.0). That is the unknown customer a single-ID command
+    // CustomersClient.SetAutoSyncAsync, 1.2.0). That is the unknown customer a single-ID command
     // exits 5 for (proposed-cli-surface.md "Several IDs").
     private static CliVerb AutoSync(string name, string description, Func<ICustomersClient, OrganisationGuid, Task<CustomerModel>> call)
     {
@@ -308,23 +308,30 @@ internal static class PartnerCustomerCommand
         return (verb, customer, email);
     }
 
-    // An empty or blank address names no admin or invite, so it is refused with the other argument
-    // checks, before the token and any call (proposed-cli-surface.md "Errors and exit codes").
-    // Passed on, it would cost the customer lookup and then match nothing, or reach
+    // An empty or blank address names no admin, invite or owner, so it is refused with the other
+    // argument checks, before the token and any call (proposed-cli-surface.md "Errors and exit
+    // codes"). Passed on, it would cost the customer lookup and then match nothing, or reach
     // ICustomersClient.InviteAdminAsync, which throws ArgumentException for a blank address
-    // (Enclave.Sdk.Api 1.1.0).
+    // (Enclave.Sdk.Api 1.2.0), or reach the API as create's owner, which the API refuses (portal
+    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:20,
+    // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
+    // 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid).
     private static Option<string?> EmailOption(CliVerb verb, string name, string description)
     {
         var option = verb.Add(CliOptions.Text(name, description, "email"));
+        RefuseBlank(verb, option, context => context.Get(option), "an email address");
+        return option;
+    }
 
-        verb.Check(context =>
-        {
-            if (context.Get(option) is { } value && string.IsNullOrWhiteSpace(value))
-            {
-                throw CliErrors.InvalidArgument(CliVerb.KeyOf(option), $"{option.Name} takes an email address, and the value given is blank.");
-            }
-        });
-
+    // An empty or blank domain or contact name names no domain or contact. The API stores it as the
+    // customer's (portal CustomerCreateModelValidator.cs:23 and 48 accept it, and
+    // Handlers/CreateCustomerHandler.cs:71 and 76 pass it on), where a flag left out sends null
+    // (proposed-cli-surface.md "Command options", the create table), so it is refused with the other
+    // argument checks, before the token and any call ("Errors and exit codes").
+    private static Option<string?> CreateTextOption(CliVerb verb, string name, string description, string valueName, string takes)
+    {
+        var option = verb.Add(CliOptions.Text(name, description, valueName));
+        RefuseBlank(verb, option, context => context.Get(option), takes);
         return option;
     }
 
@@ -351,11 +358,14 @@ internal static class PartnerCustomerCommand
     // and CustomerPatchModelValidator.cs:10, NotEmpty, which fails a string that is empty or white
     // space: FluentValidation 11.9.0, NotEmptyValidator.IsValid).
     private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value) =>
+        RefuseBlank(verb, symbol, value, "a customer name");
+
+    private static void RefuseBlank(CliVerb verb, Symbol symbol, Func<CliContext, string?> value, string takes) =>
         verb.Check(context =>
         {
-            if (value(context) is { } name && string.IsNullOrWhiteSpace(name))
+            if (value(context) is { } given && string.IsNullOrWhiteSpace(given))
             {
-                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes a customer name, and the value given is blank.");
+                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes {takes}, and the value given is blank.");
             }
         });
 

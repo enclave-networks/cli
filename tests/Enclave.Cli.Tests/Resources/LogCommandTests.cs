@@ -19,7 +19,9 @@ public class LogCommandTests
     // A test whose result depends on the time zone reads a fixed clock in a zone made by the test,
     // TestData.LocalZone, as Contract/TimeInputTests.cs does: UTC+05:30 with no daylight saving,
     // which a runner set to UTC is not in, so reading a time in UTC and reading it in the zone give
-    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone.
+    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone. A test about
+    // the hour repeated when the clocks go back reads its own fixed clock in
+    // TestData.DaylightSavingZone.
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
     private static readonly string LogsPath = TestData.OrgPath("logs");
@@ -124,6 +126,37 @@ public class LogCommandTests
         });
     }
 
+    // The API stores entries in batches every 2 seconds, each with the time of its own event (portal
+    // Enclave.ActivityLog/ActivityLogSink.cs:16-17,25,100), so an entry can be stored after newer
+    // ones and land among entries the CLI has read. Here page 0 is read, then three new entries are
+    // written and "late" is stored with a time between entry 1 and entry 2. That moves entries 0 and
+    // 1 onto page 1 beside "late", and entry 2 two pages on, onto page 2. The CLI prints "late" once,
+    // in its place newest first, and every other entry once. A CLI that drops every entry newer than
+    // the oldest it has read loses "late", and one that remembers only the page before prints entry
+    // 2 twice. The fake API serves pages of three, whatever per_page asks for.
+    [Test]
+    public async Task Log_prints_an_entry_stored_late_among_entries_already_read_once_in_its_place()
+    {
+        using var run = CliRun.Start();
+        var now = DateTime.UtcNow;
+        var entries = Entries(5, now.AddMinutes(-5));
+        var late = Entry("late", now.AddMinutes(-6.5));
+        string[] written = [Entry("new 0", now), Entry("new 1", now.AddMinutes(-1)), Entry("new 2", now.AddMinutes(-2))];
+        string[] after = [.. written, entries[0], entries[1], late, .. entries[2..]];
+        StubPage(run, 0, 3, entries.Length, entries[..3]);
+        StubPage(run, 1, 3, after.Length, after[3..6]);
+        StubPage(run, 2, 3, after.Length, after[6..9]);
+
+        var result = await run.RunAsync("log");
+
+        var items = CliAssert.List(result, "log");
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo("entry 0,entry 1,late,entry 2,entry 3,entry 4"));
+            Assert.That(run.PagesRequested(LogsPath), Is.EqualTo("0,1,2"));
+        });
+    }
+
     // --limit changes the number, and the page size is the smaller of the limit and 200, the most the
     // API returns per page (proposed-cli-surface.md "Details"; portal PaginationDefaults.cs:11). The
     // 1,000 newest fill pages 0 to 4 of 200, so page 5 is never read; 20 fill page 0 of 20. Example
@@ -149,7 +182,9 @@ public class LogCommandTests
     // --since prints every entry back to then, with no limit, and the CLI stops reading at the first
     // entry older than that, since the API returns the newest first (portal
     // ActivityLogRepository.cs:43). The last 24 hours hold 250 entries, more than the default 100;
-    // page 1 holds the first older entry, and page 2 is never read. Example 33.
+    // page 1 holds the first older entry, and page 2 is never read. --since alone sets no limit, so
+    // the pages are of 200, the most the API returns per page ("Details"), and a CLI that keeps the
+    // default limit's page of 100 asks for per_page 100. Example 33.
     [Test]
     public async Task Log_since_a_duration_prints_every_entry_since_then_and_stops_reading_at_the_first_older_entry()
     {
@@ -166,6 +201,7 @@ public class LogCommandTests
         {
             Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo(Messages(0, 250)));
             Assert.That(run.PagesRequested(LogsPath), Is.EqualTo("0,1"));
+            Assert.That(run.RequestsTo("GET", LogsPath).Select(request => request.QueryValue("per_page")), Is.Not.Empty.And.All.EqualTo("200"));
         });
     }
 
@@ -372,13 +408,40 @@ public class LogCommandTests
         });
     }
 
+    // A clock time given to --since names its latest occurrence at or before now
+    // (proposed-cli-surface.md "Command options"). In the hour repeated when the clocks go back, a
+    // clock time happens twice, and the latest of the two at or before now is the one meant. The
+    // clock reads the first 01:45 of 25 October 2026 in TestData.DaylightSavingZone (00:45 UTC); 01:30
+    // has happened once that night, at 00:30 UTC, so --since starts 15 minutes back and stops at the
+    // entry from 16 minutes ago. A CLI that reads the time as standard time alone takes 01:30 UTC,
+    // which is after now, and reads back to 01:30 the day before.
+    [Test]
+    public async Task Log_since_a_clock_time_in_the_repeated_hour_starts_at_its_latest_occurrence_at_or_before_now()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(new DateTimeOffset(2026, 10, 25, 0, 45, 0, TimeSpan.Zero), TestData.DaylightSavingZone);
+        string[] entries =
+        [
+            Entry("10 minutes ago", new DateTime(2026, 10, 25, 0, 35, 0, DateTimeKind.Utc)),
+            Entry("14 minutes ago", new DateTime(2026, 10, 25, 0, 31, 0, DateTimeKind.Utc)),
+            Entry("16 minutes ago", new DateTime(2026, 10, 25, 0, 29, 0, DateTimeKind.Utc)),
+            Entry("the day before", new DateTime(2026, 10, 24, 1, 0, 0, DateTimeKind.Utc)),
+        ];
+        run.StubPages(LogsPath, 200, entries);
+
+        var result = await run.RunAsync("log", "--since", "01:30");
+
+        var items = CliAssert.List(result, "log");
+        Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo("10 minutes ago,14 minutes ago"));
+    }
+
     // An entry's time is the instant the API wrote, whatever form it is written in. The API writes
     // UTC with Z (portal Enclave.ActivityLog/ActivityLogSink.cs:100 stores ev.Timestamp.UtcDateTime,
     // and Enclave.Api.Scaffolding/FractionalMillisecondTrimmingDateTimeConverter.cs writes it by its
     // kind); a time with no zone is UTC too. System.Text.Json reads a time with another offset into
     // local time in the machine's zone, DateTimeOffset.LocalDateTime (dotnet/runtime release/10.0,
     // System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and the instant it
-    // names is still the one written. The clock reads 20:00 UTC on 14 July 2030 and CliHost.Time's
+    // names is the one written. The clock reads 20:00 UTC on 14 July 2030 and CliHost.Time's
     // zone is UTC+05:30: --since 1h keeps the entry from 19:30 UTC and stops at the one from 18:30
     // UTC. A CLI that read a time with no zone in CliHost's zone takes both as older than an hour.
     // The date is in July so that a machine in a European zone, which is UTC+0 in winter, is not at

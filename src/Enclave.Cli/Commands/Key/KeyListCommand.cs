@@ -15,8 +15,8 @@ internal static class KeyListCommand
     {
         var verb = new CliVerb("list", "List the enrolment keys, with their secrets, reading every page.", CommandScope.Organisation);
 
-        var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
-        var tags = verb.Add(CliOptions.TagList("--tag", "Keys with every tag given."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
+        var tags = verb.Add(CliOptions.TagFilter("--tag", "Keys with every tag given."));
 
         // The values each flag stands for are the API's search values ("Filters"): the approval key
         // reads "gated" as Manual and matches nothing for "manual", and the state key reads "nouses"

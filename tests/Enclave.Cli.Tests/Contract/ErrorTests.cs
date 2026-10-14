@@ -1,5 +1,5 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
-using Enclave.Cli.Tests.Safety;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -34,7 +34,7 @@ public class ErrorTests
     private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2030, 3, 14, 20, 0, 0, TimeSpan.Zero), TestData.LocalZone);
 
     // The items are given by ID, or are an invite's email address, which the API cancels by
-    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api 1.1.0), so no lookup comes first
+    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api 1.2.0), so no lookup comes first
     // and the request that fails is the command's own ("Several IDs": single-ID commands are show, update,
     // --for and --until, dns delete-zone, org remove-user and org cancel-invite).
     public static IEnumerable<TestCaseData> SingleIdCommands()
@@ -57,10 +57,10 @@ public class ErrorTests
     // ("Options on every command"), and two options that contradict each other ("Details").
     public static IEnumerable<TestCaseData> BadArguments()
     {
-        yield return Arguments("a bad ID", "system", "show", "../systems/ABCDE");
-        yield return Arguments("a value outside the set", "system", "list", "--sort", "newest");
-        yield return Arguments("--for with --until", "policy", "enable", "--id", "42", "--for", "8h", "--until", "2099-01-01T00:00:00Z");
-        yield return Arguments("--id with no IDs", "policy", "delete", "--id", ",");
+        yield return CommandCases.Described("a bad ID", "system", "show", "../systems/ABCDE");
+        yield return CommandCases.Described("a value outside the set", "system", "list", "--sort", "newest");
+        yield return CommandCases.Described("--for with --until", "policy", "enable", "--id", "42", "--for", "8h", "--until", "2099-01-01T00:00:00Z");
+        yield return CommandCases.Described("--id with no IDs", "policy", "delete", "--id", ",");
     }
 
     // Each bulk command whose IDs go after --id, given an empty value, a lone comma, and commas
@@ -72,10 +72,12 @@ public class ErrorTests
                 .Select(value => new TestCaseData(command, value).SetArgDisplayNames(command.Name, $"--id \"{value}\"")));
 
     // Enclave.Sdk.Api throws EnclaveApiException for application/problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0). The error carries the
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0). The error carries the
     // problem's status, title and detail through, so the caller sees what the API said. A list is
     // not a single-ID command, so a 404 on one is an API error like any other status the table does
-    // not name.
+    // not name. The error object holds exactly code, status, title, detail and errors (AGENTS.md
+    // "CLI contract"), and errors is an object when the problem has no field errors, as here, so a
+    // caller reads every error in one shape.
     [TestCase(401, "token_invalid")]
     [TestCase(403, "forbidden")]
     [TestCase(429, "transient")]
@@ -99,7 +101,9 @@ public class ErrorTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(result.StderrJson[0]), Is.EqualTo(ErrorOnly));
-            Assert.That(JsonRead.PropertyNames(error), Is.SubsetOf(ErrorFields));
+            Assert.That(JsonRead.PropertyNames(error), Is.EquivalentTo(ErrorFields));
+            Assert.That(error.GetProperty("errors").ValueKind, Is.EqualTo(JsonValueKind.Object));
+            Assert.That(JsonRead.PropertyNames(error.GetProperty("errors")), Is.Empty);
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(status));
             Assert.That(error.GetProperty("title").GetString(), Is.EqualTo("Problem title"));
             Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo("Problem detail"));
@@ -128,7 +132,7 @@ public class ErrorTests
     }
 
     // Validation failures list the offending fields in the problem's "errors" (an RFC 9457
-    // extension member, which Enclave.Sdk.Api 1.1.0 reads into ProblemDetails.Errors). The CLI
+    // extension member, which Enclave.Sdk.Api 1.2.0 reads into ProblemDetails.Errors). The CLI
     // passes them through with their keys unchanged, so an agent can fix the named field.
     [Test]
     public async Task A_validation_problem_exits_1_with_api_error_carrying_the_errors_through()
@@ -161,7 +165,7 @@ public class ErrorTests
     }
 
     // A response that is not problem+json reaches the CLI as HttpRequestException with the status
-    // code (Enclave.Sdk.Api 1.1.0 throws EnclaveApiException only for problem+json,
+    // code (Enclave.Sdk.Api 1.2.0 throws EnclaveApiException only for problem+json,
     // ProblemDetailsHttpMessageHandler.cs:29). A proxy in front of the API answers this way, and the
     // CLI maps these statuses to the same codes ("Errors and exit codes").
     [TestCase(401, "text/plain", "Unauthorized", "token_invalid")]
@@ -209,6 +213,33 @@ public class ErrorTests
         var result = await run.RunAsync("system", "list");
 
         CliAssert.Failed(result, "transient");
+    }
+
+    // A timeout is transient: the API may answer the next request in time ("Errors and exit
+    // codes"). When HttpClient.Timeout elapses, HttpClient throws a TaskCanceledException whose
+    // inner exception is a TimeoutException (.NET 5 and later,
+    // https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.timeout). A fake API on
+    // loopback cannot keep HttpClient waiting 100 seconds, so the network beneath the CLI's handler
+    // throws that exception for the request, and the fake API receives nothing. detail is the
+    // timeout's own, which sets this failure apart from the other transient ones.
+    [Test]
+    public async Task A_request_that_times_out_exits_6_with_transient()
+    {
+        using var run = CliRun.Start();
+        var network = new FailingNetwork(() => new TaskCanceledException(
+            "The request was canceled due to the configured HttpClient.Timeout of 100 seconds elapsing.",
+            new TimeoutException("The operation was canceled.")));
+        run.NetworkHandler = network.CreateHandler;
+
+        var result = await run.RunAsync("system", "list");
+
+        var error = CliAssert.Failed(result, "transient");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo("The Enclave API did not answer in time."));
+            Assert.That(network.Calls, Is.EqualTo(new[] { $"GET {SystemsPath}" }));
+            Assert.That(run.Requests, Is.Empty);
+        });
     }
 
     // A connection that fails while the response body is read is a network failure as much as one
@@ -323,7 +354,7 @@ public class ErrorTests
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.StubPages(SystemsPath, 200, ApiJson.System("ABCDE"));
 
         var result = await run.RunAsync("system", "list");
@@ -331,9 +362,6 @@ public class ErrorTests
         CliAssert.Failed(result, "no_org");
         Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
     }
-
-    private static TestCaseData Arguments(string description, params string[] args) =>
-        new TestCaseData(new object[] { args }).SetArgDisplayNames(description);
 
     private static TestCaseData SingleId(string command, string method, string pathSuffix) =>
         new TestCaseData(command, method, TestData.OrgPath(pathSuffix)).SetArgDisplayNames(command);

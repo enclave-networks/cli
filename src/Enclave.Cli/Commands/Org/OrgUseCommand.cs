@@ -19,6 +19,7 @@ internal static class OrgUseCommand
         var name = verb.Add(CliArguments.OptionalText("name", "The organisation's name, matched whole and ignoring case."));
         var id = verb.Add(CliOptions.Id("--id", "The organisation's ID.", IdFormats.Guid, "orgId"));
         verb.ExactlyOne(name, id);
+        OrganisationResolver.RefuseBlankName(verb, name);
 
         verb.SetHandler(async context =>
         {

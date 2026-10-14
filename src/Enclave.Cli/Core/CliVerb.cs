@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Enclave.Cli.Context;
 
 namespace Enclave.Cli.Core;
 
@@ -27,6 +28,7 @@ internal sealed class CliVerb : Command
             OrgOption = Common(CliOptions.Text("--org", "The organisation to act in, by name. Overrides ENCLAVE_ORG, ENCLAVE_ORG_ID and the default `org use` saved.", "name"));
             OrgIdOption = Common(CliOptions.Id("--org-id", "The organisation to act in, by ID. Overrides ENCLAVE_ORG, ENCLAVE_ORG_ID and the default `org use` saved.", IdFormats.Guid));
             Exclusive(OrgOption, OrgIdOption);
+            OrganisationResolver.RefuseBlankName(this, OrgOption);
         }
 
         if (scope.HasFlag(CommandScope.Partner))

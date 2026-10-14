@@ -8,7 +8,6 @@ using System.Text.Json.Serialization;
 using Enclave.Api.Modules.AccountManagement.PublicAccount.Models;
 using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Scaffolding.Pagination.Models;
-using Enclave.Cli.Context;
 using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 using Enclave.Sdk.Api;
@@ -22,17 +21,18 @@ using static System.FormattableString;
 namespace Enclave.Cli.Tests.Support;
 
 // The tests in this project trust three things this fixture proves: that every ApiJson body is JSON
-// Enclave.Sdk.Api 1.1.0 reads into the model it names, field for field, that a CliRun confines the
-// CLI to its own environment, home directory and fake APIs, and that the stubs, the request records
-// and the CliAssert checks behave as their documentation says. A check that passed everything would
-// let every test that relies on it pass, so each check is shown failing on the outputs it rejects.
+// Enclave.Sdk.Api 1.2.0 reads into the model it names, field for field, that a CliRun confines the
+// CLI to its own environment, home directory, stdin, network and fake APIs, and that the stubs, the
+// request records and the CliAssert and TokenAssert checks behave as their documentation says. A
+// check that passed everything would let every test that relies on it pass, so each check is shown
+// failing on the outputs it rejects.
 public class HarnessTests
 {
     private const string SystemId = "ABCDE";
 
     private const int ResourceId = 7;
 
-    // The options Enclave.Sdk.Api 1.1.0 reads and writes JSON with (Constants.JsonSerializerOptions,
+    // The options Enclave.Sdk.Api 1.2.0 reads and writes JSON with (Constants.JsonSerializerOptions,
     // which is internal to the package): the gateway priority converter goes ahead of the enum
     // converter, since System.Text.Json uses the first converter that can convert a type.
     private static readonly JsonSerializerOptions SdkJsonOptions = new()
@@ -41,7 +41,7 @@ public class HarnessTests
         Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
     };
 
-    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api 1.1.0).
+    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api 1.2.0).
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static IEnumerable<TestCaseData> ResourceBodies()
@@ -213,7 +213,7 @@ public class HarnessTests
             ids.Add(item.SystemId);
         }
 
-        var json = Parse(body);
+        var json = JsonRead.Parse(body);
 
         Assert.Multiple(() =>
         {
@@ -258,7 +258,7 @@ public class HarnessTests
         {
             Assert.That(orgs.Select(org => org.OrgId), Is.EqualTo(new[] { OrganisationGuid.FromGuid(TestData.OrgId), OrganisationGuid.FromGuid(TestData.OtherOrgId) }));
             Assert.That(orgs.Select(org => org.OrgName), Is.EqualTo(new[] { TestData.OrgName, TestData.OtherOrgName }));
-            AssertSameJson(Write(orgs), Parse(body).GetProperty("orgs"));
+            AssertSameJson(Write(orgs), JsonRead.Parse(body).GetProperty("orgs"));
         });
     }
 
@@ -289,7 +289,7 @@ public class HarnessTests
         {
             Assert.That(users.Single().Id, Is.EqualTo(AccountGuid.FromGuid(userId)));
             Assert.That(users.Single().EmailAddress, Is.EqualTo("ops@acme.example"));
-            AssertSameJson(Write(users), Parse(body).GetProperty("users"));
+            AssertSameJson(Write(users), JsonRead.Parse(body).GetProperty("users"));
         });
     }
 
@@ -305,7 +305,7 @@ public class HarnessTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", invites.Select(invite => invite.EmailAddress)), Is.EqualTo("new@acme.example,other@acme.example"));
-            AssertSameJson(Write(invites), Parse(body).GetProperty("invites"));
+            AssertSameJson(Write(invites), JsonRead.Parse(body).GetProperty("invites"));
         });
     }
 
@@ -448,7 +448,7 @@ public class HarnessTests
 
         var response = await ConnectOrganisation(run).EnrolledSystems.GetSystemsAsync();
         var ids = await SystemIdsAsync(response);
-        var json = Parse(body);
+        var json = JsonRead.Parse(body);
 
         Assert.Multiple(() =>
         {
@@ -656,7 +656,7 @@ public class HarnessTests
 
     // A proxy in front of the API answers with its own error page, which Enclave.Sdk.Api passes on as
     // HttpRequestException with the status (it reads problem details from application/problem+json
-    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.1.0).
+    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0).
     [Test]
     public void StubRaw_reaches_the_sdk_as_an_http_error_without_problem_details()
     {
@@ -723,12 +723,13 @@ public class HarnessTests
         run.Environment["ENCLAVE_EXTRA"] = "extra";
         run.Environment["ENCLAVE_ORG_ID"] = null;
         run.StdinText = "line one\nline two\n";
-        run.StdinIsTerminal = true;
 
         Environment.SetEnvironmentVariable(ProbeName, "from-process");
         try
         {
             var host = run.CreateHost();
+            run.StdinIsTerminal = true;
+            var terminalHost = run.CreateHost();
 
             Assert.Multiple(() =>
             {
@@ -743,9 +744,13 @@ public class HarnessTests
                 Assert.That(host.Files, Is.SameAs(run.Files));
                 Assert.That(run.Files.Paths, Is.Empty);
                 Assert.That(host.Stdin.ReadToEnd(), Is.EqualTo("line one\nline two\n"));
-                Assert.That(host.StdinIsTerminal, Is.True);
+                Assert.That(host.StdinIsTerminal, Is.False);
+                Assert.That(terminalHost.StdinIsTerminal, Is.True);
+                Assert.That(terminalHost.Stdin, Is.InstanceOf<TerminalStdin>());
                 Assert.That(host.DefaultApiUrl, Is.EqualTo(run.ApiUrl));
                 Assert.That(host.DefaultApiUrl.Host, Is.EqualTo("127.0.0.1"));
+                Assert.That(host.DefaultPartnerApiUrl, Is.EqualTo(run.PartnerApiUrl));
+                Assert.That(host.CreateNetworkHandler, Is.Null);
             });
         }
         finally
@@ -757,23 +762,19 @@ public class HarnessTests
     // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). A run gives the
     // CLI a second fake's URL as the partner API address, on loopback at another port, so a partner
     // call can never reach the live partner API, and a partner call sent to the main API's address
-    // shows. The client is the one ApiAccess builds from the run's host, which every command's calls
-    // go through, so the call stands for any partner command's.
+    // shows. A partner command run through CliRun sends its call there, with the run's token.
     [Test]
     public async Task Partner_api_calls_of_a_run_reach_its_fake_partner_api_with_the_token()
     {
         using var run = CliRun.Start();
         var customers = TestData.PartnerPath("customers");
         run.Stub("GET", customers, json: ApiJson.Page());
-        var host = run.CreateHost();
-        using var network = new HttpClientHandler();
 
-        var partner = ApiAccess.Resolve(host).CreateClient(network).CreatePartnerClient(PartnerId.FromGuid(TestData.PartnerId));
-        await partner.Customers.GetCustomersAsync();
+        var result = await run.RunAsync("partner", "customer", "list", "--partner-id", TestData.PartnerId.ToString());
 
+        CliAssert.List(result, "customer");
         Assert.Multiple(() =>
         {
-            Assert.That(host.DefaultPartnerApiUrl, Is.EqualTo(run.PartnerApiUrl));
             Assert.That(run.PartnerApiUrl, Is.Not.EqualTo(run.ApiUrl));
             Assert.That(run.PartnerApiUrl.Host, Is.EqualTo("127.0.0.1"));
             Assert.That(run.PartnerApiRequests.Select(request => request.Call), Is.EqualTo(new[] { $"GET {customers}" }));
@@ -782,8 +783,75 @@ public class HarnessTests
         });
     }
 
+    // A run that leaves the partner API at Enclave.Sdk.Api's default would send partner calls to the
+    // live partner API, so the host is refused unless the run also replaces the network.
+    [Test]
+    public void CreateHost_refuses_a_partner_api_address_other_than_the_fake_without_a_network_handler()
+    {
+        using var run = CliRun.Start();
+        run.DefaultPartnerApiUrl = null;
+
+        Assert.That(() => run.CreateHost(), Throws.InvalidOperationException);
+
+        run.NetworkHandler = new FailingNetwork(() => new HttpRequestException("No network in tests.")).CreateHandler;
+
+        Assert.That(run.CreateHost().DefaultPartnerApiUrl, Is.Null);
+    }
+
+    // Every read a TextReader offers must fail on a terminal, so no way the CLI reads stdin gets
+    // past it, and RunAsync must fail the run after one, whatever the CLI did with the exception. A
+    // read made here, before the run, stands in for one the CLI makes.
+    [Test]
+    public async Task Stdin_on_a_terminal_fails_every_read_and_RunAsync_fails_the_run_after_one()
+    {
+        using var run = CliRun.Start();
+        run.StdinText = "some text";
+        run.StdinIsTerminal = true;
+        var stdin = run.CreateHost().Stdin;
+        var buffer = new char[4];
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => stdin.Read(), Throws.InvalidOperationException);
+            Assert.That(() => stdin.Peek(), Throws.InvalidOperationException);
+            Assert.That(() => stdin.Read(buffer, 0, buffer.Length), Throws.InvalidOperationException);
+            Assert.That(() => stdin.Read(buffer.AsSpan()), Throws.InvalidOperationException);
+            Assert.That(() => stdin.ReadBlock(buffer, 0, buffer.Length), Throws.InvalidOperationException);
+            Assert.That(() => stdin.ReadLine(), Throws.InvalidOperationException);
+            Assert.That(() => stdin.ReadToEnd(), Throws.InvalidOperationException);
+            Assert.That(async () => await stdin.ReadAsync(buffer.AsMemory()), Throws.InvalidOperationException);
+            Assert.That(async () => await stdin.ReadLineAsync(CancellationToken.None), Throws.InvalidOperationException);
+            Assert.That(async () => await stdin.ReadToEndAsync(CancellationToken.None), Throws.InvalidOperationException);
+        });
+
+        Assert.That(async () => await run.RunAsync("--version"), Throws.TypeOf<AssertionException>());
+    }
+
+    // A run that never reads a terminal stdin passes, so the check fails only a run that read it.
+    [Test]
+    public async Task RunAsync_passes_a_run_that_does_not_read_stdin_on_a_terminal()
+    {
+        using var run = CliRun.Start();
+        run.StdinIsTerminal = true;
+
+        var result = await run.RunAsync("--version");
+
+        Assert.That(result.ExitCode, Is.Zero, result.ToString());
+    }
+
+    // The checks the token tests rely on: the token on either stream fails it, and output without
+    // the token passes.
+    [Test]
+    public void TokenAssert_Absent_fails_the_test_when_the_token_is_on_stdout_or_stderr()
+    {
+        Assert.That(() => TokenAssert.Absent(new CliResult(0, "{}", "{\"verbose\":\"GET /org\"}\n")), Throws.Nothing);
+
+        AssertFails(() => TokenAssert.Absent(new CliResult(0, $"{{\"token\":\"{TestData.Token}\"}}", string.Empty)));
+        AssertFails(() => TokenAssert.Absent(new CliResult(1, string.Empty, $"{{\"verbose\":\"Bearer {TestData.Token}\"}}\n")));
+    }
+
     // A stub goes to the fake that serves its path, and each fake answers the other API's routes
-    // with 421 Misdirected Request, which Enclave.Sdk.Api 1.1.0 raises as EnclaveApiException for a
+    // with 421 Misdirected Request, which Enclave.Sdk.Api 1.2.0 raises as EnclaveApiException for a
     // problem details body. The client with the addresses swapped sends each call to the wrong fake;
     // the client with them right shows both stubs exist.
     [Test]
@@ -1121,7 +1189,7 @@ public class HarnessTests
 
         var ids = TestData.Ids(kind, 3);
         var json = CliList.WithIds(kind, ids);
-        var list = Parse(json);
+        var list = JsonRead.Parse(json);
         var items = list.GetProperty("items").EnumerateArray().ToArray();
 
         Assert.Multiple(() =>
@@ -1142,7 +1210,7 @@ public class HarnessTests
     [Test]
     public void CliList_Of_wraps_the_items_given_with_their_count_as_total()
     {
-        var list = Parse(CliList.Of("log", ApiJson.Log("one"), ApiJson.Log("two")));
+        var list = JsonRead.Parse(CliList.Of("log", ApiJson.Log("one"), ApiJson.Log("two")));
 
         Assert.Multiple(() =>
         {
@@ -1195,7 +1263,7 @@ public class HarnessTests
 
     private static EnclaveClient Connect(CliRun run) => Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
 
-    // The partner API address is always given: left out, Enclave.Sdk.Api 1.1.0 uses production's
+    // The partner API address is always given: left out, Enclave.Sdk.Api 1.2.0 uses production's
     // (EnclaveClientOptions.PartnerApiBaseUrl).
     private static EnclaveClient Connect(string baseUrl, string partnerApiBaseUrl) => new(new EnclaveClientOptions
     {
@@ -1231,7 +1299,7 @@ public class HarnessTests
     // item and the single resource, so a property only one of them has is allowed.
     private static async Task AssertBodyMatchesModelsAsync(string body, IReadOnlyList<object> models)
     {
-        var expected = Parse(body);
+        var expected = JsonRead.Parse(body);
         var written = new HashSet<string>(StringComparer.Ordinal);
         var mismatches = new List<string>();
 
@@ -1312,12 +1380,6 @@ public class HarnessTests
     }
 
     private static JsonElement Write<T>(T value) => JsonSerializer.SerializeToElement(value, SdkJsonOptions);
-
-    private static JsonElement Parse(string json)
-    {
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.Clone();
-    }
 
     private static TestCaseData IdCase(string kind, string field, JsonValueKind valueKind) =>
         new TestCaseData(kind, field, valueKind).SetArgDisplayNames(kind);

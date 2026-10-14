@@ -272,7 +272,7 @@ public class OrgContextTests
         var policies = TestData.OrgPath("policies");
         var disable = TestData.OrgPath("policies/disable");
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        BothOrgs.Stub(run);
         run.StubPages(policies, 200, ApiJson.Policy(42, "web to db"), ApiJson.Policy(7, "admins"));
         run.Stub("PUT", disable, json: ApiJson.Bulk("policiesUpdated", 1));
         await SaveDefaultAsync(run, TestData.OtherOrgId);
@@ -293,7 +293,7 @@ public class OrgContextTests
         using var run = CliRun.Start();
         var disable = TestData.OrgPath("policies/disable");
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        BothOrgs.Stub(run);
         run.Stub("PUT", disable, json: ApiJson.Bulk("policiesUpdated", 1));
         await SaveDefaultAsync(run, TestData.OtherOrgId);
         var before = run.Requests.Count;
@@ -388,13 +388,13 @@ public class OrgContextTests
         });
     }
 
-    // A name that matches nothing exits 2 invalid_argument with no candidates ("Errors and exit
-    // codes"). no_org is for an organisation not chosen at all, so a name that was given and found
-    // nothing is not reported as no_org. org use saves nothing.
+    // A name that matches nothing exits 2 invalid_argument with an empty list of candidates ("Errors
+    // and exit codes"). no_org is for an organisation not chosen at all, so a name that was given
+    // and found nothing is not reported as no_org. org use saves nothing.
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
     [TestCase("org use")]
-    public async Task An_organisation_name_matching_no_organisation_exits_2_with_no_candidates(string source)
+    public async Task An_organisation_name_matching_no_organisation_exits_2_with_an_empty_list_of_candidates(string source)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_ORG_ID");
@@ -405,10 +405,39 @@ public class OrgContextTests
         var error = CliAssert.Failed(result, "invalid_argument");
         Assert.Multiple(() =>
         {
-            Assert.That(HasNoCandidates(error), Is.True, error.ToString());
+            Assert.That(HasEmptyCandidates(error), Is.True, error.ToString());
             Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
             Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
         });
+    }
+
+    // An empty or blank organisation name names no organisation, so --org and org use's name given
+    // one exit 2 invalid_argument with the other argument checks, keyed by the option or argument,
+    // and make no lookup ("Errors and exit codes": arguments, then the token, then the
+    // organisation). ENCLAVE_ORG_ID names Acme, so a CLI that read --org "" as no --org acts on
+    // Acme, and one that passed the name on looks it up. org use saves nothing. The corrected run
+    // shows the command takes a name there.
+    [TestCase("--org", "")]
+    [TestCase("--org", "   ")]
+    [TestCase("org use", "")]
+    [TestCase("org use", " \t ")]
+    public async Task A_blank_organisation_name_exits_2_invalid_argument_before_the_lookup(string source, string name)
+    {
+        using var run = CliRun.Start();
+        StubBothOrgsAndTheirSystems(run);
+        var key = source == "org use" ? "name" : "--org";
+
+        var result = await RunWithOrgNameAsync(run, source, name);
+
+        CliAssert.Rejected(run, result);
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(key), result.ToString());
+            Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
+        });
+
+        CliAssert.Succeeded(await RunWithOrgNameAsync(run, source, TestData.OtherOrgName));
+        Assert.That(run.Calls()[0], Is.EqualTo(OrgLookup));
     }
 
     // --org takes a name and the option decides how a value is read ("Shape and naming": the CLI
@@ -691,12 +720,9 @@ public class OrgContextTests
         });
     }
 
-    private static string BothOrgs() =>
-        ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName));
-
     private static void StubBothOrgsAndTheirSystems(CliRun run)
     {
-        run.Stub("GET", "/account/orgs", json: BothOrgs());
+        BothOrgs.Stub(run);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
         run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
     }
@@ -739,12 +765,13 @@ public class OrgContextTests
     private static string Candidate(JsonElement candidate) =>
         Pair(Guid.Parse(JsonAssert.Property(candidate, "id").GetString()!, CultureInfo.InvariantCulture), JsonAssert.Property(candidate, "name").GetString()!);
 
-    // For a name that matches nothing the error carries no candidates ("Errors and exit codes": "for
-    // no match, nothing"), which the CLI can write as no property, null, or an empty list.
-    private static bool HasNoCandidates(JsonElement error) =>
-        !error.TryGetProperty("candidates", out var candidates)
-        || candidates.ValueKind == JsonValueKind.Null
-        || (candidates.ValueKind == JsonValueKind.Array && candidates.GetArrayLength() == 0);
+    // For a name that matches nothing the error carries candidates as an empty list ("Errors and
+    // exit codes": "the items that matched, or an empty list for no match"), so a caller reads one
+    // shape whatever the match. No property, or null, is another shape.
+    private static bool HasEmptyCandidates(JsonElement error) =>
+        error.TryGetProperty("candidates", out var candidates)
+        && candidates.ValueKind == JsonValueKind.Array
+        && candidates.GetArrayLength() == 0;
 
     private static string Pairs(params (Guid Id, string Name)[] orgs) =>
         string.Join(", ", orgs.Select(org => Pair(org.Id, org.Name)).Order(StringComparer.Ordinal));

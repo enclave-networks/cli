@@ -15,6 +15,9 @@ namespace Enclave.Cli.Core;
 // the parser kept.
 internal static class ParseProblems
 {
+    // The errors key of an unknown option reported without its name.
+    private const string UnnamedOptionKey = "options";
+
     /// <summary>
     /// The error for everything that did not parse, with detail naming the first problem and
     /// errors listing each, or null when the command line parsed.
@@ -69,11 +72,44 @@ internal static class ParseProblems
     }
 
     // A value given to an unknown option could be a token passed by mistake, so no message repeats
-    // a value: an unknown option is named by the part before any "=", a word that follows an
-    // unknown option is taken as its value and left out, and an unknown command or extra argument
-    // is described by its position (proposed-cli-surface.md "Errors and exit codes"). The
-    // trade-off is a less specific message for a mistyped command word, which the suggestion makes
-    // up for.
+    // any part of a value, or anything joined to an option's name (proposed-cli-surface.md "Errors
+    // and exit codes"). An unknown option is named only when what is printed has the form the
+    // CLI's own options have: "--" and lower-case words joined by hyphens, or "-" and one letter or
+    // digit. Every option of the CLI is written that way, apart from help's -?, /h and /?
+    // (ParseErrorTests checks it), so a mistyped option written as the CLI's options are is named.
+    // A word that follows an unknown option is taken as its value and left out unless the option
+    // carries a value of its own, and an unknown command or extra argument is described by its
+    // position.
+    //
+    //   token                        named as   the word after it
+    //   ---------------------------  ---------  -------------------
+    //   --bogus                      --bogus    its value, left out
+    //   --bogus=V  --bogus:V         --bogus    reported on its own
+    //   "--bogus V" (one argument)   --bogus    reported on its own
+    //   -b                           -b         its value, left out
+    //   -bV                          -b         reported on its own
+    //   --Bogus  --bogusV9           not named  its value, left out
+    //   --Bogus=V                    not named  reported on its own
+    //
+    // A long name ends at "=" or ":", where System.CommandLine splits a known option from its value
+    // (Parsing/StringExtensions.cs, TrySplitIntoSubtokens, version 2.0.12), or at white space, which
+    // one argument holds when a script quotes an option and its value together. Anything else after
+    // the name, such as a token glued to it, leaves the option unnamed, with no suggestion, and the
+    // message points to `commands` for the options the command takes.
+    //
+    // The rule gives up some cases. A value glued to a name with nothing between them reads as part
+    // of the name when the value is itself lower-case letters and hyphens, since nothing tells
+    // "--notesreviewed" from a mistyped option; a personal access token is 63 characters of
+    // Base58, which holds digits and capitals as well as lower-case letters (portal
+    // src/Enclave.Accounts.Data/Stores/AccessTokenStore.cs:102-135, StoreReferenceTokenAsync), so
+    // one glued to a name is printed only when every character of it is a lower-case letter. A
+    // single-dash token shows the character after the dash, which is one character of a value
+    // written straight after a dash, too little to give a token away. A word that starts with "-"
+    // after an unknown option is read as another option, so such a value is named when it has an
+    // option's form; in exchange two unknown options in a row (`--bogus --wrong`) are both
+    // reported. An option written with a capital or a digit gets no name and no suggestion, which
+    // the pointer to `commands` makes up for, as the suggestion does for the less specific message
+    // a mistyped command word gets.
     private static void AddUnmatchedTokens(ParseResult parseResult, List<(string Key, string Message)> problems)
     {
         var commandResult = parseResult.CommandResult;
@@ -86,12 +122,20 @@ internal static class ParseProblems
         {
             if (token.Length > 1 && token[0] == '-')
             {
-                var name = token.Split('=', 2)[0];
-                var suggestion = Suggestions.Closest(name, OptionNames(commandResult));
-                var message = $"`{commandName}` has no option {name}.{DidYouMean(suggestion)}";
+                var (name, carriesValue) = ReadOption(token);
 
-                problems.Add((name, message));
-                followsUnknownOption = !token.Contains('=', StringComparison.Ordinal);
+                if (name is null)
+                {
+                    var commands = commandResult.Parent is null ? $"{CliRootCommand.ProgramName} commands" : $"{CliRootCommand.ProgramName} commands {commandName}";
+                    problems.Add((UnnamedOptionKey, $"`{commandName}` was given an option it does not have, which is not repeated here because it is not written as an option name: \"--\" and lower-case words joined by hyphens. Run `{commands}` for the options it takes."));
+                }
+                else
+                {
+                    var suggestion = Suggestions.Closest(name, OptionNames(commandResult));
+                    problems.Add((name, $"`{commandName}` has no option {name}.{DidYouMean(suggestion)}"));
+                }
+
+                followsUnknownOption = !carriesValue;
                 continue;
             }
 
@@ -116,6 +160,28 @@ internal static class ParseProblems
 
             problems.Add(("arguments", $"`{commandName}` was given more arguments than it takes."));
         }
+    }
+
+    // The name an unknown option is reported by, or null when the token is not written as an option
+    // name, and whether the token carries a value of its own; the table above AddUnmatchedTokens
+    // gives the cases.
+    private static (string? Name, bool CarriesValue) ReadOption(string token)
+    {
+        if (token[1] != '-')
+        {
+            return (char.IsAsciiLetterOrDigit(token[1]) ? token[..2] : null, token.Length > 2);
+        }
+
+        var end = 2;
+        while (end < token.Length && token[end] is not ('=' or ':') && !char.IsWhiteSpace(token[end]))
+        {
+            end++;
+        }
+
+        var name = token[..end];
+        var isOptionName = name.Length > 2 && name[2..].Split('-').All(word => word.Length > 0 && word.All(char.IsAsciiLetterLower));
+
+        return (isOptionName ? name : null, end < token.Length);
     }
 
     private static string DidYouMean(string? suggestion) => suggestion is null ? string.Empty : $" Did you mean {suggestion}?";

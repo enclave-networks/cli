@@ -10,11 +10,9 @@ namespace Enclave.Cli.Tests.Safety;
 /// </summary>
 public class OptionDecidesParsingTests
 {
-    private static readonly Guid AccountId = new("5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25");
-
     // 12 is the ID of one key and the description of another, so the systems request shows which
     // reading the CLI took. --key-id uses the API's enrolment_key parameter (proposed-cli-surface.md
-    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api 1.1.0).
+    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api 1.2.0).
     [Test]
     public async Task Key_id_option_reads_its_value_as_a_key_id_and_makes_no_lookup()
     {
@@ -93,7 +91,7 @@ public class OptionDecidesParsingTests
     {
         using var run = CliRun.Start();
         var otherOrgDisable = TestData.OtherOrgPath("systems/disable");
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.StubBulk("PUT", otherOrgDisable, "systemsUpdated", 1);
 
         await CliAssert.RejectedThenAcceptedAsync(
@@ -113,7 +111,7 @@ public class OptionDecidesParsingTests
     public async Task Org_option_reads_its_value_as_a_name_even_when_it_is_a_guid()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
         run.StubBulk("PUT", TestData.OtherOrgPath("systems/disable"), "systemsUpdated", 1);
 
@@ -135,11 +133,12 @@ public class OptionDecidesParsingTests
     public async Task Org_remove_user_argument_is_read_as_an_email_address_even_when_it_is_a_guid()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("users"), 200, ApiJson.Users((AccountId, "sam@example.com")));
-        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:N}"), json: ApiJson.User(AccountId, "sam@example.com"));
-        run.Stub("DELETE", TestData.OrgPath($"users/{AccountId:D}"), json: ApiJson.User(AccountId, "sam@example.com"));
+        var accountId = TestData.PartnerStaffAccountGuid;
+        run.Stub("GET", TestData.OrgPath("users"), 200, ApiJson.Users((accountId, "sam@example.com")));
+        run.Stub("DELETE", TestData.OrgPath($"users/{accountId:N}"), json: ApiJson.User(accountId, "sam@example.com"));
+        run.Stub("DELETE", TestData.OrgPath($"users/{accountId:D}"), json: ApiJson.User(accountId, "sam@example.com"));
 
-        var rejected = await run.RunAsync("org", "remove-user", AccountId.ToString());
+        var rejected = await run.RunAsync("org", "remove-user", TestData.PartnerStaffAccountId);
 
         var error = CliAssert.Failed(rejected, "invalid_argument");
         Assert.Multiple(() =>
@@ -170,10 +169,10 @@ public class OptionDecidesParsingTests
 
         CliAssert.Rejected(run, rejected);
 
-        var accepted = await run.RunAsync("partner", "customer", verb, "Globex Ltd", "--user-id", AccountId.ToString(), "--partner-id", partner);
+        var accepted = await run.RunAsync("partner", "customer", verb, "Globex Ltd", "--user-id", TestData.PartnerStaffAccountId, "--partner-id", partner);
 
         PartnerApiFake.AssertSentToThePartnerApi(run, accepted);
-        Assert.That(run.Calls().Last(), Is.EqualTo($"{method} {TestData.CustomerAdminPath(TestData.CustomerOrgId, AccountId.ToString())}"), accepted.ToString());
+        Assert.That(run.Calls().Last(), Is.EqualTo($"{method} {TestData.CustomerAdminPath(TestData.CustomerOrgId, TestData.PartnerStaffAccountId)}"), accepted.ToString());
     }
 
     // A name and its ID option given together contradict each other, and nothing in the values says
@@ -184,7 +183,7 @@ public class OptionDecidesParsingTests
     {
         using var run = CliRun.Start();
         run.Stub(method, path, 200, response);
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("policies"), 200, ApiJson.Page(ApiJson.Policy(17, "old vpn")));
         run.Stub("GET", TestData.OrgPath("enrolment-keys"), 200, ApiJson.Page(ApiJson.Key(12, "build agents")));
 
@@ -198,6 +197,13 @@ public class OptionDecidesParsingTests
         yield return NameWithId("policy delete <name> --id", ["policy", "delete", "old vpn", "--id", "17"], ["policy", "delete", "--id", "17"], "DELETE", TestData.OrgPath("policies"), ApiJson.Bulk("policiesDeleted", 1));
         yield return NameWithId("key disable <name> --id", ["key", "disable", "build agents", "--id", "12"], ["key", "disable", "--id", "12"], "PUT", TestData.OrgPath("enrolment-keys/disable"), ApiJson.Bulk("keysModified", 1));
         yield return NameWithId("--org with --org-id", ["system", "disable", "ABCDE", "--org", TestData.OtherOrgName, "--org-id", otherOrg], ["system", "disable", "ABCDE", "--org-id", otherOrg], "PUT", TestData.OtherOrgPath("systems/disable"), ApiJson.Bulk("systemsUpdated", 1));
+
+        string[] policyCreate = ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "any"];
+        yield return NameWithId("policy create --trust with --trust-id", [.. policyCreate, "--trust", "entra staff", "--trust-id", "3"], [.. policyCreate, "--trust-id", "3"], "POST", TestData.OrgPath("policies"), ApiJson.Policy(42, "web to db"));
+        yield return NameWithId("policy update --set-trust with --set-trust-id", ["policy", "update", "--id", "42", "--set-trust", "entra staff", "--set-trust-id", "3"], ["policy", "update", "--id", "42", "--set-trust-id", "3"], "PATCH", TestData.OrgPath("policies/42"), ApiJson.Policy(42, "web to db"));
+        yield return NameWithId("tag set --trust with --trust-id", ["tag", "set", "web", "--trust", "entra staff", "--trust-id", "3"], ["tag", "set", "web", "--trust-id", "3"], "PATCH", TestData.OrgPath("tags/web"), ApiJson.Tag("web"));
+        yield return NameWithId("system list --key with --key-id", ["system", "list", "--key", "build agents", "--key-id", "12"], ["system", "list", "--key-id", "12"], "GET", TestData.OrgPath("systems"), ApiJson.Page(ApiJson.System("ABCDE")));
+        yield return NameWithId("dns list-hostnames --zone with --zone-id", ["dns", "list-hostnames", "--zone", "internal", "--zone-id", "4"], ["dns", "list-hostnames", "--zone-id", "4"], "GET", TestData.OrgPath("dns/records"), ApiJson.Page(ApiJson.HostnameRecord(7, "db", 4, "internal")));
     }
 
     private static TestCaseData NameWithId(string name, string[] rejectedArgs, string[] acceptedArgs, string method, string path, string response) =>

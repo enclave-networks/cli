@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -19,6 +20,13 @@ namespace Enclave.Cli.Tests.Resources;
 public partial class TrustCommandTests
 {
     private const string Tenant = "9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31";
+
+    // The fields of TrustRequirementCreateModel and TrustRequirementSettingsModel (portal
+    // Enclave.Api/Modules/SystemManagement/TrustRequirements/Models), every one a setting a create
+    // sends ("Create and update").
+    private static readonly string[] TrustCreateFields = ["description", "type", "notes", "settings"];
+
+    private static readonly string[] TrustSettingsFields = ["configuration", "conditions"];
 
     // Example 26. azure takes --tenant, and its configuration holds the authority and tenantId only
     // (portal TrustRequirementSettingsUserAuthValidator.cs:35-38); a claim condition is
@@ -64,7 +72,9 @@ public partial class TrustCommandTests
 
     // Example 56 is the portal case. portal and google take no settings ("Command options"), so the
     // configuration holds the authority alone (portal TrustRequirementSettingsUserAuthValidator.cs:40-43
-    // for portal).
+    // for portal). The body holds every field of TrustRequirementCreateModel, and --claim, the list
+    // flag left out, is sent as an empty list of conditions ("Details"; portal
+    // TrustRequirementCreateModel.cs, TrustRequirementSettingsModel.cs).
     [TestCase("portal")]
     [TestCase("google")]
     public async Task Trust_create_with_an_authority_that_takes_no_settings_sends_the_authority_alone(string authority)
@@ -74,14 +84,19 @@ public partial class TrustCommandTests
 
         var request = await CliAssert.AcceptedAsync(run, "POST", TrustsPath, "trust", "create", "sign in", "--authority", authority);
 
-        var settings = JsonAssert.Property(request.BodyJson, "settings");
-        var configuration = JsonAssert.Property(settings, "configuration");
+        var body = request.BodyJson;
+        var settings = body.GetProperty("settings");
+        var configuration = settings.GetProperty("configuration");
         Assert.Multiple(() =>
         {
-            Assert.That(Text(request.BodyJson, "type"), Is.EqualTo("UserAuthentication"));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(TrustCreateFields));
+            Assert.That(JsonRead.PropertyNames(settings), Is.EquivalentTo(TrustSettingsFields));
+            Assert.That(body.GetProperty("type").GetString(), Is.EqualTo("UserAuthentication"));
+            Assert.That(body.GetProperty("description").GetString(), Is.EqualTo("sign in"));
+            Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(Set(JsonRead.PropertyNames(configuration)), Is.EqualTo("authority"));
-            Assert.That(Text(configuration, "authority"), Is.EqualTo(authority));
-            Assert.That(Text(settings, "conditions"), Is.EqualTo(None).Or.EqualTo("json:[]"));
+            Assert.That(configuration.GetProperty("authority").GetString(), Is.EqualTo(authority));
+            Assert.That(settings.GetProperty("conditions").GetRawText(), Is.EqualTo("[]"));
         });
     }
 
@@ -179,27 +194,34 @@ public partial class TrustCommandTests
             TrustsPath);
     }
 
-    // A sign-in setting given "" carries no value, so it exits 2 before any call, as trust update's
-    // --set-client-id "" does ("Command options"). The API refuses an authority address that is not
-    // https, an empty client ID and an empty audience (portal
-    // TrustRequirementSettingsUserAuthValidator.cs:47-49), and stores an empty tenant, since for
-    // azure it checks only which keys the configuration holds (same file, 35-38). The command with
-    // every setting given a value, run next, shows the rejection comes from the empty one.
-    [TestCase("oidc", "--authority-uri")]
-    [TestCase("oidc", "--client-id")]
-    [TestCase("oidc", "--audience")]
-    [TestCase("azure", "--tenant")]
-    public async Task Trust_create_rejects_an_empty_sign_in_setting(string authority, string option)
+    // A sign-in setting given "" or only white space carries no value, so it exits 2 before the
+    // token and any call, as trust update's --set-client-id "" does ("Command options"). The API
+    // refuses an authority address that is not https, and a client ID or audience that is empty or
+    // white space (portal TrustRequirementSettingsUserAuthValidator.cs:47-49, whose
+    // MustHaveKeyWithValue and KeyNotEmptyIfSet test string.IsNullOrWhiteSpace,
+    // DictionaryValidationExtensions.cs:45,82), and stores a blank tenant, since for azure it checks
+    // only which keys the configuration holds (TrustRequirementSettingsUserAuthValidator.cs:35-38).
+    // The command with every setting given a value, run next, shows the rejection comes from the
+    // blank one, and the run without a token shows the check comes before the token.
+    [TestCase("oidc", "--authority-uri", "")]
+    [TestCase("oidc", "--authority-uri", " ")]
+    [TestCase("oidc", "--client-id", "")]
+    [TestCase("oidc", "--client-id", " ")]
+    [TestCase("oidc", "--audience", "")]
+    [TestCase("oidc", "--audience", " \t ")]
+    [TestCase("azure", "--tenant", "")]
+    [TestCase("azure", "--tenant", "  ")]
+    public async Task Trust_create_rejects_an_empty_or_blank_sign_in_setting_before_the_token(string authority, string option, string blank)
     {
         using var run = CliRun.Start();
+        using var withoutToken = CliRun.Start();
+        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
         run.Stub("POST", TrustsPath, json: ApiJson.Trust(7, "sso"));
+        string[] rejected = ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, option, blank)];
 
-        await CliAssert.RejectedThenAcceptedAsync(
-            run,
-            ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, emptied: option)],
-            ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, emptied: null)],
-            "POST",
-            TrustsPath);
+        await CliAssert.RejectedThenAcceptedAsync(run, rejected, ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, null, blank)], "POST", TrustsPath);
+
+        CliAssert.Rejected(withoutToken, await withoutToken.RunAsync(rejected));
     }
 
     // The API stores a repeated range or country as given: its public IP validator checks each
@@ -290,8 +312,11 @@ public partial class TrustCommandTests
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(TrustCreateFields));
+            Assert.That(JsonRead.PropertyNames(body.GetProperty("settings")), Is.EquivalentTo(TrustSettingsFields));
             Assert.That(Text(body, "description"), Is.EqualTo("uk only"));
             Assert.That(Text(body, "type"), Is.EqualTo("PublicIp"));
+            Assert.That(body.GetProperty("settings").GetProperty("configuration").GetRawText(), Is.EqualTo("{}"));
             Assert.That(Conditions(JsonAssert.Property(JsonAssert.Property(body, "settings"), "conditions")), Is.EqualTo(Set("country|GB|false|(none)", "ip|203.0.113.0/24|true|(none)")));
         });
     }
@@ -418,13 +443,13 @@ public partial class TrustCommandTests
     }
 
     // The settings an authority takes, each with a value the API accepts, and the one named by
-    // emptied given "".
-    private static string[] SignInSettings(string authority, string? emptied)
+    // blanked given the blank value.
+    private static string[] SignInSettings(string authority, string? blanked, string blank)
     {
         (string Option, string Value)[] settings = authority == "azure"
             ? [("--tenant", Tenant)]
             : [("--authority-uri", "https://sso.example.com"), ("--client-id", "enclave-portal"), ("--audience", "api://enclave")];
 
-        return [.. settings.SelectMany(setting => new[] { setting.Option, setting.Option == emptied ? string.Empty : setting.Value })];
+        return [.. settings.SelectMany(setting => new[] { setting.Option, setting.Option == blanked ? blank : setting.Value })];
     }
 }

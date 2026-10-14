@@ -63,20 +63,17 @@ internal static class GatewayRoutes
     }
 
     /// <summary>
-    /// The first subnet given more than once, with a label or without, or null when each is given
-    /// once.
+    /// Whether a subnet is given more than once, with a label or without.
     /// </summary>
     // The API refuses a route list that holds a subnet twice, comparing the strings exactly (portal
     // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:37,
     // MustNotHaveDuplicates on Subnet, a HashSet with the default comparer), so the CLI refuses it
     // before any call.
-    public static string? Repeated(IReadOnlyList<LabelledValue> given)
+    public static bool RepeatsASubnet(IReadOnlyList<LabelledValue> given)
     {
         ArgumentNullException.ThrowIfNull(given);
 
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-
-        return given.Select(value => value.Value).FirstOrDefault(subnet => !seen.Add(subnet));
+        return given.Select(value => value.Value).Distinct(StringComparer.Ordinal).Count() < given.Count;
     }
 
     private static bool IsFor(LabelledEntry entry, SystemGatewayRouteModel route) =>

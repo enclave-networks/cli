@@ -10,12 +10,16 @@ internal sealed class SearchText
 
     /// <summary>
     /// Starts with the --filter text, sent as typed so that it takes the API's own search syntax;
-    /// nothing when it is null or empty.
+    /// nothing when it is null. Throws <see cref="ArgumentException"/> for a blank filter.
     /// </summary>
+    // A blank filter or an empty list filters by nothing, and adding no term for it would list every
+    // item, so the options a list filters by refuse it as they parse (CliOptions.Filter, TagFilter)
+    // and one reaching here is a fault in the command.
     public SearchText(string? filter)
     {
-        if (!string.IsNullOrEmpty(filter))
+        if (filter is not null)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(filter);
             _terms.Add(filter);
         }
     }
@@ -36,10 +40,20 @@ internal sealed class SearchText
 
     /// <summary>
     /// Adds key:a,b for a list such as --tag a,b, which the API reads as items having every value
-    /// given; nothing when the list is null or empty.
+    /// given; nothing when the list is null. Throws <see cref="ArgumentException"/> for an empty
+    /// list.
     /// </summary>
-    public SearchText Add(string key, IReadOnlyList<string>? values) =>
-        values is { Count: > 0 } ? Add(key, string.Join(',', values)) : this;
+    public SearchText Add(string key, IReadOnlyList<string>? values)
+    {
+        if (values is null)
+        {
+            return this;
+        }
+
+        return values.Count > 0
+            ? Add(key, string.Join(',', values))
+            : throw new ArgumentException($"The list for the search key {key} holds no value.", nameof(values));
+    }
 
     /// <summary>
     /// Adds key:true when the flag is given, as --gateway adds gateway:true.

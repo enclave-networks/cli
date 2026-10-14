@@ -26,12 +26,16 @@ internal sealed class CliRun : IDisposable
 
     private readonly string _root;
 
+    // One reader for the whole run, so a read in any of its commands is known when RunAsync checks.
+    private readonly TerminalStdin _terminalStdin = new();
+
     private CliRun(WireMockServer api, string apiUrl, WireMockServer partnerApi, string partnerApiUrl, string root)
     {
         Api = api;
         ApiBaseUrl = apiUrl;
         PartnerApi = partnerApi;
         PartnerApiBaseUrl = partnerApiUrl;
+        DefaultPartnerApiUrl = PartnerApiUrl;
         _root = root;
         Home = Path.Combine(root, "home");
         WorkDirectory = Path.Combine(root, "work");
@@ -70,6 +74,21 @@ internal sealed class CliRun : IDisposable
     public Uri PartnerApiUrl => new(PartnerApiBaseUrl);
 
     /// <summary>
+    /// The default partner API URL the CLI receives: <see cref="PartnerApiUrl"/> unless a test sets
+    /// another. Null leaves Enclave.Sdk.Api's own default, production's, as outside tests; a run
+    /// with any URL but the fake's must set <see cref="NetworkHandler"/>, so nothing reaches the
+    /// live partner API.
+    /// </summary>
+    public Uri? DefaultPartnerApiUrl { get; set; }
+
+    /// <summary>
+    /// Creates the network beneath the CLI's own handler (CliHost.CreateNetworkHandler), such as
+    /// <see cref="FailingNetwork.CreateHandler"/>; null sends requests to the network, where only
+    /// the fake APIs listen at the run's addresses.
+    /// </summary>
+    public Func<HttpMessageHandler>? NetworkHandler { get; set; }
+
+    /// <summary>
     /// The user profile path the CLI receives; ~/.enclave lives here. Nothing exists at it on disk:
     /// the files under it are in <see cref="Files"/>.
     /// </summary>
@@ -102,13 +121,15 @@ internal sealed class CliRun : IDisposable
     };
 
     /// <summary>
-    /// What the CLI reads from stdin, such as a list from <see cref="CliList"/>.
+    /// What the CLI reads from stdin, such as a list from <see cref="CliList"/>, while
+    /// <see cref="StdinIsTerminal"/> is not set.
     /// </summary>
     public string StdinText { get; set; } = string.Empty;
 
     /// <summary>
     /// Whether the CLI sees stdin as a terminal, where a command given "-" must exit 2 without
-    /// reading it.
+    /// reading it. While it is set, stdin is a <see cref="TerminalStdin"/>, and any read of it
+    /// fails the run.
     /// </summary>
     public bool StdinIsTerminal { get; set; }
 
@@ -160,20 +181,29 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// The host RunAsync gives the CLI: this run's environment, home directory, stdin, in-memory
-    /// files, clock, and the fake APIs' URLs as the default API URL and the default partner API URL,
-    /// so a run can never reach the live API or the live partner API.
+    /// files, clock and network, and the fake APIs' URLs as the default API URL and the default
+    /// partner API URL, so a run can never reach the live API or the live partner API.
     /// </summary>
-    public CliHost CreateHost() => new()
+    public CliHost CreateHost()
     {
-        GetEnvironmentVariable = name => Environment.TryGetValue(name, out var value) ? value : null,
-        HomeDirectory = Home,
-        Stdin = new StringReader(StdinText),
-        StdinIsTerminal = StdinIsTerminal,
-        DefaultApiUrl = ApiUrl,
-        DefaultPartnerApiUrl = PartnerApiUrl,
-        Files = Files,
-        Time = Time,
-    };
+        if (DefaultPartnerApiUrl != PartnerApiUrl && NetworkHandler is null)
+        {
+            throw new InvalidOperationException("A run whose default partner API URL is not the fake partner API's must set NetworkHandler, so nothing it sends reaches the live partner API.");
+        }
+
+        return new()
+        {
+            GetEnvironmentVariable = name => Environment.TryGetValue(name, out var value) ? value : null,
+            HomeDirectory = Home,
+            Stdin = StdinIsTerminal ? _terminalStdin : new StringReader(StdinText),
+            StdinIsTerminal = StdinIsTerminal,
+            DefaultApiUrl = ApiUrl,
+            DefaultPartnerApiUrl = DefaultPartnerApiUrl,
+            Files = Files,
+            Time = Time,
+            CreateNetworkHandler = NetworkHandler,
+        };
+    }
 
     public async Task<CliResult> RunAsync(params string[] args)
     {
@@ -211,6 +241,11 @@ internal sealed class CliRun : IDisposable
         if (Directory.Exists(_root))
         {
             throw new AssertionException($"The CLI wrote to the disk under {_root}; every file it reads or writes must go through CliHost.Files.");
+        }
+
+        if (_terminalStdin.WasRead)
+        {
+            throw new AssertionException("The CLI read stdin while it was a terminal; a command must decide from StdinIsTerminal without reading it.");
         }
 
         return new CliResult(exitCode, stdout.ToString(), stderr.ToString());
@@ -379,7 +414,7 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// Puts ~/.enclave/credentials.json in <see cref="Files"/>, private to the user as login writes
-    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.1.0). The
+    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.2.0). The
     /// base URL defaults to the fake API's. The file holds partnerApiBaseUrl only when one is given.
     /// </summary>
     public void SaveCredentials(string token, string? baseUrl = null, string? partnerApiBaseUrl = null)
@@ -404,6 +439,7 @@ internal sealed class CliRun : IDisposable
         Api.Dispose();
         PartnerApi.Stop();
         PartnerApi.Dispose();
+        _terminalStdin.Dispose();
 
         // A directory here means the CLI wrote to the disk, which RunAsync reports; it is removed
         // so the failure leaves nothing behind.

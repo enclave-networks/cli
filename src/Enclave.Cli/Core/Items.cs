@@ -55,9 +55,11 @@ internal static class Items
 
     /// <summary>
     /// For a command whose arguments are IDs (systems, and tags, which are given by name only): the
-    /// arguments, checked against <paramref name="format"/>, or the IDs of a list on stdin.
+    /// arguments, each as <paramref name="format"/> reads it, or the IDs of a list on stdin.
     /// Duplicates are removed and the order kept. Exits 2 when nothing is given.
     /// </summary>
+    // Duplicates are compared in the form the format reads, so a system ID given in two cases is
+    // one ID (IdFormats.System).
     public static async Task<IReadOnlyList<string>> ReadIdsAsync(
         CliContext context,
         Argument<IReadOnlyList<string>> argument,
@@ -80,15 +82,19 @@ internal static class Items
             throw CliErrors.InvalidArgument(argument.Name, $"Give at least one <{argument.Name}>, or \"{CliArguments.Stdin}\" to read a list from stdin.");
         }
 
-        foreach (var id in given)
+        var ids = new List<string>(given.Count);
+
+        foreach (var text in given)
         {
-            if (!format.TryParse(id, out _))
+            if (!format.TryParse(text, out var id))
             {
                 throw CliErrors.InvalidArgument(argument.Name, $"Each <{argument.Name}> is {format.Describe}.");
             }
+
+            ids.Add(id);
         }
 
-        return given.Distinct(StringComparer.Ordinal).ToArray();
+        return ids.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>

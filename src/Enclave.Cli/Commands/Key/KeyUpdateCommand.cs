@@ -13,17 +13,21 @@ internal static class KeyUpdateCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("update", "Change a key's settings and print the key.", CommandScope.Organisation, changes: true);
-        var key = verb.Add(CliArguments.OptionalText("key", "The key's description, matched whole and ignoring case."));
+        var key = verb.Add(CliArguments.OptionalName("key", "The key's description, matched whole and ignoring case.", "a key's description"));
         var id = verb.Add(CliOptions.Id("--id", "The key's ID.", IdFormats.Int32));
-        var description = verb.Add(CliOptions.Text("--description", "The key's description."));
+        // The API refuses a blank description (portal
+        // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Validators/EnrolmentKeyPatchModelValidator.cs:14,
+        // NotEmpty when set) and takes empty notes (same file, 25, MaximumLength only), which clear
+        // them.
+        var description = verb.Add(CliOptions.NonBlank("--description", "The key's description.", "a key's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The key's notes."));
         var autoApprove = verb.Add(CliOptions.Flag("--auto-approve", "Approve systems that enrol with the key automatically."));
         var requireApproval = verb.Add(CliOptions.Flag("--require-approval", "Require approval for systems that enrol with the key."));
         var uses = verb.Add(CliOptions.Number("--uses", "How many more systems can enrol with the key.", minimum: 1));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the key's tags; \"\" removes them all."));
-        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the key's others."));
-        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the key's others."));
-        var setAllowIp = verb.Add(CliOptions.Labelled("--set-allow-ip", "Replace the ranges enrolment is allowed from, keeping the labels of ranges that stay.", "range"));
+        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the key's others.", needsEntries: true));
+        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the key's others.", needsEntries: true));
+        var setAllowIp = verb.Add(CliOptions.Labelled("--set-allow-ip", "Replace the ranges enrolment is allowed from, keeping the labels of ranges that stay; \"\" removes them all.", "range", clears: true));
         var keepDisconnected = verb.Add(CliOptions.Duration("--keep-disconnected", "Keep a system of an ephemeral key this long after it disconnects."));
 
         verb.ExactlyOne(key, id);
@@ -41,11 +45,13 @@ internal static class KeyUpdateCommand
             var add = context.Get(addTags);
             var remove = context.Get(removeTags);
             var allow = context.Get(setAllowIp);
+            var clearsAllowIp = ListValues.Clears(allow);
 
             // The patch takes whole lists, so --add-tags and --remove-tags read the key to keep the
             // tags it has, and --set-allow-ip reads it to keep the labels of ranges that stay
-            // ("Create and update", "Calls per command").
-            var current = TagEdits.NeedsCurrentTags(set, add, remove) || allow is not null
+            // ("Create and update", "Calls per command"). --set-allow-ip "" clears the ranges, which
+            // leaves no labels to keep, so it makes no read ("Details").
+            var current = TagEdits.NeedsCurrentTags(set, add, remove) || (allow is not null && !clearsAllowIp)
                 ? await SingleItem.CallAsync(() => org.Client.EnrolmentKeys.GetAsync(keyId))
                 : null;
 
@@ -76,7 +82,11 @@ internal static class KeyUpdateCommand
                 patch.Set(model => model.Tags, [.. tags]);
             }
 
-            if (allow is not null)
+            if (clearsAllowIp)
+            {
+                patch.Set(model => model.IpConstraints, []);
+            }
+            else if (allow is not null)
             {
                 var existing = (current?.IpConstraints ?? []).Select(constraint => new LabelledEntry(constraint.Range, constraint.Description));
                 patch.Set(model => model.IpConstraints, [.. LabelledEntry.Keep(allow, existing).Select(entry => new EnrolmentKeyIpConstraintInputModel(entry.Value, entry.Label))]);

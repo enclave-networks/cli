@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -9,6 +10,8 @@ namespace Enclave.Cli.Tests.Safety;
 /// </summary>
 public class StdinListTests
 {
+    private static readonly string[] StdinKeyOnly = ["-"];
+
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_acts_on_the_items_of_a_list_of_the_commands_kind_on_stdin(BulkCommand command)
     {
@@ -96,6 +99,34 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds("systemIds")), Is.EqualTo("ABCDE,FGHIJ"));
     }
 
+    // The command acts on the items by ID ("Several IDs"), so an item without its kind's ID field
+    // names nothing to act on, and the list is refused as one with a malformed ID is. The item is a
+    // copy of the first with its ID field removed, between two items with IDs, so a CLI that skipped
+    // it and sent the others would show a request. The second run gives the two items alone and
+    // shows the command acts on them.
+    [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
+    public async Task Dash_exits_2_and_sends_nothing_when_a_list_item_has_no_id_field(BulkCommand command)
+    {
+        using var run = CliRun.Start();
+        command.StubBulk(run, 2);
+        var ids = command.Ids(2);
+        var items = JsonNode.Parse(command.List(ids))!["items"]!.AsArray();
+        var withoutId = items[0]!.DeepClone().AsObject();
+        withoutId.Remove(CliList.IdField(command.Kind));
+        run.StdinText = CliList.Of(command.Kind, items[0]!.ToJsonString(), withoutId.ToJsonString(), items[1]!.ToJsonString());
+
+        var rejected = await run.RunAsync(command.StdinArgs());
+
+        CliAssert.Rejected(run, rejected);
+        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(StdinKeyOnly));
+
+        run.StdinText = command.List(ids);
+        var accepted = await run.RunAsync(command.StdinArgs());
+
+        CliAssert.Bulk(accepted, requested: 2, affected: 2);
+        Assert.That(string.Join(",", run.SingleRequest().BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
+    }
+
     // A bare ID per line carries no kind, so the command could not tell key IDs from policy IDs.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_exits_2_and_sends_nothing_for_ids_one_per_line(BulkCommand command)
@@ -151,8 +182,10 @@ public class StdinListTests
     }
 
     // The CLI never waits for input (AGENTS.md "CLI contract"), and an agent driving a terminal
-    // would hang on a read. stdin holds a list of the command's kind, so a CLI that read it anyway
-    // would send the bulk call; the second run, with stdin redirected, shows the list is accepted.
+    // would hang on a read. While stdin is a terminal, any read of it fails the run
+    // (CliRun.StdinIsTerminal), so the rejection shows the command refused without reading; the
+    // second run, with stdin redirected and holding a list of the command's kind, shows the list is
+    // accepted.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_exits_2_without_reading_stdin_when_stdin_is_a_terminal(BulkCommand command)
     {

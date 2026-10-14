@@ -14,8 +14,8 @@ internal static class PolicyListCommand
     public static CliVerb Create()
     {
         var verb = new CliVerb("list", "List the policies, reading every page.", CommandScope.Organisation);
-        var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
-        var tags = verb.Add(CliOptions.TagList("--tag", "Policies with every tag given among their sender or receiver tags."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
+        var tags = verb.Add(CliOptions.TagFilter("--tag", "Policies with every tag given among their sender or receiver tags."));
         var state = verb.Add(CliOptions.ChoiceText("--state", "Enabled or disabled policies.", ("enabled", "enabled"), (Disabled, Disabled)));
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled policies."));
         var sort = verb.Add(CliOptions.Enum("--sort", "The order to list policies in.", PolicySortOrder.Description, PolicySortOrder.RecentlyCreated));

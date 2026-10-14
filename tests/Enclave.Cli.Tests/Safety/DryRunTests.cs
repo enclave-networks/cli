@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Safety;
 
@@ -12,13 +13,6 @@ namespace Enclave.Cli.Tests.Safety;
 /// </summary>
 public class DryRunTests
 {
-    // Each request's fields, sorted and joined with commas.
-    private const string RequestFields = "body,method,url";
-
-    private static readonly string[] OutputFields = ["dryRun", "org", "requests"];
-
-    private static readonly string[] OrgFields = ["id", "name"];
-
     private static readonly Dictionary<string, string> NoQuery = new(StringComparer.Ordinal);
 
     // The reads a change depends on run under --dry-run, such as the zone a hostname belongs to;
@@ -33,7 +27,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args, "--dry-run"]);
 
-        var (org, request) = ReadDryRunOfOneRequest(result);
+        var (org, request) = DryRunOutput.ReadOne(result);
         var urls = command.Paths.Select(path => ExpectedUrl(run, path)).ToArray();
         Assert.Multiple(() =>
         {
@@ -55,7 +49,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args(ids), "--dry-run"]);
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo(command.Method));
@@ -76,14 +70,14 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args(ids), "--dry-run"]);
 
-        var (_, requests) = ReadDryRun(result);
+        var (_, requests) = DryRunOutput.Read(result);
         var expectedUrl = ExpectedUrl(run, command.Path);
         Assert.That(requests, Has.Length.EqualTo(3), result.ToString());
         Assert.Multiple(() =>
         {
             Assert.That(requests.Select(request => Text(request, "method")), Is.All.EqualTo(command.Method));
             Assert.That(requests.Select(Url), Is.All.EqualTo(expectedUrl));
-            Assert.That(string.Join("|", requests.Select(request => BodyIds(request, command.BodyField))), Is.EqualTo(Batches(ids)));
+            Assert.That(string.Join("|", requests.Select(request => BodyIds(request, command.BodyField))), Is.EqualTo(BulkCommand.Batches(ids)));
             Assert.That(command.BulkCalls(run), Is.Empty);
         });
     }
@@ -99,7 +93,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.StdinArgs(), "--dry-run"]);
 
-        var (_, requests) = ReadDryRun(result);
+        var (_, requests) = DryRunOutput.Read(result);
         Assert.Multiple(() =>
         {
             Assert.That(requests, Is.Empty);
@@ -119,7 +113,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("system", "approve", "-", "--dry-run");
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo("PUT"));
@@ -149,7 +143,7 @@ public class DryRunTests
 
         var preview = await run.RunAsync([.. args, "--dry-run"]);
 
-        var (_, printed) = ReadDryRunOfOneRequest(preview);
+        var (_, printed) = DryRunOutput.ReadOne(preview);
         Assert.Multiple(() =>
         {
             Assert.That(run.RequestsTo("DELETE", path), Is.Empty);
@@ -178,7 +172,7 @@ public class DryRunTests
     public async Task Dry_run_prints_the_organisation_given_by_name_and_builds_the_url_from_its_id(bool fromEnvironment)
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         string[] args = ["system", "disable", "ABCDE", "--dry-run", "--org", TestData.OtherOrgName];
 
         if (fromEnvironment)
@@ -190,7 +184,7 @@ public class DryRunTests
 
         var result = await run.RunAsync(args);
 
-        var (org, request) = ReadDryRunOfOneRequest(result);
+        var (org, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
@@ -206,11 +200,11 @@ public class DryRunTests
     public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id_and_prints_a_null_name()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
 
         var result = await run.RunAsync("system", "disable", "ABCDE", "--org-id", TestData.OtherOrgId.ToString(), "--dry-run");
 
-        var (org, request) = ReadDryRunOfOneRequest(result);
+        var (org, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
@@ -252,7 +246,7 @@ public class DryRunTests
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update"), and the
     // printed body is the one Enclave.Sdk.Api would send, so it holds the description alone.
-    // PatchClient keys the body by the model's property name (Enclave.Sdk.Api 1.1.0,
+    // PatchClient keys the body by the model's property name (Enclave.Sdk.Api 1.2.0,
     // PatchClient.cs, Set), which JsonAssert.Property matches ignoring case.
     [Test]
     public async Task Dry_run_of_an_update_prints_a_body_holding_only_the_fields_given()
@@ -263,7 +257,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("system", "update", "ABCDE", "--description", "web server", "--dry-run");
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         var body = JsonAssert.Property(request, "body");
         Assert.Multiple(() =>
         {
@@ -275,7 +269,7 @@ public class DryRunTests
         });
     }
 
-    // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api 1.1.0), which the dry run
+    // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api 1.2.0), which the dry run
     // shows as "body": null (proposed-cli-surface.md "Dry run").
     [Test]
     public async Task Dry_run_of_a_request_without_a_body_prints_a_null_body()
@@ -286,7 +280,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("dns", "delete-zone", "--id", "4", "--dry-run");
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo("DELETE"));
@@ -321,7 +315,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("tag", "set", "web", "--notes", "front end", "--dry-run");
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo(method));
@@ -336,6 +330,8 @@ public class DryRunTests
     // (proposed-cli-surface.md "Command options"). The CLI reads the key to find the labels, a read
     // the dry run makes too ("Dry run"), and the dry run shows the list it would send.
     // 172.16.0.0/12 is left out, so it goes. A label can hold a comma, since the flag is repeated.
+    // An empty label is sent as null ("Details"), and Text reads a null or missing label as (none)
+    // and an empty string as (empty), so the check tells them apart.
     [Test]
     public async Task Dry_run_of_an_update_that_replaces_a_list_shows_the_labels_it_keeps()
     {
@@ -361,7 +357,7 @@ public class DryRunTests
             "198.18.0.0/15=Office, ground floor",
             "--dry-run");
 
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         var ranges = JsonAssert.Property(JsonAssert.Property(request, "body"), "ipConstraints");
         Assert.Multiple(() =>
         {
@@ -369,7 +365,7 @@ public class DryRunTests
             Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, path)));
             Assert.That(
                 string.Join("|", ranges.EnumerateArray().Select(range => $"{Text(range, "range")}={Text(range, "description")}")),
-                Is.EqualTo("203.0.113.0/24=London office|198.51.100.0/24=Build farm|192.0.2.0/24=|10.20.0.0/16=|198.18.0.0/15=Office, ground floor"));
+                Is.EqualTo("203.0.113.0/24=London office|198.51.100.0/24=Build farm|192.0.2.0/24=(none)|10.20.0.0/16=(none)|198.18.0.0/15=Office, ground floor"));
             Assert.That(run.RequestsTo("GET", path), Has.Count.EqualTo(1));
             Assert.That(Changes(run), Is.Empty);
         });
@@ -389,7 +385,7 @@ public class DryRunTests
         var result = await run.RunAsync("system", "enable", "K7P2Q", "--for", "24h", "--then", "revoke", "--dry-run");
 
         var after = DateTimeOffset.UtcNow;
-        var (_, request) = ReadDryRunOfOneRequest(result);
+        var (_, request) = DryRunOutput.ReadOne(result);
         var body = JsonAssert.Property(request, "body");
         var expiry = JsonRead.ExpiryDateTime(body);
         Assert.Multiple(() =>
@@ -467,68 +463,6 @@ public class DryRunTests
     private static TestCaseData ReadOnly(string[] args, string path, string response) =>
         new TestCaseData(args, path, response).SetArgDisplayNames(string.Join(' ', args));
 
-    // Checks the output's shape and returns its "org" object and the items of "requests". Each
-    // request object holds method, url and body only, so no header can appear in it.
-    private static (JsonElement Org, JsonElement[] Requests) ReadDryRun(CliResult result)
-    {
-        CliAssert.Succeeded(result);
-
-        var output = result.StdoutJson;
-        Assert.That(output.ValueKind, Is.EqualTo(JsonValueKind.Object), result.ToString());
-
-        var org = JsonAssert.Property(output, "org");
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(OutputFields), result.ToString());
-            Assert.That(JsonAssert.Property(output, "dryRun").ValueKind, Is.EqualTo(JsonValueKind.True));
-            Assert.That(org.ValueKind, Is.EqualTo(JsonValueKind.Object));
-            Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array));
-            Assert.That(result.Stderr, Is.Empty);
-        });
-
-        var items = requests.EnumerateArray().ToArray();
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.PropertyNames(org), Is.EquivalentTo(OrgFields), result.ToString());
-            Assert.That(items.Select(item => item.ValueKind), Is.All.EqualTo(JsonValueKind.Object), result.ToString());
-        });
-        Assert.That(
-            items.Select(item => string.Join(",", JsonRead.PropertyNames(item).Order(StringComparer.Ordinal))),
-            Is.All.EqualTo(RequestFields),
-            result.ToString());
-
-        return (org, items);
-    }
-
-    // The output of a command that makes one call: exactly one request.
-    private static (JsonElement Org, JsonElement Request) ReadDryRunOfOneRequest(CliResult result)
-    {
-        var (org, requests) = ReadDryRun(result);
-        Assert.That(requests, Has.Length.EqualTo(1), result.ToString());
-
-        return (org, requests[0]);
-    }
-
-    // A string property's value, or an empty string when it is missing or null.
-    private static string Text(JsonElement obj, string name)
-    {
-        if (obj.ValueKind != JsonValueKind.Object)
-        {
-            return string.Empty;
-        }
-
-        foreach (var property in obj.EnumerateObject())
-        {
-            if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase) && property.Value.ValueKind == JsonValueKind.String)
-            {
-                return property.Value.GetString()!;
-            }
-        }
-
-        return string.Empty;
-    }
-
     private static string Url(JsonElement request) => new Uri(Text(request, "url")).AbsoluteUri;
 
     // The URL Enclave.Sdk.Api builds: the API base URL, the fake API's here, with the call's path.
@@ -537,11 +471,6 @@ public class DryRunTests
     // The IDs in a printed body, read as RecordedRequest reads the IDs of a sent body.
     private static string BodyIds(JsonElement request, string field) =>
         string.Join(",", new RecordedRequest("DRY-RUN", string.Empty, NoQuery, JsonAssert.Property(request, "body").GetRawText(), null).BodyIds(field));
-
-    // The IDs of each call joined with commas, and the calls joined with "|", for IDs sent in calls
-    // of 200 in the order given.
-    private static string Batches(string[] ids) =>
-        string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));
 
     // The requests that would change something; a dry run makes none.
     private static string Changes(CliRun run) =>

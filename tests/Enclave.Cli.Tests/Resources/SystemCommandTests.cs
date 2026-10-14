@@ -11,16 +11,14 @@ public class SystemCommandTests
     // A test whose result depends on the time reads a fixed clock in a time zone made by the test,
     // TestData.LocalZone, as Contract/TimeInputTests.cs does: UTC+05:30 with no daylight saving,
     // which a runner set to UTC is not in, so reading a time in UTC and reading it in the zone give
-    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone.
+    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone. A test about
+    // the hour repeated when the clocks go back reads its own fixed clock in
+    // TestData.DaylightSavingZone.
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
     private static readonly string SystemsPath = TestData.OrgPath("systems");
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
-
-    // A key whose description starts with the same words is listed first, so a CLI that takes a
-    // partial match, or the first item, finds key 13.
-    private static readonly string BuildAgentsKeys = ApiJson.Page(ApiJson.Key(13, "build agents 2026-04"), ApiJson.Key(12, "build agents"));
 
     // A list reads every page before it prints (proposed-cli-surface.md "Output"); five systems two
     // to a page take three reads. Without filter flags the CLI sends no search, key or DNS filter,
@@ -92,7 +90,7 @@ public class SystemCommandTests
 
         var request = await CliAssert.AcceptedAsync(run, "GET", SystemsPath, ["system", "list", .. flags.Split(' ')]);
 
-        Assert.That(SearchTerms(request.QueryValue("search")), Is.EqualTo(SearchTerms(search)));
+        Assert.That(SearchTerms.Of(request.QueryValue("search")), Is.EqualTo(SearchTerms.Of(search)));
     }
 
     // --key-id uses the API's enrolment_key parameter, which takes one key's ID (portal
@@ -120,7 +118,7 @@ public class SystemCommandTests
     public async Task System_list_key_looks_the_key_up_by_description_and_sends_its_id_as_the_enrolment_key_parameter()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", KeysPath, json: BuildAgentsKeys);
+        run.Stub("GET", KeysPath, json: ApiJson.BuildAgentsKeys());
         run.Stub("GET", SystemsPath, json: ApiJson.Page(ApiJson.System("ABCDE")));
 
         var result = await run.RunAsync("system", "list", "--key", "build agents");
@@ -153,24 +151,28 @@ public class SystemCommandTests
             SystemsPath);
     }
 
-    // --dns-name uses the API's dns parameter, which finds the systems that answer to that name
-    // (portal SystemsRequestModel.cs:43-45). Example 87.
+    // system list has no --dns-name (proposed-cli-surface.md "Left out"). The API binds its dns
+    // parameter (portal Enclave.Api/Modules/SystemManagement/Systems/Models/SystemsRequestModel.cs:43-45)
+    // and its list handler never reads it (Systems/Handlers/PaginatedSystemsHandler.cs), so a filter
+    // sent there would list every system as if it matched. The option is unknown to the command, so
+    // it exits 2 before any call ("Details"), and the error names the option.
     [Test]
-    public async Task System_list_dns_name_sends_the_dns_parameter()
+    public async Task System_list_dns_name_is_an_unknown_option_and_exits_2_without_a_request()
     {
         using var run = CliRun.Start();
-        run.Stub("GET", SystemsPath, json: ApiJson.Page());
+        run.Stub("GET", SystemsPath, json: ApiJson.Page(ApiJson.System("ABCDE")));
 
-        var request = await CliAssert.AcceptedAsync(run, "GET", SystemsPath, "system", "list", "--dns-name", "db.internal");
+        var result = await run.RunAsync("system", "list", "--dns-name", "db.internal");
 
+        CliAssert.Rejected(run, result);
         Assert.Multiple(() =>
         {
-            Assert.That(request.QueryValue("dns"), Is.EqualTo("db.internal"));
-            Assert.That(request.QueryValue("search"), Is.Null);
+            Assert.That(JsonRead.PropertyNameList(result.Error.GetProperty("errors")), Is.EqualTo("--dns-name"));
+            Assert.That(result.Error.GetProperty("detail").GetString(), Does.Contain("--dns-name"));
         });
     }
 
-    // Enclave.Sdk.Api 1.1.0 writes the flag with bool.ToString() (SystemsClient.BuildQueryString),
+    // Enclave.Sdk.Api 1.2.0 writes the flag with bool.ToString() (SystemsClient.BuildQueryString),
     // which gives "True".
     [Test]
     public async Task System_list_include_disabled_sends_include_disabled_true()
@@ -230,21 +232,23 @@ public class SystemCommandTests
     // --not-seen-for has no API search key, so the CLI keeps the systems whose lastSeen is longer ago
     // than the duration, from every page it reads, and total counts the matches
     // (proposed-cli-surface.md "Filters"). Every system here enrolled long ago, so a CLI that reads
-    // enrolledAt for a system that has been seen lists RECENT and ONLINE too. The matches are on all
-    // three pages, so a CLI that filters one page misses some.
+    // enrolledAt for a system that has been seen lists RECENT too. ONLINE is connected, which
+    // --not-seen-for never lists whatever the CLI reads, so RECENT is the system that tells the two
+    // readings apart. The matches are on all three pages, so a CLI that filters one page misses
+    // some.
     [Test]
     public async Task System_list_not_seen_for_keeps_the_systems_last_seen_longer_ago_and_counts_only_them_in_total()
     {
         using var run = CliRun.Start();
-        var now = DateTimeOffset.UtcNow;
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         run.StubPages(
             SystemsPath,
             2,
-            SystemSeen("STALE1", "Disconnected", now.AddDays(-100)),
-            SystemSeen("ONLINE", "Connected", now.AddMinutes(-1)),
-            SystemSeen("RECENT", "Disconnected", now.AddDays(-10)),
-            SystemSeen("STALE2", "Disconnected", now.AddDays(-120)),
-            SystemSeen("STALE3", "Disconnected", now.AddDays(-91)));
+            SystemSeen("STALE1", "Disconnected", Now.AddDays(-100)),
+            SystemSeen("ONLINE", "Connected", Now.AddMinutes(-1)),
+            SystemSeen("RECENT", "Disconnected", Now.AddDays(-10)),
+            SystemSeen("STALE2", "Disconnected", Now.AddDays(-120)),
+            SystemSeen("STALE3", "Disconnected", Now.AddDays(-91)));
 
         var result = await run.RunAsync("system", "list", "--not-seen-for", "90d");
 
@@ -263,8 +267,8 @@ public class SystemCommandTests
     public async Task System_list_not_seen_for_counts_a_system_never_seen_from_when_it_enrolled()
     {
         using var run = CliRun.Start();
-        var now = DateTimeOffset.UtcNow;
-        var systems = ApiJson.Page(SystemNeverSeen("NEWBIE", now.AddDays(-1)), SystemNeverSeen("ABANDONED", now.AddDays(-100)));
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var systems = ApiJson.Page(SystemNeverSeen("NEWBIE", Now.AddDays(-1)), SystemNeverSeen("ABANDONED", Now.AddDays(-100)));
         run.Stub("GET", SystemsPath, json: systems);
 
         var result = await run.RunAsync("system", "list", "--not-seen-for", "90d");
@@ -320,18 +324,18 @@ public class SystemCommandTests
     // Example 14: the list --not-seen-for prints is the input of system revoke, which revokes the
     // listed systems and no others; LIVE is connected, so it is not revoked whatever its lastSeen.
     // Both commands run in one sandbox, as a shell pipeline runs them. The route and result field are
-    // those of Enclave.Sdk.Api 1.1.0 SystemsClient.RevokeSystemsAsync.
+    // those of Enclave.Sdk.Api 1.2.0 SystemsClient.RevokeSystemsAsync.
     [Test]
     public async Task System_revoke_given_the_list_of_systems_not_seen_for_90_days_revokes_those_systems()
     {
         using var run = CliRun.Start();
-        var now = DateTimeOffset.UtcNow;
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var systems = ApiJson.Page(
-            SystemSeen("STALE1", "Disconnected", now.AddDays(-100)),
-            SystemSeen("RECENT", "Disconnected", now.AddDays(-10)),
-            SystemSeen("LIVE", "Connected", now.AddDays(-300)),
-            SystemSeen("STALE2", "Disconnected", now.AddDays(-200)),
-            SystemNeverSeen("NEWBIE", now.AddHours(-1)));
+            SystemSeen("STALE1", "Disconnected", Now.AddDays(-100)),
+            SystemSeen("RECENT", "Disconnected", Now.AddDays(-10)),
+            SystemSeen("LIVE", "Connected", Now.AddDays(-300)),
+            SystemSeen("STALE2", "Disconnected", Now.AddDays(-200)),
+            SystemNeverSeen("NEWBIE", Now.AddHours(-1)));
         run.Stub("GET", SystemsPath, json: systems);
         run.StubBulk("DELETE", SystemsPath, "systemsRevoked", 2);
 
@@ -381,7 +385,7 @@ public class SystemCommandTests
     }
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update").
-    // Enclave.Sdk.Api 1.1.0 keys a patch body by SystemPatchModel's property names (PatchClient.Set).
+    // Enclave.Sdk.Api 1.2.0 keys a patch body by SystemPatchModel's property names (PatchClient.Set).
     // The output is the model the API returned, whose description differs from the one sent.
     [Test]
     public async Task System_update_sends_the_description_and_notes_as_the_only_patch_fields_and_prints_the_updated_system()
@@ -561,6 +565,36 @@ public class SystemCommandTests
         });
     }
 
+    // A subnet given that the system found itself stays the route the system found: userEntered
+    // false, with the weight it has, and the label given as its name (proposed-cli-surface.md
+    // "Command options"). Sent as a user-entered route as well, the subnet would be in the list
+    // twice, which the API refuses (portal SystemPatchModelValidator.cs:37); sent as a user-entered
+    // route alone, the system would no longer have it as found.
+    [Test]
+    public async Task System_update_enable_gateway_for_a_subnet_the_system_found_sends_one_found_route_with_its_weight_and_the_new_label()
+    {
+        using var run = CliRun.Start();
+        var path = $"{SystemsPath}/GW001";
+        run.Stub("GET", path, json: SystemWithRoutes("GW001", GatewayRoute("172.16.0.0/12", userEntered: false, weight: 3, "Found LAN")));
+        run.Stub("PATCH", path, json: ApiJson.System("GW001"));
+
+        var result = await run.RunAsync("system", "update", "GW001", "--enable-gateway-for", "172.16.0.0/12=Warehouse");
+
+        CliAssert.Succeeded(result);
+        var patches = run.RequestsTo("PATCH", path);
+        Assert.That(patches, Has.Count.EqualTo(1));
+        var routes = JsonAssert.Property(patches[0].BodyJson, "GatewayRoutes");
+        Assert.That(routes.GetArrayLength(), Is.EqualTo(1));
+        var route = routes[0];
+        Assert.Multiple(() =>
+        {
+            Assert.That(route.GetProperty("subnet").GetString(), Is.EqualTo("172.16.0.0/12"));
+            Assert.That(route.GetProperty("userEntered").GetBoolean(), Is.False);
+            Assert.That(route.GetProperty("weight").GetInt32(), Is.EqualTo(3));
+            Assert.That(route.GetProperty("name").GetString(), Is.EqualTo("Warehouse"));
+        });
+    }
+
     // A route that stays keeps its weight (proposed-cli-surface.md "Command options"), the preference
     // the API gives it over other gateways' routes to the same subnet
     // (SystemGatewayRouteModel.Weight), and its label ("A flag that replaces a list keeps the label
@@ -637,8 +671,10 @@ public class SystemCommandTests
     // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:37,
     // MustNotHaveDuplicates on Subnet, which compares the strings exactly), so a subnet given to
     // --enable-gateway-for twice, with a label or without, exits 2 before any call, the read of the
-    // system included. The corrected command gives the subnet once, and reads the system then
-    // patches it.
+    // system included. The error names the option and not the subnet: the option checks no format,
+    // so a value given to it can be a token passed by mistake, and no CLI error repeats a value
+    // (proposed-cli-surface.md "Errors and exit codes"). The corrected command gives the subnet
+    // once, and reads the system then patches it.
     [TestCase("10.0.0.0/16", "10.0.0.0/16=Office")]
     [TestCase("10.0.0.0/16=Office", "10.0.0.0/16=Office")]
     [TestCase("10.0.0.0/16", "10.0.0.0/16")]
@@ -651,6 +687,11 @@ public class SystemCommandTests
 
         var rejected = await run.RunAsync("system", "update", "GW001", "--enable-gateway-for", first, "--enable-gateway-for", "10.1.0.0/16", "--enable-gateway-for", second);
         CliAssert.Rejected(run, rejected);
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--enable-gateway-for"));
+            Assert.That(rejected.Stderr, Does.Not.Contain("10.0.0.0"));
+        });
 
         var corrected = await run.RunAsync("system", "update", "GW001", "--enable-gateway-for", "10.1.0.0/16", "--enable-gateway-for", second);
         CliAssert.Succeeded(corrected);
@@ -678,7 +719,7 @@ public class SystemCommandTests
 
     // A command that takes several items sends them in one bulk call and prints requested and
     // affected (proposed-cli-surface.md "Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api 1.1.0 SystemsClient (BulkEnableAsync, BulkDisableAsync, RevokeSystemsAsync).
+    // Enclave.Sdk.Api 1.2.0 SystemsClient (BulkEnableAsync, BulkDisableAsync, RevokeSystemsAsync).
     // The API counts two of the three systems, and the output carries its count. The disable case is
     // examples 44 and 45, where the shell expands the file's IDs into arguments.
     [TestCase("enable", "PUT", "systems/enable", "systemsUpdated")]
@@ -707,18 +748,17 @@ public class SystemCommandTests
     // --for takes one system and calls its enable-until route, since the API's timed enable has no
     // bulk form, and prints the system the API returns (proposed-cli-surface.md "Several IDs").
     // --then revoke is the API's Delete action ("Options on every command"), and the expiry is sent
-    // as a UTC instant ("Details"). The expected window spans the run, with a second either side for
-    // a CLI that rounds to whole seconds. Example 7.
+    // as a UTC instant ("Details"). The clock is fixed, so the expiry is exactly 24 hours after it.
+    // Example 7.
     [Test]
     public async Task System_enable_for_a_duration_then_revoke_puts_enable_until_with_the_delete_action_and_prints_the_system()
     {
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{SystemsPath}/K7P2Q/enable-until";
         run.Stub("PUT", path, json: ApiJson.System("K7P2Q", "visitor laptop"));
 
-        var before = DateTimeOffset.UtcNow;
         var result = await run.RunAsync("system", "enable", "K7P2Q", "--for", "24h", "--then", "revoke");
-        var after = DateTimeOffset.UtcNow;
 
         CliAssert.Succeeded(result);
         var request = run.SingleRequest();
@@ -727,7 +767,7 @@ public class SystemCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("PUT"));
             Assert.That(request.Path, Is.EqualTo(path));
-            Assert.That(expiry, Is.InRange(before.AddHours(24).AddSeconds(-1), after.AddHours(24).AddSeconds(1)));
+            Assert.That(expiry, Is.EqualTo(Now.AddHours(24)));
             Assert.That(expiry.Offset, Is.EqualTo(TimeSpan.Zero));
             Assert.That(JsonAssert.Property(request.BodyJson, "expiryAction").GetString(), Is.EqualTo("Delete"));
             Assert.That(result.StdoutJson.GetProperty("systemId").GetString(), Is.EqualTo("K7P2Q"));
@@ -737,7 +777,7 @@ public class SystemCommandTests
 
     // A duration is minutes, hours or days, and afterwards the system is disabled unless --then
     // revoke is given (proposed-cli-surface.md "Command options"). Values are matched ignoring case
-    // ("Options on every command").
+    // ("Options on every command"). The clock is fixed, so the expiry is exactly that long after it.
     [TestCase("--for 30m", 30, "Disable")]
     [TestCase("--for 8h --then disable", 8 * 60, "Disable")]
     [TestCase("--for 14d --then REVOKE", 14 * 24 * 60, "Delete")]
@@ -745,18 +785,16 @@ public class SystemCommandTests
     {
         ArgumentNullException.ThrowIfNull(flags);
         using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
         var path = $"{SystemsPath}/K7P2Q/enable-until";
         run.Stub("PUT", path, json: ApiJson.System("K7P2Q"));
-        var span = TimeSpan.FromMinutes(minutes);
 
-        var before = DateTimeOffset.UtcNow;
         var request = await CliAssert.AcceptedAsync(run, "PUT", path, ["system", "enable", "K7P2Q", .. flags.Split(' ')]);
-        var after = DateTimeOffset.UtcNow;
 
         var expiry = JsonRead.ExpiryDateTime(request.BodyJson);
         Assert.Multiple(() =>
         {
-            Assert.That(expiry, Is.InRange(before + span - TimeSpan.FromSeconds(1), after + span + TimeSpan.FromSeconds(1)));
+            Assert.That(expiry, Is.EqualTo(Now + TimeSpan.FromMinutes(minutes)));
             Assert.That(JsonAssert.Property(request.BodyJson, "expiryAction").GetString(), Is.EqualTo(action));
         });
     }
@@ -824,6 +862,24 @@ public class SystemCommandTests
         Assert.That(JsonRead.ExpiryDateTime(request.BodyJson), Is.EqualTo(new DateTimeOffset(2030, 3, 15, 12, 30, 0, TimeSpan.Zero)));
     }
 
+    // A clock time means its next occurrence (proposed-cli-surface.md "Command options"). In the hour
+    // repeated when the clocks go back, a clock time happens twice, and the next occurrence is the
+    // earliest of the two after now. The clock reads the first 01:15 of 25 October 2026 in
+    // TestData.DaylightSavingZone (00:15 UTC), so 01:30 comes 15 minutes later, at 00:30 UTC. A CLI
+    // that reads the time as standard time alone sends 01:30 UTC, an hour and a quarter later.
+    [Test]
+    public async Task System_enable_until_a_clock_time_in_the_repeated_hour_sends_its_next_occurrence()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(new DateTimeOffset(2026, 10, 25, 0, 15, 0, TimeSpan.Zero), TestData.DaylightSavingZone);
+        var path = $"{SystemsPath}/M4R8T/enable-until";
+        run.Stub("PUT", path, json: ApiJson.System("M4R8T"));
+
+        var request = await CliAssert.AcceptedAsync(run, "PUT", path, "system", "enable", "M4R8T", "--until", "01:30");
+
+        Assert.That(JsonRead.ExpiryDateTime(request.BodyJson), Is.EqualTo(new DateTimeOffset(2026, 10, 25, 0, 30, 0, TimeSpan.Zero)));
+    }
+
     // --then takes disable or revoke on a system; delete is the value for keys and policies
     // (proposed-cli-surface.md "Command options"). --for and --until each take a duration or a time.
     // Options that contradict each other exit 2: --for with --until, or --then without either; and
@@ -868,11 +924,6 @@ public class SystemCommandTests
         CliAssert.Failed(result, "not_found");
         Assert.That(run.SingleRequest().Path, Is.EqualTo($"{SystemsPath}/ZZZZZ/enable-until"));
     }
-
-    // The API splits a search at whitespace into terms and applies each, whatever their order
-    // (portal BaseSearchKeyService.ParseSearchString), so the terms are compared sorted.
-    private static string SearchTerms(string? search) =>
-        string.Join(" ", (search ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries).Order(StringComparer.Ordinal));
 
     // A command that adds or removes tags patches the whole list, in no order the API depends on.
     private static string SortedStrings(JsonElement array) =>

@@ -17,8 +17,8 @@ internal static class SystemListCommand
     {
         var verb = new CliVerb("list", "List the enrolled systems, or with --pending the systems waiting for approval, reading every page.", CommandScope.Organisation);
 
-        var filter = verb.Add(CliOptions.Text("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
-        var tags = verb.Add(CliOptions.TagList("--tag", "Systems with every tag given."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
+        var tags = verb.Add(CliOptions.TagFilter("--tag", "Systems with every tag given."));
 
         // The values each flag stands for are the API's search values ("Filters"). The API matches os
         // against the platform name it stores exactly and case-sensitively (UseExactMatch), so
@@ -30,9 +30,8 @@ internal static class SystemListCommand
         var os = verb.Add(CliOptions.ChoiceText("--os", "Systems on this operating system.", ("windows", "Windows"), ("linux", "Linux"), ("mac", "Mac")));
         var type = verb.Add(CliOptions.ChoiceText("--type", "General-purpose or ephemeral systems.", ("general", "general"), ("ephemeral", "ephemeral")));
         var gateway = verb.Add(CliOptions.Flag("--gateway", "Systems that act as gateways."));
-        var key = verb.Add(CliOptions.Text("--key", "Systems enrolled with the key of this description.", "name"));
+        var key = verb.Add(CliOptions.Filter("--key", "Systems enrolled with the key of this description.", "name"));
         var keyId = verb.Add(CliOptions.Id("--key-id", "Systems enrolled with the key of this ID.", IdFormats.Int32));
-        var dnsName = verb.Add(CliOptions.Text("--dns-name", "Systems that answer to this DNS name.", "name"));
         var notSeenFor = verb.Add(CliOptions.Duration("--not-seen-for", "Systems not connected and not seen for at least this long; a system never seen counts from when it enrolled."));
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled systems."));
         var sort = verb.Add(CliOptions.Enum(
@@ -49,10 +48,16 @@ internal static class SystemListCommand
         verb.Exclusive(key, keyId);
         verb.Requires(waitingFor, pending);
 
-        // The API keeps waiting systems apart, and their list takes no state, platform, type,
-        // gateway, DNS or disabled filter (UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api
-        // 1.1.0), so those options exit 2 with --pending ("Details").
-        Option[] enrolledOnly = [state, os, type, gateway, dnsName, notSeenFor, includeDisabled];
+        // The API keeps waiting systems apart, and their list request has no include_disabled or dns
+        // parameter (portal UnapprovedSystems/Models/UnapprovedSystemsRequestModel.cs;
+        // UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api 1.2.0). Its search is parsed by
+        // the same search key service as the enrolled systems' list (portal
+        // UnapprovedSystems/Handlers/PaginatedUnapprovedSystemsHandler.cs:49,75 pass it to
+        // Enclave.Configuration.Data/Modules/Systems/SystemRepository.cs:513-515), so --filter takes
+        // the same keys with --pending. "Command options" gives the state, platform, type and gateway
+        // flags, --not-seen-for and --include-disabled to enrolled systems only, so with --pending
+        // they exit 2 ("Details").
+        Option[] enrolledOnly = [state, os, type, gateway, notSeenFor, includeDisabled];
         verb.Check(context =>
         {
             if (!context.Get(pending))
@@ -108,15 +113,18 @@ internal static class SystemListCommand
                 return;
             }
 
+            // The list handler never reads the dns parameter (portal
+            // Systems/Handlers/PaginatedSystemsHandler.cs), so the CLI sends none
+            // (proposed-cli-surface.md "Left out").
             var systems = await Paging.ReadAllAsync(
                 (page, perPage) => org.Client.EnrolledSystems.GetSystemsAsync(
                     enrolmentKey,
                     search,
                     context.Get(includeDisabled) ? true : null,
                     context.Get(sort),
-                    context.Get(dnsName),
-                    page,
-                    perPage),
+                    dnsName: null,
+                    pageNumber: page,
+                    perPage: perPage),
                 context.CancellationToken);
 
             // --not-seen-for has no API search key either. A system never seen counts from when it

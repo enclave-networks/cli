@@ -44,7 +44,7 @@ public class NamingTests
         yield return Alias("tag list", "tags list", "GET", TestData.OrgPath("tags"), ApiJson.Page(ApiJson.Tag("web")));
         yield return Alias("trust list", "trusts list", "GET", TestData.OrgPath("trust-requirements"), ApiJson.Page(ApiJson.Trust(5)));
         yield return Alias("log", "logs", "GET", TestData.OrgPath("logs"), ApiJson.Page(ApiJson.Log("System ABCDE enrolled")));
-        yield return Alias("org list", "orgs list", "GET", "/account/orgs", ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        yield return Alias("org list", "orgs list", "GET", "/account/orgs", BothOrgs.Body);
         yield return Alias("org list-users", "orgs list-users", "GET", TestData.OrgPath("users"), ApiJson.Users((TestData.OtherOrgId, "sam@acme.example")));
     }
 

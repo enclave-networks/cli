@@ -1,3 +1,4 @@
+using System.CommandLine;
 using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Org;
@@ -25,6 +26,30 @@ internal static class OrgCommand
         return noun;
     }
 
+    /// <summary>
+    /// Refuses an email address that is empty or only white space with the other argument checks,
+    /// before the token and any call.
+    /// </summary>
+    // An empty or blank address names no one (proposed-cli-surface.md "Details"). Passed on, invite
+    // and cancel-invite send it, and the API refuses it (portal
+    // CreateOrganisationInviteModelValidator.cs:16 and DeleteOrganisationInviteModelValidator.cs:16,
+    // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
+    // 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid), and remove-user's lookup matches no
+    // member; both come after the token, so the command would fail one way with a token and another
+    // without ("Errors and exit codes").
+    internal static void RefuseBlankEmail(CliVerb verb, Symbol symbol, Func<CliContext, string?> value)
+    {
+        ArgumentNullException.ThrowIfNull(verb);
+
+        verb.Check(context =>
+        {
+            if (value(context) is { } email && string.IsNullOrWhiteSpace(email))
+            {
+                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes an email address, and the value given is blank.");
+            }
+        });
+    }
+
     private static CliVerb Show()
     {
         var verb = new CliVerb("show", "Show the organisation's properties.", CommandScope.Organisation);
@@ -43,7 +68,15 @@ internal static class OrgCommand
     private static CliVerb Update()
     {
         var verb = new CliVerb("update", "Change the organisation's name, website or phone number, and print its properties.", CommandScope.Organisation, changes: true);
-        var name = verb.Add(CliOptions.Text("--name", "The organisation's new name.", "name"));
+        // The API refuses an empty name and stores one of white space, since it checks only that
+        // the name is at least one character long (portal
+        // Enclave.Api/Modules/OrganisationManagement/Organisation/Validators/OrganisationPatchModelValidator.cs:11,
+        // Length(1, ...): FluentValidation 11.9.0, LengthValidator, counts white space; the handler
+        // passes the name on as given, Handlers/OrganisationModifyHandler.cs:41-60). A blank
+        // name names nothing, and --org refuses one, so an organisation named so could not be
+        // chosen by name; both exit 2 before the token ("Details"). The website and phone number
+        // are not validated (same file), so "" clears them.
+        var name = verb.Add(CliOptions.NonBlank("--name", "The organisation's new name.", "the organisation's new name", "name"));
         var website = verb.Add(CliOptions.Text("--website", "The organisation's website.", "url"));
         var phone = verb.Add(CliOptions.Text("--phone", "The organisation's phone number.", "phone"));
 
@@ -89,7 +122,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetOrganisationUsersAsync returns every user in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
             var users = await org.Client.GetOrganisationUsersAsync();
 
             await context.Output.WriteListAsync(ListKind.User, users, context.CancellationToken);
@@ -107,7 +140,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetPendingInvitesAsync returns every invite in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.1.0), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
             var invites = await org.Client.GetPendingInvitesAsync();
 
             await context.Output.WriteListAsync(ListKind.Invite, invites, context.CancellationToken);
@@ -117,12 +150,15 @@ internal static class OrgCommand
     }
 
     // A failed invite or cancel-invite is reported, with or without problem details: Enclave.Sdk.Api
-    // 1.1.0 checks the status of these responses (proposed-cli-surface.md "`Enclave.Sdk.Api`
+    // 1.2.0 checks the status of these responses before it reads the body
+    // (OrganisationScopedClient.ReadModelAsync; proposed-cli-surface.md "`Enclave.Sdk.Api`
     // changes", item 6), and CliAction maps its exception like any other.
     private static CliVerb Invite()
     {
         var verb = new CliVerb("invite", "Invite someone to the organisation by email address.", CommandScope.Organisation, changes: true);
         var email = verb.Add(CliArguments.Text("email", "The email address to invite."));
+
+        RefuseBlankEmail(verb, email, context => context.Get(email));
 
         verb.SetHandler(async context =>
         {
@@ -144,6 +180,8 @@ internal static class OrgCommand
     {
         var verb = new CliVerb("cancel-invite", "Cancel the pending invite to an email address.", CommandScope.Organisation, changes: true);
         var email = verb.Add(CliArguments.Text("email", "The invited email address."));
+
+        RefuseBlankEmail(verb, email, context => context.Get(email));
 
         verb.SetHandler(async context =>
         {

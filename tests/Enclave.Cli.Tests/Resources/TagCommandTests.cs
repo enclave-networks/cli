@@ -1,7 +1,7 @@
-using System.Globalization;
 using System.Text.Json;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
+using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
@@ -146,7 +146,7 @@ public class TagCommandTests
     }
 
     // The patch holds only the fields given ("Create and update"). Enclave.Sdk.Api keys a PATCH
-    // body by the C# property name (PatchClient.Set, version 1.1.0).
+    // body by the C# property name (PatchClient.Set, version 1.2.0).
     [Test]
     public async Task Tag_set_on_a_tag_that_exists_patches_only_the_fields_given_and_prints_the_tag()
     {
@@ -189,26 +189,36 @@ public class TagCommandTests
 
     // The update answers 404 for a tag the API does not hold (portal
     // TagModifyHandler.GetResponseAsync:58), so tag set creates it ("Command options", "Calls per
-    // command"). A create sends an empty list for a list flag left out, so the trust requirements go
-    // as [] ("Details").
+    // command"). A create sends a value for every setting, and an empty list for a list flag left
+    // out, so the trust requirements go as [] ("Create and update", "Details"): the body is
+    // TagCreateModel in camelCase, every property written (Enclave.Sdk.Api 1.2.0
+    // TagsClient.CreateAsync with Constants.JsonSerializerOptions, which ignores no property). The
+    // output is the model the API answered with, whose colour and notes differ from those sent, read
+    // with exact names, since JsonAssert.Property also matches a name in another case.
     [Test]
     public async Task Tag_set_on_a_tag_that_does_not_exist_creates_it_and_prints_it()
     {
         using var run = CliRun.Start();
         StubMissingTag(run, "web");
-        run.Stub("POST", TagsPath, json: ApiJson.Tag("web"));
+        run.Stub("POST", TagsPath, json: ApiJson.Altered(ApiJson.Tag("web"), ("colour", "#000000"), ("notes", "from-the-api")));
+        string[] fields = ["tag", "colour", "notes", "trustRequirements"];
 
         var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--notes", "Web servers, all regions");
 
         CliAssert.Succeeded(result);
         var create = SingleChange(run, "POST", TagsPath);
+        var body = create.BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(create.BodyJson, "tag").GetString(), Is.EqualTo("web"));
-            Assert.That(JsonAssert.Property(create.BodyJson, "colour").GetString(), Is.EqualTo("#2f80ed"));
-            Assert.That(JsonAssert.Property(create.BodyJson, "notes").GetString(), Is.EqualTo("Web servers, all regions"));
-            Assert.That(create.BodyIds("trustRequirements"), Is.Empty);
-            Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web"));
+            Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(fields));
+            Assert.That(body.GetProperty("tag").GetString(), Is.EqualTo("web"));
+            Assert.That(body.GetProperty("colour").GetString(), Is.EqualTo("#2f80ed"));
+            Assert.That(body.GetProperty("notes").GetString(), Is.EqualTo("Web servers, all regions"));
+            Assert.That(body.GetProperty("trustRequirements").ValueKind, Is.EqualTo(JsonValueKind.Array));
+            Assert.That(body.GetProperty("trustRequirements").GetArrayLength(), Is.Zero);
+            Assert.That(result.StdoutJson.GetProperty("tag").GetString(), Is.EqualTo("web"));
+            Assert.That(result.StdoutJson.GetProperty("colour").GetString(), Is.EqualTo("#000000"));
+            Assert.That(result.StdoutJson.GetProperty("notes").GetString(), Is.EqualTo("from-the-api"));
         });
     }
 
@@ -364,9 +374,11 @@ public class TagCommandTests
         var result = await run.RunAsync("tag", "set", "prod", "--trust", "uk only");
 
         var error = CliAssert.Failed(result, "invalid_argument");
+        var candidates = error.GetProperty("candidates");
         Assert.Multiple(() =>
         {
-            Assert.That(error.TryGetProperty("candidates", out var candidates) && candidates.ValueKind == JsonValueKind.Array ? candidates.GetArrayLength() : 0, Is.Zero);
+            Assert.That(candidates.ValueKind, Is.EqualTo(JsonValueKind.Array));
+            Assert.That(candidates.EnumerateArray(), Is.Empty);
             Assert.That(run.Requests.Where(request => request.Method != "GET"), Is.Empty);
         });
     }
@@ -385,8 +397,8 @@ public class TagCommandTests
         Assert.That(Keys(SingleChange(run, "PATCH", TagPath("web")).BodyJson), Is.EqualTo("Colour").IgnoreCase);
     }
 
-    // The read tag set makes to choose between update and create still runs under --dry-run, and
-    // the change it chose is printed and not sent ("Dry run").
+    // The read tag set makes to choose between update and create runs under --dry-run, and the
+    // change it chose is printed and not sent ("Dry run").
     [Test]
     public async Task Tag_set_with_dry_run_on_a_tag_that_exists_prints_the_update_and_sends_no_change()
     {
@@ -396,7 +408,7 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--dry-run");
 
-        var request = DryRunRequest(result, "PATCH", TagPath("web"));
+        var request = DryRunOutput.RequestInTestOrg(result, "PATCH", TagPath("web"));
         Assert.Multiple(() =>
         {
             Assert.That(Keys(JsonAssert.Property(request, "body")), Is.EqualTo("Colour").IgnoreCase);
@@ -413,7 +425,7 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "set", "web", "--colour", "#2f80ed", "--dry-run");
 
-        var body = JsonAssert.Property(DryRunRequest(result, "POST", TagsPath), "body");
+        var body = JsonAssert.Property(DryRunOutput.RequestInTestOrg(result, "POST", TagsPath), "body");
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(body, "tag").GetString(), Is.EqualTo("web"));
@@ -424,7 +436,7 @@ public class TagCommandTests
     }
 
     // A command that takes several items always makes the bulk call, and the tag bulk delete takes
-    // names in a "tags" array (Enclave.Sdk.Api 1.1.0, TagsClient.DeleteTagsAsync). affected below
+    // names in a "tags" array (Enclave.Sdk.Api 1.2.0, TagsClient.DeleteTagsAsync). affected below
     // requested is a success ("Several IDs").
     [Test]
     public async Task Tag_delete_sends_every_tag_named_in_one_bulk_call()
@@ -440,7 +452,7 @@ public class TagCommandTests
         {
             Assert.That(request.Method, Is.EqualTo("DELETE"));
             Assert.That(request.Path, Is.EqualTo(TagsPath));
-            Assert.That(Names(request), Is.EqualTo("db,web"));
+            Assert.That(request.SortedBodyIds("tags"), Is.EqualTo("db,web"));
         });
     }
 
@@ -467,7 +479,7 @@ public class TagCommandTests
         var result = await run.RunAsync("tag", "delete", "-");
 
         CliAssert.Bulk(result, 2, 2);
-        Assert.That(Names(run.SingleRequest()), Is.EqualTo("db,web"));
+        Assert.That(run.SingleRequest().SortedBodyIds("tags"), Is.EqualTo("db,web"));
     }
 
     [Test]
@@ -478,7 +490,7 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "delete", "web", "--dry-run");
 
-        var request = DryRunRequest(result, "DELETE", TagsPath);
+        var request = DryRunOutput.RequestInTestOrg(result, "DELETE", TagsPath);
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.StringList(JsonAssert.Property(JsonAssert.Property(request, "body"), "tags")), Is.EqualTo("web"));
@@ -518,36 +530,4 @@ public class TagCommandTests
 
         return changes[0];
     }
-
-    // The output form "Dry run" gives: { "dryRun": true, "org": { id, name }, "requests": [...] },
-    // with requests a list holding the one change here. CliRun names the organisation by ID
-    // (ENCLAVE_ORG_ID), and then no lookup gives its name, which is null.
-    private static JsonElement DryRunRequest(CliResult result, string method, string path)
-    {
-        CliAssert.Succeeded(result);
-        var output = result.StdoutJson;
-        var org = JsonAssert.Property(output, "org");
-        var requests = JsonAssert.Property(output, "requests");
-        Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
-        Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
-        var request = requests[0];
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(JsonAssert.Property(request, "method").GetString(), Is.EqualTo(method));
-            Assert.That(JsonAssert.Property(request, "url").GetString(), Does.EndWith(path));
-        });
-
-        return request;
-    }
-
-    // Sorted, so a test can state the exact set of fields an update sends.
-    private static string Keys(JsonElement body) => string.Join("; ", JsonRead.PropertyNames(body).Order(StringComparer.OrdinalIgnoreCase));
-
-    // Sorted, since the order of a bulk call's names does not change what it does.
-    private static string Names(RecordedRequest request) =>
-        string.Join(",", request.BodyIds("tags").Order(StringComparer.Ordinal));
 }

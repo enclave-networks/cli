@@ -33,8 +33,10 @@ internal static class PolicySeveralCommand
                 return;
             }
 
-            // The API's timed enable takes one policy and has no bulk form ("Several IDs").
-            if (selection.Ids.Count + selection.Names.Count != 1)
+            // The API's timed enable takes one policy and has no bulk form ("Several IDs"). A name
+            // given twice names one policy, since names match whole and ignoring case, as
+            // NameLookup.Match compares them ("Names and IDs"); IDs arrive with duplicates removed.
+            if (selection.Ids.Count + selection.Names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
             {
                 Option timed = context.IsGiven(forOption) ? forOption : untilOption;
                 throw CliErrors.InvalidArgument(timed.Name, $"{timed.Name} takes one policy: the API's timed enable has no bulk form.");
@@ -81,7 +83,7 @@ internal static class PolicySeveralCommand
     private static CliVerb Several(string name, string description, out Argument<IReadOnlyList<string>> policies, out Option<IReadOnlyList<int>?> ids)
     {
         var verb = new CliVerb(name, $"{description} Takes policy descriptions, IDs after --id, or \"-\" to read a list from stdin, and prints {{ requested, affected }}.", CommandScope.Organisation, changes: true);
-        policies = verb.Add(CliArguments.Many("policy", "A policy's description, matched whole and ignoring case."));
+        policies = verb.Add(CliArguments.Names("policy", "A policy's description, matched whole and ignoring case.", "a policy's description"));
         ids = verb.Add(CliOptions.IdList("--id", "Policy IDs, separated by commas.", IdFormats.Int32));
 
         verb.Exclusive(policies, ids);

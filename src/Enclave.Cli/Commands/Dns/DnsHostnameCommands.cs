@@ -19,9 +19,9 @@ internal static class DnsHostnameCommands
     public static CliVerb List()
     {
         var verb = new CliVerb("list-hostnames", "List the hostnames, reading every page.", CommandScope.Organisation);
-        var zone = verb.Add(CliOptions.Text("--zone", "Hostnames in the zone of this name.", "name"));
+        var zone = verb.Add(CliOptions.Filter("--zone", "Hostnames in the zone of this name.", "name"));
         var zoneId = verb.Add(CliOptions.Id("--zone-id", "Hostnames in the zone of this ID.", IdFormats.Int32));
-        var filter = verb.Add(CliOptions.Text("--filter", "Hostnames whose name contains this text."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Hostnames whose name contains this text."));
 
         verb.Exclusive(zone, zoneId);
 
@@ -65,9 +65,9 @@ internal static class DnsHostnameCommands
     public static CliVerb Create()
     {
         var verb = new CliVerb("create-hostname", "Create a hostname in the zone its name ends in, and print it.", CommandScope.Organisation, changes: true);
-        var hostname = verb.Add(CliArguments.Text("hostname", "The full hostname, such as db.internal."));
-        var tags = verb.Add(CliOptions.TagList("--tags", "The hostname answers with the systems that have these tags."));
-        var systems = verb.Add(CliOptions.IdList("--systems", "The hostname answers with these systems.", IdFormats.System, "id,id"));
+        var hostname = verb.Add(CliArguments.Name("hostname", "The full hostname, such as db.internal.", "a full hostname"));
+        var tags = verb.Add(CliOptions.TagList("--tags", "The hostname answers with the systems that have these tags.", needsEntries: true));
+        var systems = verb.Add(CliOptions.IdList("--systems", "The hostname answers with these systems.", IdFormats.System, "id,id", needsEntries: true));
         var notes = verb.Add(CliOptions.Text("--notes", "The hostname's notes."));
 
         // The API refuses tags that hold a tag twice (portal DnsRecordCreateValidator.cs:32).
@@ -104,10 +104,10 @@ internal static class DnsHostnameCommands
     public static CliVerb Update()
     {
         var (verb, hostname, id) = ForHostname("update-hostname", "Change a hostname and print it.", changes: true);
-        var name = verb.Add(CliOptions.Text("--name", "The hostname's new full name, in the same zone.", "hostname"));
+        var name = verb.Add(CliOptions.NonBlank("--name", "The hostname's new full name, in the same zone.", "a full hostname", "hostname"));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the hostname's tags; \"\" removes them all."));
-        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the hostname's others."));
-        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the hostname's others."));
+        var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the hostname's others.", needsEntries: true));
+        var removeTags = verb.Add(CliOptions.TagList("--remove-tags", "Remove tags, keeping the hostname's others.", needsEntries: true));
         var setSystems = verb.Add(CliOptions.IdList("--set-systems", "Replace the hostname's systems; \"\" removes them all.", IdFormats.System, "id,id"));
         var notes = verb.Add(CliOptions.Text("--notes", "The hostname's notes."));
 
@@ -132,10 +132,12 @@ internal static class DnsHostnameCommands
                 var (zone, recordName) = DnsLookup.Place(newName, zones, name.Name);
 
                 // The API cannot move a record between zones: the patch takes a record name within
-                // the record's own zone (portal DnsRecordPatchModel.Name; "Details").
+                // the record's own zone (portal DnsRecordPatchModel.Name; "Details"). The message
+                // names the option only, and neither the value nor the zone it ends in, as no
+                // message repeats a value (CliOptions).
                 if (zone.Id != current.ZoneId)
                 {
-                    throw CliErrors.InvalidArgument(name.Name, $"{name.Name} takes a full hostname in the hostname's own zone; \"{newName}\" is in the zone \"{zone.Name}\", and the API cannot move a hostname to another zone.");
+                    throw CliErrors.InvalidArgument(name.Name, $"{name.Name} takes a full hostname in the hostname's own zone, and the hostname given is in another zone; the API cannot move a hostname to another zone.");
                 }
 
                 patch.Set(model => model.Name, recordName);
@@ -167,7 +169,7 @@ internal static class DnsHostnameCommands
     public static CliVerb Delete()
     {
         var verb = new CliVerb("delete-hostname", "Delete hostnames. Takes full hostnames, IDs after --id, or \"-\" to read a list from stdin, and prints { requested, affected }.", CommandScope.Organisation, changes: true);
-        var hostnames = verb.Add(CliArguments.Many("hostname", "A full hostname, such as db.internal."));
+        var hostnames = verb.Add(CliArguments.Names("hostname", "A full hostname, such as db.internal.", "a full hostname"));
         var ids = verb.Add(CliOptions.IdList("--id", "Hostname IDs, separated by commas.", IdFormats.Int32));
 
         verb.Exclusive(hostnames, ids);
@@ -256,7 +258,7 @@ internal static class DnsHostnameCommands
     private static (CliVerb Verb, Argument<string?> Hostname, Option<int?> Id) ForHostname(string name, string description, bool changes)
     {
         var verb = new CliVerb(name, description, CommandScope.Organisation, changes);
-        var hostname = verb.Add(CliArguments.OptionalText("hostname", "The full hostname, such as db.internal, matched ignoring case."));
+        var hostname = verb.Add(CliArguments.OptionalName("hostname", "The full hostname, such as db.internal, matched ignoring case.", "a full hostname"));
         var id = verb.Add(CliOptions.Id("--id", "The hostname's ID.", IdFormats.Int32));
 
         verb.ExactlyOne(hostname, id);

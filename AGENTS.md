@@ -33,7 +33,9 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - NUnit 4: `Assert.That`, `Assert.Multiple`.
 - Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin, in-memory files (`run.Files`), a fake API and a fake partner API on separate addresses, and records exit code, stdout, stderr and every request.
 - Tests never write to the disk: set up and check files through `run.Files`. A run that writes to the disk fails. Only `Storage/DiskFileStoreTests.cs` touches the disk, in its own temp directory, to prove `DiskFileStore` itself.
+- A run that reads stdin while `StdinIsTerminal` is set fails.
 - Fake the Enclave API with WireMock.Net through `CliRun` or `LoopbackApi`, which listen on 127.0.0.1 only. A listener on every interface raises a Windows Firewall prompt and accepts connections from other machines. enclave.sdk.api's own tests use WireMock.Net the same way.
+- `CliRun.NetworkHandler` replaces the network beneath the CLI's own handler, for failures a fake API cannot give, such as a timeout. A run whose default partner API address (`DefaultPartnerApiUrl`) is not the fake's is refused unless it is set.
 - Shared helpers live in `Support/`: `CliAssert` (outcomes), `JsonRead` and `JsonAssert` (JSON), `ApiJson` (API response bodies), `TestData` (paths, IDs and the test time zone), `FixedTimeProvider` (clocks). Add a helper there when a second test file needs it; NEVER copy one into a test class.
 - Assert the request the fake received (method, path, query, body) as well as the CLI's output. A test MUST fail if the CLI sends the wrong request, or none.
 - NEVER call the live API. NEVER read the real `~/.enclave/` or user profile in tests; inject paths and environment.
@@ -45,6 +47,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - Every API call goes through the `Enclave.Sdk.Api` package. NEVER use `HttpClient` or build requests in this repository.
 - An endpoint or field `Enclave.Sdk.Api` lacks: stop and report it. It is added to enclave-networks/enclave.sdk.api first, with tests there, then the `Enclave.Sdk.Api` version is bumped here. NEVER work around a gap locally.
 - The API and `Enclave.Sdk.Api.Data` (built from the portal repository) do not change. Use only routes and fields the API has; a model `Enclave.Sdk.Api.Data` lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
+- The API is the security boundary: it decides what a token may read and change. NEVER add authorisation checks to the CLI, such as checking that an organisation or customer belongs to the caller, and NEVER describe a call the CLI makes (a lookup, a read for an exit code) as a security control. A gap in the API's own checks is reported to the API team.
 - One command makes one `Enclave.Sdk.Api` call, with the exceptions listed in `proposed-cli-surface.md` "Calls per command": paging, name lookups, reads that keep tags, labels and conditions, and bulk calls of 200 IDs.
 - Command shape: `enclave-cli <noun> <verb> [args] [options]`. A noun's own parts take hyphenated verbs (`dns create-hostname`, `org remove-user`). Nouns are singular, with a hidden plural alias: `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
 - `proposed-cli-surface.md` is the reference for every command, flag, default and example. A command or flag it does not list is not added without changing it first.
@@ -59,6 +62,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - NEVER prompt, and NEVER wait on interactive input. Changes run when given; there is no confirmation option.
 - Every command that changes something supports `--dry-run`: print the request it would send, send nothing, exit 0.
 - Every field is set with a flag; there is no file or JSON input. A create sends every setting that changes behaviour, with the value `proposed-cli-surface.md` gives when a flag is left out.
+- A value given as `""` or only white space is set only where an empty value means something: clearing an optional field, setting or list. Where it means nothing (a name, email address, ID, filter or required setting), the command exits 2 `invalid_argument` before the token is read and before any call. NEVER treat it as a flag left out: an empty value usually comes from an unset shell variable, and dropping the flag widens the command (`--tag "$RETIRED" | system revoke -` would revoke every system).
 - An ID is never a positional argument. `--id` gives the command's own item; other items have `--<item>` for a name and `--<item>-id` for an ID. The option decides how a value is parsed; NEVER inspect a value to guess its type.
 - `-` in place of the arguments reads a list printed by an `enclave-cli` list command; its `kind` must match the command. A command that takes several items takes any number, sends them in bulk calls of 200, and prints `{ "requested": n, "affected": m }`.
 - Ranges, ACLs, gateway subnets and countries take an optional `=label`; an update keeps the labels of entries that stay.
@@ -69,6 +73,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 
 ## Code
 - .NET 10, nullable enabled, file-scoped namespaces, `_camelCase` private fields. Rules: `.editorconfig` (matches enclave.sdk.api).
+- `global.json` requires SDK 10.0.102 or later, the first with runtime 10.0.2. Runtimes 10.0.0 and 10.0.1 have dotnet/runtime#121578, which can skip a caller's catch block when an exception is thrown from a `finally`, and a self-contained build ships the SDK's runtime.
 - Analyzers: `AnalysisMode=AllEnabledByDefault` plus StyleCop; `TreatWarningsAsErrors=true`. Fix the cause. Suppress only with a comment at the suppression giving the reason.
 - Package versions live only in `Directory.Packages.props`. Restore uses nuget.org only (`NuGet.config`). NEVER add a private feed: forks and CI build without credentials.
 - `InvariantGlobalization` is on. Format and parse with `CultureInfo.InvariantCulture`.
@@ -98,6 +103,7 @@ Code comments also:
 - Push to main: the same, then the `release` job publishes GitHub release `v<version>` with eight archives and `SHA256SUMS`.
 - Adding or removing a RID changes all of: the build matrices, the release job's expected file list, README's supported platforms table, and "RIDs shipped" above.
 - Version: `YEAR.MONTH.DAY.RUN` in UTC, no leading zeros (e.g. `2026.10.5.57`), the scheme other Enclave products use. Pull requests add `-pr.<number>`. Computed once, in the `version` job.
+- Accepted: re-running a whole workflow after midnight UTC gives a new version and publishes a second release of the same commit, with the same binaries. NEVER add a token or an API call to keep the version stable across re-runs.
 - NEVER use `pull_request_target`. NEVER give a pull-request job a secret or write permission. Keep top-level `permissions: contents: read`; grant more per job.
 - Reference actions by major version tag, e.g. `actions/checkout@v7`.
 - Pass `${{ }}` values to `run:` scripts through `env:`.

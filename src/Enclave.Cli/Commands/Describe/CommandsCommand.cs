@@ -20,7 +20,7 @@ internal static class CommandsCommand
 
     private const string ListNames = "system list, key list, policy list or tag list";
 
-    // The lists whose search keys Enclave.Sdk.Api 1.1.0 reads, by their command words. Each
+    // The lists whose search keys Enclave.Sdk.Api 1.2.0 reads, by their command words. Each
     // GetSearchKeysAsync calls GET /org/{orgId}/<list>/meta/search-keys. system list --pending reads
     // the unapproved systems' keys, which have their own route (UnapprovedSystemsClient).
     private static readonly Dictionary<string, Func<IOrganisationScopedClient, Task<IReadOnlyList<SearchKey>>>> SearchKeyLists = new(StringComparer.Ordinal)

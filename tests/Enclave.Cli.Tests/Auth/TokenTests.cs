@@ -1,7 +1,6 @@
 using Enclave.Cli.Context;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
-using WireMock;
 
 namespace Enclave.Cli.Tests.Auth;
 
@@ -110,20 +109,20 @@ public class TokenTests
 
         var result = await run.RunAsync("system", "list");
 
-        var received = otherApi.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>().ToArray();
+        var received = LoopbackApi.Received(otherApi);
         var expectedToken = tokenFromEnvironment ? TestData.Token : FileToken;
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty, "The request went to the default API address.");
-            Assert.That(received.Select(request => $"{request.Method} {request.Path}"), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
-            Assert.That(received.Select(Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
+            Assert.That(received.Select(request => request.Call), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
+            Assert.That(received.Select(request => request.Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
         });
     }
 
     // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made, from
-    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.1.0), so
+    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.2.0), so
     // an address that is not a URL fails every command. The CLI reports it as a bad setting naming
     // the file, as it does a bad baseUrl, before any call.
     [TestCase("not a url")]
@@ -161,26 +160,48 @@ public class TokenTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // Checks run in this order: arguments, the token, the organisation, then the call ("Errors and
-    // exit codes"). With no token and an organisation choice that would end in no_org (none chosen,
-    // several organisations) or a lookup (a name in ENCLAVE_ORG), the CLI reports token_missing and
-    // makes no lookup.
-    [TestCase("none chosen")]
-    [TestCase("ENCLAVE_ORG")]
-    public async Task The_token_is_checked_before_the_organisation(string choice)
+    // Checks run in this order: arguments, the token, the organisation or partner, then the call
+    // ("Errors and exit codes"). With no token, the CLI reports token_missing and makes no call
+    // whatever the choice of organisation or partner would give: no_org (none chosen, several
+    // organisations), a lookup (a name in ENCLAVE_ORG), or exit 2 with no call ("Details": ENCLAVE_ORG
+    // with ENCLAVE_ORG_ID, and a malformed source that is read). The choices that exit 2 need no
+    // client, so they are the ones a CLI that chose before reading the token reports. status
+    // chooses the organisation and the partner as any command does ("Login, logout and status").
+    [TestCaseSource(nameof(ContextChoices))]
+    public async Task The_token_is_checked_before_the_organisation_and_the_partner(string[] args, string choice)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_TOKEN");
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+        BothOrgs.Stub(run);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
-        if (choice == "ENCLAVE_ORG")
+        switch (choice)
         {
-            run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
+            case "none chosen":
+                break;
+            case "ENCLAVE_ORG":
+                run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
+                break;
+            case "ENCLAVE_ORG with ENCLAVE_ORG_ID":
+                run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
+                run.Environment["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString();
+                break;
+            case "ENCLAVE_ORG_ID that is not a GUID":
+                run.Environment["ENCLAVE_ORG_ID"] = "not-a-guid";
+                break;
+            case "ENCLAVE_PARTNER_ID that is not a GUID":
+                run.Environment["ENCLAVE_PARTNER_ID"] = "12";
+                break;
+            case "cli.json that is not JSON":
+                run.Files.WriteText(run.CliConfigPath, "{ not json", privateToUser: false);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(choice), choice, "No arrangement for this choice.");
         }
 
-        var result = await run.RunAsync("system", "list");
+        var result = await run.RunAsync(args);
 
         CliAssert.Rejected(run, result, "token_missing");
     }
@@ -198,7 +219,7 @@ public class TokenTests
 
         foreach (var run in new[] { withToken, withoutToken })
         {
-            run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName)));
+            BothOrgs.Stub(run);
             run.Stub("GET", OrgSystems, json: ApiJson.Page());
             run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
         }
@@ -283,7 +304,12 @@ public class TokenTests
     }
 
     // Bad arguments of each kind this area has: an ID that is not a GUID, a name with its ID option,
-    // an unknown option, a missing argument, and an option the command does not take ("Details").
+    // an unknown option, a missing argument, an option the command does not take ("Details"), an
+    // empty or blank organisation name, which names no organisation and would otherwise cost the
+    // lookup a name makes ("Calls per command") before matching nothing, and an empty or blank
+    // organisation or partner ID, which is no GUID ("ID checks"). status succeeds with no
+    // organisation or partner chosen ("Login, logout and status"), so a CLI that read such an ID
+    // as not given would print its status.
     private static IEnumerable<TestCaseData> BadArgumentRuns()
     {
         yield return BadArguments("system", "list", "--org-id", "12");
@@ -294,16 +320,47 @@ public class TokenTests
         yield return BadArguments("org", "use", "--id", "12");
         yield return BadArguments("org", "list", "--dry-run");
         yield return BadArguments("login", "--dry-run");
+        yield return BadArguments("system", "list", "--org", string.Empty);
+        yield return BadArguments("system", "list", "--org", "  ");
+        yield return BadArguments("status", "--org", string.Empty);
+        yield return BadArguments("status", "--org-id", string.Empty);
+        yield return BadArguments("status", "--partner-id", " ");
+        yield return BadArguments("commands", "system", "list", "--search-keys", "--org", " ");
+        yield return BadArguments("org", "use", string.Empty);
+        yield return BadArguments("org", "use", " \t ");
     }
 
+    // Each choice for an organisation command, and for status, which also reads the partner; and
+    // the partner choices for a partner command, which reads cli.json for its partner.
+    private static IEnumerable<TestCaseData> ContextChoices()
+    {
+        string[] systemList = ["system", "list"];
+        string[] status = ["status"];
+        string[] partnerList = ["partner", "customer", "list"];
+        string[] organisationChoices = ["none chosen", "ENCLAVE_ORG", "ENCLAVE_ORG with ENCLAVE_ORG_ID", "ENCLAVE_ORG_ID that is not a GUID", "cli.json that is not JSON"];
+
+        foreach (var choice in organisationChoices)
+        {
+            yield return ContextChoice(systemList, choice);
+            yield return ContextChoice(status, choice);
+        }
+
+        yield return ContextChoice(status, "ENCLAVE_PARTNER_ID that is not a GUID");
+        yield return ContextChoice(partnerList, "ENCLAVE_PARTNER_ID that is not a GUID");
+        yield return ContextChoice(partnerList, "cli.json that is not JSON");
+    }
+
+    private static TestCaseData ContextChoice(string[] args, string choice) =>
+        new TestCaseData(args, choice).SetArgDisplayNames(string.Join(" ", args), choice);
+
+    // An empty or blank argument is shown quoted, so the cases with one have distinct names.
     private static TestCaseData BadArguments(params string[] args) =>
-        new TestCaseData((object)args).SetArgDisplayNames(string.Join(" ", args));
+        new TestCaseData((object)args).SetArgDisplayNames(string.Join(" ", args.Select(arg => string.IsNullOrWhiteSpace(arg) ? $"'{arg}'" : arg)));
 
     // Stubs what each command needs to reach its outcome, and returns its arguments and exit code.
     private static CommandRun Arrange(CliRun run, string name)
     {
         var oneOrg = ApiJson.Orgs((TestData.OrgId, TestData.OrgName));
-        var bothOrgs = ApiJson.Orgs((TestData.OrgId, TestData.OrgName), (TestData.OtherOrgId, TestData.OtherOrgName));
 
         switch (name)
         {
@@ -322,36 +379,36 @@ public class TokenTests
                 run.SaveCredentials(TestData.Token);
                 return LocalCommand("logout");
             case "status with ENCLAVE_TOKEN":
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with credentials.json":
                 run.Environment.Remove("ENCLAVE_TOKEN");
                 run.SaveCredentials(TestData.Token);
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with no organisation chosen":
                 run.Environment.Remove("ENCLAVE_ORG_ID");
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with a refused token":
                 run.StubProblem("GET", "/account/orgs", 401, "Unauthorized");
                 return Command(3, "status");
             case "org list":
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "org", "list");
             case "org use by name":
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "org", "use", TestData.OtherOrgName);
             case "org use --id":
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(0, "org", "use", "--id", TestData.OtherOrgId.ToString());
             case "an organisation looked up by name":
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
                 return Command(0, "system", "list", "--org", TestData.OtherOrgName);
             case "several organisations and none chosen":
                 run.Environment.Remove("ENCLAVE_ORG_ID");
-                run.Stub("GET", "/account/orgs", json: bothOrgs);
+                BothOrgs.Stub(run);
                 return Command(2, "system", "list");
             default:
                 throw new ArgumentOutOfRangeException(nameof(name), name, "No arrangement for this command.");
@@ -361,12 +418,6 @@ public class TokenTests
     private static CommandRun Command(int exitCode, params string[] args) => new(args, exitCode, SendsRequests: true);
 
     private static CommandRun LocalCommand(params string[] args) => new(args, 0, SendsRequests: false);
-
-    private static string? Authorization(IRequestMessage request) =>
-        request.Headers?
-            .Where(header => string.Equals(header.Key, "Authorization", StringComparison.OrdinalIgnoreCase))
-            .Select(header => string.Join(", ", header.Value))
-            .FirstOrDefault();
 
     private sealed record CommandRun(string[] Args, int ExitCode, bool SendsRequests);
 }
