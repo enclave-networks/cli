@@ -11,24 +11,20 @@ namespace Enclave.Cli.Context;
 /// </summary>
 internal static class SettingsFile
 {
-    public static string PathFor(CliHost host)
-    {
-        ArgumentNullException.ThrowIfNull(host);
-
-        return Path.Combine(host.HomeDirectory, ".enclave", "cli.json");
-    }
+    /// <summary>
+    /// The file's path, or null when there is no home directory (EnclaveDirectory.HomeFrom).
+    /// </summary>
+    public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "cli.json");
 
     /// <summary>
-    /// The settings object, or null when there is no file. A file that is not a JSON object exits
-    /// 2; it is read only when no higher source chose the organisation or partner
-    /// (proposed-cli-surface.md "Details"), so a malformed file fails only the commands that need it.
+    /// The settings object, or null when there is no file or no home directory. A file that is not
+    /// a JSON object exits 2; it is read only when no higher source chose the organisation or
+    /// partner (proposed-cli-surface.md "Details"), so a malformed file fails only the commands that
+    /// need it.
     /// </summary>
     public static JsonObject? Read(CliHost host)
     {
-        var path = PathFor(host);
-        var text = host.Files.ReadText(path);
-
-        if (text is null)
+        if (PathFor(host) is not { } path || host.Files.ReadText(path) is not { } text)
         {
             return null;
         }
@@ -58,13 +54,13 @@ internal static class SettingsFile
 
     /// <summary>
     /// Sets one default and writes the file, keeping the other defaults it holds. A file that is not
-    /// a JSON object is replaced.
+    /// a JSON object is replaced. Exits 2 when there is no home directory.
     /// </summary>
     public static void Save(CliHost host, string key, JsonObject value)
     {
         ArgumentNullException.ThrowIfNull(host);
 
-        var path = PathFor(host);
+        var path = PathFor(host) ?? throw EnclaveDirectory.NoHome();
         JsonObject settings;
 
         try

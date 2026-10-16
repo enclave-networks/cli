@@ -11,8 +11,10 @@ namespace Enclave.Cli.Core;
 /// is a parse error, so it exits 2 with invalid_argument before any call and before the token is
 /// checked.
 /// </summary>
-// No message repeats the value given, so a token pasted after the wrong option stays out of
-// stderr, as it does for unknown options (ParseProblems).
+// No error these options give repeats the value given, so a token pasted after the wrong option
+// stays out of stderr, as it does for unknown options (ParseProblems). A name that matches nothing
+// is repeated (NameLookup, OrganisationResolver), since the user needs it to see which name failed;
+// a token given as a name reaches stderr there.
 internal static class CliOptions
 {
     /// <summary>

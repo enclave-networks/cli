@@ -18,6 +18,16 @@ internal sealed class CliHost
 
     public required Func<string, string?> GetEnvironmentVariable { get; init; }
 
+    /// <summary>
+    /// The user profile path, which can be empty or relative; EnclaveDirectory.HomeFrom decides
+    /// whether it names a home directory.
+    /// </summary>
+    // FromProcess asks .NET for the path without checking that the directory exists
+    // (SpecialFolderOption.DoNotVerify). With the default, SpecialFolderOption.None, .NET returns ""
+    // on Linux and macOS for a directory that does not exist or cannot be read (dotnet/runtime
+    // release/10.0, src/libraries/System.Private.CoreLib/src/System/Environment.GetFolderPathCore.Unix.cs,
+    // GetFolderPathCore, lines 24-39), as for a container whose HOME does not exist, and "" would
+    // put ~/.enclave in the current directory. The path as given keeps ~/.enclave where HOME says.
     public required string HomeDirectory { get; init; }
 
     public required TextReader Stdin { get; init; }
@@ -79,7 +89,8 @@ internal sealed class CliHost
     // through [Console]::OutputEncoding (Microsoft Learn, about_Character_Encoding). That is
     // accepted because agents, the CLI's first users, read JSON as UTF-8, and a PowerShell user can
     // set [Console]::OutputEncoding to UTF-8. A terminal keeps Console's writer, which writes in the
-    // encoding the terminal shows text in, so a person reading it sees the characters.
+    // encoding the terminal shows text in, so a person reading it sees every character that encoding
+    // has; a console at a single-byte code page such as 437 or 850 shows the others as "?".
     //
     // System.CommandLine writes to Console.Out and Console.Error unless the invocation is given
     // other writers (InvocationConfiguration.Output and Error, version 2.0.12, which read them on
@@ -100,7 +111,7 @@ internal sealed class CliHost
         return new()
         {
             GetEnvironmentVariable = Environment.GetEnvironmentVariable,
-            HomeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            HomeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify),
             Stdin = StdinReader(Console.OpenStandardInput()),
             StdinIsTerminal = !Console.IsInputRedirected,
             DefaultApiUrl = new Uri(ApiUrl),

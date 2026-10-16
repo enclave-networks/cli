@@ -180,7 +180,7 @@ enclave-cli
 
   The ranges are checked first, and a failed range check is not overridden by an allowed country.
 - `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes, matched ignoring case.
-- Each authority takes only its own settings, as the API does (portal `TrustRequirementSettingsUserAuthValidator.cs:34-48`): `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2. So does a setting given `""` or only white space: the API refuses an `--authority-uri` that is not https, and a `--client-id` or `--audience` that is empty or white space (same file, 47-49, which test with `string.IsNullOrWhiteSpace`, `DictionaryValidationExtensions.cs:45,82`), and stores a blank `--tenant`, since for `azure` it checks only which keys are present (same file, 35-38). On `trust update`, a `--set-` setting given only white space exits 2 the same way, and so do `--set-authority-uri ""` and `--set-client-id ""`, since the authority requires both. `--set-audience ""` and `--set-tenant ""` remove the setting, since both are optional.
+- Each authority takes only its own settings: `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2; the API refuses one for `azure` and `portal` only (portal `TrustRequirementSettingsUserAuthValidator.cs:35-43`), and stores it for the others. A setting given `""` or only white space exits 2 too: the API refuses an `--authority-uri` that is not https, and a `--client-id` or `--audience` that is empty or white space (same file, 47-49, which test with `string.IsNullOrWhiteSpace`, `DictionaryValidationExtensions.cs:45,82`), and stores a blank `--tenant`, since for `azure` it checks only which keys are present (same file, 35-38). On `trust update`, a `--set-` setting given only white space exits 2 the same way, and so do `--set-authority-uri ""` and `--set-client-id ""`, since the authority requires both. `--set-audience ""` and `--set-tenant ""` remove the setting, since both are optional.
 - `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". It sends the update, and on a 404 sends the create. Under `--dry-run` it reads the tag instead, to show which of the two it would send. `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
 - A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs:356-370, 432-437`).
 - `partner customer create` sends every field of the API's `CustomerCreateModel`, with the partner portal's values when a flag is left out (portal `Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345`, `Shared/AdminTable.razor:171`):
@@ -213,7 +213,7 @@ enclave-cli
 
 Option values that name an API enum (`--sort`, `--type`, `--approval`, `--then`, `--state`, `--os`, `--level`, `--mode`) take lower-case, hyphenated names (`recently-connected`, `general`, `automatic`, `revoke`), matched ignoring case. A value is renamed where the API's name does not say what it does: `--then revoke` for `Delete` on a system. JSON output keeps the API's own names. `commands` lists the allowed values.
 
-The token comes from `ENCLAVE_TOKEN`, then `~/.enclave/credentials.json`. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs:105` issues them with `TimeSpan.MaxValue`).
+The token comes from `ENCLAVE_TOKEN`, then `~/.enclave/credentials.json`. From either, and from `login --token-stdin`, the CLI drops a byte order mark at the start and white space around the token; an `ENCLAVE_TOKEN` left empty counts as unset. A token that then holds a space, a control character or a character outside ASCII exits 3 `token_invalid` before any call, with an error that names where the token came from and holds no part of it. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs:105` issues them with `TimeSpan.MaxValue`).
 
 ## Context
 
@@ -272,7 +272,7 @@ Flag values are written as the API's search values, which are not always the CLI
 
 A value with a space is quoted (`key:"build agents"`).
 
-`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI keeps the matches from the items it reads; `total` counts the matches. `--not-seen-for` reads `lastSeen`, and a system never seen counts from when it enrolled (`enrolledAt`), so a system that has just enrolled is not removed. `--not-seen-for` never lists a connected system, whatever its `lastSeen`: a connected system is being seen now. `lastSeen` is when the discovery service last wrote the system's session (portal `SystemExtensions.cs:63`, services `Enclave.Discover/Discovery/PeerSessionReporter.cs:129`), which a system that stays connected can go long without, and the portal shows it for disconnected systems only (portal-spa `modules/Systems/Columns/Status.tsx`). So `enclave-cli system list --not-seen-for 90d | enclave-cli system revoke -` (example 14) never revokes a system that is online. `--waiting-for` reads `enrolledAt`.
+`system list --not-seen-for 90d` and `system list --pending --waiting-for 7d` have no API search key, so the CLI keeps the matches from the items it reads; `total` counts the matches. `--not-seen-for` reads `lastSeen`, and a system never seen counts from when it enrolled (`enrolledAt`), so a system that has just enrolled is not removed. `--not-seen-for` never lists a connected system, whatever its `lastSeen`: a connected system is being seen now. `lastSeen` is when the discovery service last wrote the system's session (portal `SystemExtensions.cs:63`, services `Enclave.Discover/Discovery/PeerSessionReporter.cs:129`), which a system that stays connected can go long without, and the portal shows it for disconnected systems only (portal-spa `modules/Systems/Columns/Status.tsx`). So `enclave-cli system list --not-seen-for 90d | enclave-cli system revoke -` (example 14) never revokes a system that is online. The search carries `state:disconnected`, ahead of the `--filter` text, and the CLI drops any system reported `Connected`. The search is what leaves out a disabled system that is connected, which the API reports as `Disabled` (portal `SystemExtensions.cs:43-52`): `state:disconnected` matches on the session, enabled or not (`SystemSearchKeyService.cs:192-207`). The API reads only the first `state:` term (`SystemSearchKeyService.cs:194`), so one in `--filter` does not replace it. `--state disconnected` is the same term, sent once; `--state connected` exits 2. `--waiting-for` reads `enrolledAt`.
 
 Name lookups ask for disabled items too (`include_disabled`), since `enable` takes a disabled item by name.
 
@@ -372,7 +372,7 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | 0 | | success |
 | 1 | `api_error`, `not_implemented` | any other API error; a command the CLI lists that has no handler, which makes no call |
 | 2 | `invalid_argument`, `no_org`, `no_partner` | bad arguments, bad ID, no organisation or partner chosen |
-| 3 | `token_missing`, `token_invalid` | no token, or HTTP 401 |
+| 3 | `token_missing`, `token_invalid` | no token, a token with a character no token holds, or HTTP 401 |
 | 4 | `forbidden` | HTTP 403: the token lacks the scope |
 | 5 | `not_found` | HTTP 404 on a single-ID command |
 | 6 | `transient` | network failure, timeout, HTTP 429 or 5xx: retrying can succeed |
@@ -392,6 +392,7 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 - `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
 - `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`, 1.2.0). `login` keeps an existing `baseUrl` and `partnerApiBaseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
 - The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and `ENCLAVE_TOKEN` keeps the file's `baseUrl`.
+- When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables work against the default API address, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
 - `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
 - `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
 - `org use` saves `{ "org": { "id", "name" } }` in `~/.enclave/cli.json` and prints the organisation's model; `org use --id` makes one lookup call for the name, and an ID the token does not see exits 2. `partner use --id` saves `{ "partner": { "id" } }` beside it, makes no call, and prints `{ "id" }`. Each leaves the other's default as it is. On Linux and macOS, either one run before `login` creates `~/.enclave` as 0700, since `login` later writes the token into it; `cli.json` holds no secret and is written with the default file mode.
@@ -435,6 +436,24 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 - The partner API's `countries` and `referlink` (data for the partner portal's screens) and `customer oldest-version`.
 - The partner's own properties, users and invites, and listing partners: personal access tokens cannot carry the scopes they need (see "Partner API").
 - Listing systems by DNS name. The API binds a `dns` parameter on the systems list (portal `Enclave.Api/Modules/SystemManagement/Systems/Models/SystemsRequestModel.cs:43-45`), and its handler never reads it (`Systems/Handlers/PaginatedSystemsHandler.cs`), so the list it returns holds every system. `dns show-hostname <name>` shows what a hostname answers to: the systems it names (`systems`) and the tags whose systems it answers for (`tags`) (portal `Dns/Handlers/SingleDnsRecordQueryHandler.cs:40-57`).
+
+## Accepted for now
+
+Known, and left as they are. The CLI passes the API's answers on as they come.
+
+- A partner command given an `--org-id` the partner does not have exits 0 with empty lists, 2 or 6, not 5: the partner API answers it with 200 and empty lists, or 500.
+- `partner customer update --contact ""` saves an empty contact.
+- `key create --tags a,a` sends `a` twice, and the API keeps both.
+- An error marked `application/problem+json` whose body is not valid JSON exits 1, whatever its status: `Enclave.Sdk.Api` fails to read it before the CLI sees the status.
+- A TLS failure exits 6 `transient`, like a network failure, though retrying does not fix it.
+- `ENCLAVE_ORG` set to only spaces makes a lookup, then exits 2.
+- `--notes ""` on a create sends an empty note.
+- `key enable --for` reads a one-key list from `-`; `system enable --for` refuses `-`.
+- What Ctrl+C prints and exits with is not specified.
+- `not_implemented` stays in the error codes, though every command has a handler, so none gives it.
+- This document keeps its "proposed" title and wording, and its "Build order" section.
+- CI runs the tests on Linux only.
+- Release binaries are not signed or notarised.
 
 ## `Enclave.Sdk.Api` changes
 

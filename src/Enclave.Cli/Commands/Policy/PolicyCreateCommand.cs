@@ -73,8 +73,10 @@ internal static class PolicyCreateCommand
         });
         verb.Check(context => PolicyGateways.Check(gateways.Name, context.Get(gateways)));
 
-        // The API accepts gateway settings on gateway policies only (portal
-        // PolicyCreateModelValidator.cs:47-52).
+        // The API refuses a subnet filter on a general policy (portal
+        // PolicyCreateModelValidator.cs:47-48). It accepts a mode there, checking it on gateway
+        // policies only (58), but a mode orders a policy's gateways and a general policy has none, so
+        // the API leaves it out of the policy it returns (PolicyModelExtensions.cs:46).
         verb.Requires(mode, gateways);
         verb.Requires(subnetFilter, gateways);
         verb.Check(context => PolicyActiveHours.Check(activeHours.Name, context.Get(activeHours)));

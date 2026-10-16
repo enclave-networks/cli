@@ -11,6 +11,8 @@ internal sealed class DiskFileStore : IFileStore
 
     public string? ReadText(string path)
     {
+        RequireFullyQualified(path);
+
         try
         {
             return File.ReadAllText(path);
@@ -39,6 +41,8 @@ internal sealed class DiskFileStore : IFileStore
     // user profile inherits the profile's access list, which other users cannot read.
     public void WriteText(string path, string text, bool privateToUser)
     {
+        RequireFullyQualified(path);
+
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath)!;
 
@@ -88,6 +92,8 @@ internal sealed class DiskFileStore : IFileStore
 
     public bool Delete(string path)
     {
+        RequireFullyQualified(path);
+
         if (!File.Exists(path))
         {
             return false;
@@ -95,5 +101,19 @@ internal sealed class DiskFileStore : IFileStore
 
         File.Delete(path);
         return true;
+    }
+
+    // The CLI's files live under the home directory, and a path that is not fully qualified
+    // resolves against the current directory: the CLI would read a credentials.json from wherever
+    // it is run and send the token to that file's baseUrl, or write the token there.
+    // EnclaveDirectory.HomeFrom gives no path then; this refuses one whatever the caller.
+    private static void RequireFullyQualified(string path)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
+        if (!Path.IsPathFullyQualified(path))
+        {
+            throw new ArgumentException($"The CLI reads and writes files only at a fully qualified path, and {path} is not one.", nameof(path));
+        }
     }
 }

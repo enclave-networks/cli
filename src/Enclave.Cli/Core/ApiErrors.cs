@@ -64,7 +64,11 @@ internal static class ApiErrors
             }
 
             // No status means no response: the connection was refused or dropped, or name
-            // resolution failed. Retrying can succeed.
+            // resolution failed. Retrying can succeed. A TLS failure, such as a certificate the
+            // machine does not trust, also has no status (HttpRequestError.SecureConnectionError,
+            // .NET 8 and later, https://learn.microsoft.com/dotnet/api/system.net.http.httprequesterror)
+            // and gets the same code, though a retry does not fix it; that is accepted
+            // (proposed-cli-surface.md "Accepted for now").
             case HttpRequestException http:
                 return new CliException(ErrorCode.Transient, $"The Enclave API could not be reached: {http.Message}", innerException: http);
 

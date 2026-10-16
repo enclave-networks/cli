@@ -61,7 +61,7 @@ internal static class PolicyUpdateCommand
         });
         verb.Check(context =>
         {
-            if (context.Get(activeHours) is { Length: > 0 } hours)
+            if (context.Get(activeHours) is { } hours && !string.IsNullOrWhiteSpace(hours))
             {
                 PolicyActiveHours.Check(activeHours.Name, hours);
             }
@@ -131,13 +131,14 @@ internal static class PolicyUpdateCommand
                 patch.Set(model => model.GatewayAllowedIpRanges, ListValues.Clears(rangeValues) ? [] : PolicyGateways.KeepRanges(rangeValues, current!.GatewayAllowedIpRanges));
             }
 
-            // "" removes the restriction ("Command options") by patching ActiveHours to null.
+            // "" removes the restriction ("Command options") by patching ActiveHours to null, and
+            // only white space reads as "" does ("Details").
             // Enclave.Sdk.Api 1.2.0 sends a null patch value as JSON null, and the API applies every
             // field the body holds, a null one included (Data/PatchClient.cs, Set, citing portal
             // Enclave.Api.Scaffolding PatchModel.WasSet).
             if (context.Get(activeHours) is { } hours)
             {
-                patch.Set(model => model.ActiveHours, hours.Length == 0 ? null : PolicyActiveHours.Parse(hours)!);
+                patch.Set(model => model.ActiveHours, string.IsNullOrWhiteSpace(hours) ? null : PolicyActiveHours.Parse(hours)!);
             }
 
             // One policy named: a 404 means it does not exist, exit 5 ("Several IDs").

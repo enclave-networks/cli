@@ -18,6 +18,7 @@ internal static class PartnerUseCommand
 
         var id = verb.Add(CliOptions.Id("--id", "The partner's ID.", IdFormats.Guid, "partnerId"));
         verb.ExactlyOne(id);
+        EnclaveDirectory.RequireHome(verb);
 
         // The ID is saved as given, with no call: listing partners needs the ReadPartnerList scope,
         // which personal access tokens cannot carry (proposed-cli-surface.md "Partner API"). So no

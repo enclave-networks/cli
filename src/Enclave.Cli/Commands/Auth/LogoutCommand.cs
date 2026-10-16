@@ -15,11 +15,13 @@ internal static class LogoutCommand
             "logout",
             "Delete ~/.enclave/credentials.json. The token stays valid until it is revoked in the portal, and other tools built on Enclave.Sdk.Api, which read the same file, lose it too. Prints { path, deleted }.");
 
+        EnclaveDirectory.RequireHome(verb);
+
         // logout needs no token, makes no call, and leaves cli.json, which holds settings and says
         // nothing about who is signed in.
         verb.SetHandler(async context =>
         {
-            var path = CredentialsFile.PathFor(context.Host);
+            var path = CredentialsFile.PathFor(context.Host) ?? throw EnclaveDirectory.NoHome();
             var deleted = context.Host.Files.Delete(path);
 
             await context.Output.WriteAsync(new JsonObject { ["path"] = path, ["deleted"] = deleted }, context.CancellationToken);

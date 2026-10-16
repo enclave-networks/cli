@@ -2,7 +2,8 @@ namespace Enclave.Cli.Storage;
 
 /// <summary>
 /// Reads and writes the CLI's files. The CLI reaches files only through this, so tests can keep
-/// them in memory.
+/// them in memory. Every path is fully qualified; DiskFileStore throws ArgumentException for any
+/// other.
 /// </summary>
 internal interface IFileStore
 {

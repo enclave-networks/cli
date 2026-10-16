@@ -90,9 +90,11 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// The user profile path the CLI receives; ~/.enclave lives here. Nothing exists at it on disk:
-    /// the files under it are in <see cref="Files"/>.
+    /// the files under it are in <see cref="Files"/>. A test sets "" or a relative path to give the
+    /// CLI a profile path that names no home directory; <see cref="Files"/> resolves a relative path
+    /// against the current directory, as the disk does.
     /// </summary>
-    public string Home { get; }
+    public string Home { get; set; }
 
     /// <summary>
     /// The path WriteFile puts input files under, in <see cref="Files"/>.

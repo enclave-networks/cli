@@ -21,7 +21,7 @@ internal static class DnsHostnameCommands
         var verb = new CliVerb("list-hostnames", "List the hostnames, reading every page.", CommandScope.Organisation);
         var zone = verb.Add(CliOptions.Filter("--zone", "Hostnames in the zone of this name.", "name"));
         var zoneId = verb.Add(CliOptions.Id("--zone-id", "Hostnames in the zone of this ID.", IdFormats.Int32));
-        var filter = verb.Add(CliOptions.Filter("--filter", "Hostnames whose name contains this text."));
+        var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
 
         verb.Exclusive(zone, zoneId);
 
@@ -201,10 +201,9 @@ internal static class DnsHostnameCommands
         return verb;
     }
 
-    // The hostname an update acts on: its ID, and, when the update needs them, its zone and tags.
-    // A hostname given by name comes with both from the lookup. One given by --id is read first only
-    // when --name, --add-tags or --remove-tags needs it, since --name must stay in the hostname's zone
-    // and the tag flags patch the whole list ("Calls per command").
+    // A hostname given by name comes with its zone and tags from the lookup. One given by --id is
+    // read first only when --name, --add-tags or --remove-tags needs it, since --name must stay in
+    // the hostname's zone and the tag flags patch the whole list ("Calls per command").
     private static async Task<CurrentHostname> CurrentAsync(CliContext context, OrganisationInUse org, string? hostname, string key, int? id, bool needsRead)
     {
         if (hostname is not null)

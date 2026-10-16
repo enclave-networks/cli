@@ -143,9 +143,8 @@ internal static class TrustUpdateCommand
     }
 
     // update takes the create flags of the requirement's own type, and each authority takes only
-    // its own settings (portal TrustRequirementSettingsUserAuthValidator.cs:34-48), which are known
-    // once the requirement is read. The configuration's other keys and, without --set-claim, the
-    // claims go back as they were.
+    // its own settings (TrustSettings.KeysOf), which are known once the requirement is read. The
+    // configuration's other keys and, without --set-claim, the claims go back as they were.
     private static TrustRequirementSettingsModel SignIn(
         CliContext context,
         TrustRequirementModel current,

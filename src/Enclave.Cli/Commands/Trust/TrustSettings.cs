@@ -78,11 +78,14 @@ internal static class TrustSettings
     public static PublicIpKind BlockedCountry { get; } = new(CountryType, Blocked: true);
 
     /// <summary>
-    /// The configuration keys an authority takes besides its name. Each authority takes only its
-    /// own settings, as the API does (portal TrustRequirementSettingsUserAuthValidator.cs:34-48):
-    /// azure takes a tenant, portal and google take none, and okta, jumpcloud, duo and oidc take an
-    /// address, a client ID and an audience.
+    /// The configuration keys an authority takes besides its name: azure takes a tenant, portal and
+    /// google take none, and okta, jumpcloud, duo and oidc take an address, a client ID and an
+    /// audience.
     /// </summary>
+    // The API refuses other keys for azure and portal (portal
+    // TrustRequirementSettingsUserAuthValidator.cs:35-43) and has no such rule for google, okta,
+    // jumpcloud, duo or oidc (45-50). The CLI refuses them for every authority, so a setting given
+    // for the wrong authority exits 2 before it is stored.
     public static IReadOnlyList<string> KeysOf(string? authority) =>
         authority == "azure" ? AzureKeys : IsGeneric(authority) ? GenericKeys : [];
 

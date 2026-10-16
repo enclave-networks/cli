@@ -243,8 +243,10 @@ public partial class TrustCommandTests
         Assert.That(JsonAssert.Property(JsonAssert.Property(request.BodyJson, "settings"), "conditions").GetArrayLength(), Is.EqualTo(2));
     }
 
-    // Each authority takes only its own settings, as the API does, and a setting the authority does
-    // not take exits 2 ("Command options"; portal TrustRequirementSettingsUserAuthValidator.cs:34-48).
+    // Each authority takes only its own settings, and a setting the authority does not take exits 2
+    // ("Command options"). The API refuses such a setting for azure and portal only (portal
+    // TrustRequirementSettingsUserAuthValidator.cs:35-43), so the google case shows the CLI refuses
+    // one the API would store.
     [TestCase("portal", "--tenant", Tenant)]
     [TestCase("google", "--client-id", "enclave-portal")]
     [TestCase("azure", "--client-id", "enclave-portal")]

@@ -30,8 +30,8 @@ internal static class ListValues
     /// the default comparer when it is null. An option not given, whose values are null, passes.
     /// </summary>
     /// <typeparam name="T">The value type: a tag, name or ID.</typeparam>
-    // The error does not repeat the value, as no CLI error does (CliOptions), since a value can be
-    // a token passed by mistake.
+    // The error does not repeat the value, as no option's parse error does (CliOptions), since a
+    // value can be a token passed by mistake.
     public static void CheckNoRepeats<T>(string option, IReadOnlyList<T>? values, IEqualityComparer<T>? comparer = null)
     {
         if (values is not null && values.Distinct(comparer).Count() < values.Count)

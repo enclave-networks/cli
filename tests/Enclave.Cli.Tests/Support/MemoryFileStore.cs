@@ -13,13 +13,19 @@ internal sealed class MemoryFileStore : IFileStore
     // same file always has the same spelling.
     private readonly Dictionary<string, (string Text, bool Private)> _files = new(StringComparer.Ordinal);
 
+    private readonly HashSet<string> _read = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Every path that holds a file, in no particular order.
     /// </summary>
     public IReadOnlyCollection<string> Paths => _files.Keys;
 
-    public string? ReadText(string path) =>
-        _files.TryGetValue(Normalise(path), out var file) ? file.Text : null;
+    public string? ReadText(string path)
+    {
+        _read.Add(Normalise(path));
+
+        return _files.TryGetValue(Normalise(path), out var file) ? file.Text : null;
+    }
 
     public void WriteText(string path, string text, bool privateToUser) =>
         _files[Normalise(path)] = (text, privateToUser);
@@ -27,6 +33,11 @@ internal sealed class MemoryFileStore : IFileStore
     public bool Delete(string path) => _files.Remove(Normalise(path));
 
     public bool Exists(string path) => _files.ContainsKey(Normalise(path));
+
+    /// <summary>
+    /// Whether anything read this path through <see cref="ReadText"/>, with or without a file there.
+    /// </summary>
+    public bool WasRead(string path) => _read.Contains(Normalise(path));
 
     /// <summary>
     /// Whether the file's last write asked for it to be private to the user. Fails the test when

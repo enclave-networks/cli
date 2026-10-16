@@ -325,6 +325,25 @@ public partial class PolicyCommandTests
         });
     }
 
+    // A value of only white space reads as "" does, and removes the restriction ("Details"): the
+    // patch sets ActiveHours to null, as for "".
+    [TestCase(" ")]
+    [TestCase("   ")]
+    [TestCase("\t")]
+    public async Task Policy_update_with_active_hours_of_only_white_space_removes_the_restriction(string activeHours)
+    {
+        using var run = CliRun.Start();
+        run.Stub("PATCH", PolicyPath(61), json: ApiJson.Policy(61, "facilities tablets"));
+
+        var request = await CliAssert.AcceptedAsync(run, "PATCH", PolicyPath(61), "policy", "update", "--id", "61", "--set-active-hours", activeHours);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(Keys(request.BodyJson), Is.EqualTo("ActiveHours").IgnoreCase);
+            Assert.That(JsonAssert.Property(request.BodyJson, "ActiveHours").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        });
+    }
+
     [Test]
     public async Task Policy_update_patches_the_active_hours_given()
     {

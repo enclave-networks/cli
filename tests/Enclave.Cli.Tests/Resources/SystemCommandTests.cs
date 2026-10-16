@@ -303,6 +303,101 @@ public class SystemCommandTests
         Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("STALE"));
     }
 
+    // The API gives a disabled system the state Disabled whether or not it is connected (portal
+    // Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:43-52), so with
+    // --include-disabled the list cannot show that such a system is connected. --not-seen-for asks
+    // the API for disconnected systems with state:disconnected, which matches a system whose session
+    // is Disconnected or GracefulDisconnected, or that has no session, whether or not it is enabled
+    // (portal Enclave.Configuration.Data/Modules/Systems/SystemSearchKeyService.cs:192-207). The
+    // fake answers that search as the API does, and any other search with LIVEOFF as well, a
+    // disabled system that is connected and was last written long ago, so a CLI that does not ask
+    // for disconnected systems lists LIVEOFF, and example 14 would revoke it.
+    [TestCase("--not-seen-for 90d")]
+    [TestCase("--not-seen-for 90d --include-disabled")]
+    public async Task System_list_not_seen_for_asks_the_api_for_disconnected_systems_only(string flags)
+    {
+        ArgumentNullException.ThrowIfNull(flags);
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var stale = SystemSeen("STALE", "Disconnected", Now.AddDays(-100));
+        var liveDisabled = ApiJson.Altered(SystemSeen("LIVEOFF", "Disabled", Now.AddDays(-200)), ("isEnabled", false));
+        run.Stub("GET", SystemsPath, json: ApiJson.Page(stale, liveDisabled));
+        run.StubWithQuery("GET", SystemsPath, "search", "state:disconnected", json: ApiJson.Page(stale));
+
+        var result = await run.RunAsync(["system", "list", .. flags.Split(' ')]);
+
+        var items = CliAssert.List(result, "system");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.SingleRequest().QueryValue("search"), Is.EqualTo("state:disconnected"));
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("STALE"));
+        });
+    }
+
+    // The API reads the first state: term of a search and no later one: its parser adds a repeated
+    // key's values after the first (portal
+    // Enclave.Configuration.Data/Modules/Search/BaseSearchKeyService.cs:616-639,
+    // AddOrUpdateQueryDetails), and the state key reads Values[0] (SystemSearchKeyService.cs:194).
+    // So --not-seen-for sends state:disconnected ahead of the --filter text, which follows as typed,
+    // and a state: term in the filter cannot turn the search to connected systems. The fake answers
+    // any other search with LIVEOFF, a disabled system that is connected, as the API answers a
+    // search whose first state: term is state:connected, so a CLI that puts its term after the
+    // filter lists LIVEOFF.
+    [Test]
+    public async Task System_list_not_seen_for_sends_state_disconnected_ahead_of_the_filter_text()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var stale = SystemSeen("STALE", "Disconnected", Now.AddDays(-100));
+        var liveDisabled = ApiJson.Altered(SystemSeen("LIVEOFF", "Disabled", Now.AddDays(-200)), ("isEnabled", false));
+        run.Stub("GET", SystemsPath, json: ApiJson.Page(liveDisabled));
+        run.StubWithQuery("GET", SystemsPath, "search", "state:disconnected state:connected web", json: ApiJson.Page(stale));
+
+        var result = await run.RunAsync("system", "list", "--filter", "state:connected web", "--not-seen-for", "90d", "--include-disabled");
+
+        var items = CliAssert.List(result, "system");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.SingleRequest().QueryValue("search"), Is.EqualTo("state:disconnected state:connected web"));
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("STALE"));
+        });
+    }
+
+    // --not-seen-for lists disconnected systems only, so --state connected contradicts it and exits
+    // 2 (proposed-cli-surface.md "Filters"), with the other argument checks, before the token is
+    // read and before any call ("Details"). The run without a token gives the same error, so a CLI
+    // that read the token first exits 3. --not-seen-for alone, run next, is accepted, which shows the
+    // rejection comes from the pair.
+    [Test]
+    public async Task System_list_state_connected_with_not_seen_for_exits_2_before_the_token_and_any_call()
+    {
+        using var run = CliRun.Start();
+        using var withoutToken = CliRun.Start();
+        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        run.Stub("GET", SystemsPath, json: ApiJson.Page());
+        string[] contradicting = ["system", "list", "--state", "connected", "--not-seen-for", "1d"];
+
+        var tokenless = await withoutToken.RunAsync(contradicting);
+
+        CliAssert.Rejected(withoutToken, tokenless);
+        Assert.That(JsonRead.PropertyNameList(tokenless.Error.GetProperty("errors")), Is.EqualTo("--state"));
+        await CliAssert.RejectedThenAcceptedAsync(run, contradicting, ["system", "list", "--not-seen-for", "1d"], "GET", SystemsPath);
+    }
+
+    // --state disconnected asks for the systems --not-seen-for asks for, so the two are taken
+    // together, and the search holds the term state:disconnected once, ahead of the --filter text
+    // (proposed-cli-surface.md "Filters").
+    [Test]
+    public async Task System_list_state_disconnected_with_not_seen_for_sends_state_disconnected_once_ahead_of_the_filter_text()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", SystemsPath, json: ApiJson.Page());
+
+        var request = await CliAssert.AcceptedAsync(run, "GET", SystemsPath, "system", "list", "--filter", "web", "--state", "disconnected", "--not-seen-for", "1d");
+
+        Assert.That(request.QueryValue("search"), Is.EqualTo("state:disconnected web"));
+    }
+
     // A duration that reaches back before year 1 names no time the CLI can compare lastSeen with
     // (DateTimeOffset.MinValue), so it is an argument error that names its option, and exits 2
     // before any call. From the fixed clock in 2030, 1000000d, about 2,700 years, reaches back

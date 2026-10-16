@@ -12,6 +12,8 @@ internal sealed class ApiAccess
 {
     public const string TokenVariable = "ENCLAVE_TOKEN";
 
+    private const char ByteOrderMark = (char)0xFEFF;
+
     public ApiAccess(string token, string tokenSource, Uri baseUrl, Uri? partnerApiBaseUrl = null)
     {
         Token = token;
@@ -43,9 +45,10 @@ internal sealed class ApiAccess
 
     /// <summary>
     /// The token from ENCLAVE_TOKEN, then credentials.json (proposed-cli-surface.md "Options on
-    /// every command"), and the base URLs from credentials.json whichever source gave the token.
-    /// Exits 3 with token_missing when neither holds a token, and 2 when a base URL in the file is
-    /// not an http or https URL.
+    /// every command"), each cleaned by <see cref="TokenFrom"/>, and the base URLs from
+    /// credentials.json whichever source gave the token. Exits 3 with token_missing when neither
+    /// holds a token, 3 with token_invalid when the token used holds a character no token holds, and
+    /// 2 when a base URL in the file is not an http or https URL.
     /// </summary>
     public static ApiAccess Resolve(CliHost host)
     {
@@ -56,9 +59,14 @@ internal sealed class ApiAccess
         var baseUrl = BaseUrlFrom(host, stored);
         var partnerApiBaseUrl = PartnerApiBaseUrlFrom(host, stored);
 
-        if (host.GetEnvironmentVariable(TokenVariable) is { Length: > 0 } token)
+        if (TokenFrom(host.GetEnvironmentVariable(TokenVariable), TokenVariable) is { } token)
         {
             return new ApiAccess(token, TokenVariable, baseUrl, partnerApiBaseUrl);
+        }
+
+        if (path is null)
+        {
+            throw CliErrors.TokenMissing("No token: ENCLAVE_TOKEN is not set, and there is no home directory to hold ~/.enclave/credentials.json, since the user profile path (HOME on Linux and macOS) is empty or not a fully qualified path. Set ENCLAVE_TOKEN.");
         }
 
         if (stored is { IsValid: false })
@@ -66,12 +74,54 @@ internal sealed class ApiAccess
             throw CliErrors.TokenMissing($"ENCLAVE_TOKEN is not set and {path} is not valid JSON. Run `enclave-cli login --token-stdin` with a personal access token, or set ENCLAVE_TOKEN.");
         }
 
-        if (stored?.Token is { } savedToken)
+        if (TokenFrom(stored?.Token, path) is { } savedToken)
         {
             return new ApiAccess(savedToken, path, baseUrl, partnerApiBaseUrl);
         }
 
         throw CliErrors.TokenMissing($"No token: ENCLAVE_TOKEN is not set and {path} holds none. Run `enclave-cli login --token-stdin` with a personal access token, or set ENCLAVE_TOKEN.");
+    }
+
+    /// <summary>
+    /// The token <paramref name="text"/> holds, from any source: without a leading byte order mark,
+    /// then without surrounding white space. Null when nothing else is left, which counts as no
+    /// token. Exits 3 with token_invalid when the token holds any character but printable ASCII
+    /// other than space; the error names <paramref name="source"/> and holds no part of the token.
+    /// </summary>
+    // A token file saved with a UTF-8 byte order mark starts with U+FEFF when its reader passes the
+    // mark on (LoginCommand.ReadTokenAsync gives the cases for stdin), and ENCLAVE_TOKEN set from
+    // such a file with $(cat file) holds it too. Trim leaves it, since U+FEFF is not white space
+    // (char.IsWhiteSpace).
+    //
+    // A token is printable ASCII with no space: a bearer token is letters, digits and -._~+/=
+    // (RFC 6750 section 2.1), and an HTTP header value is visible ASCII (RFC 9110 section 5.5).
+    // Sent as it is, another character fails in .NET with no HTTP status: SocketsHttpHandler writes
+    // header values as ASCII and throws HttpRequestException for a character outside it
+    // (dotnet/runtime release/10.0,
+    // src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/HttpConnection.cs,
+    // WriteString), which the CLI reports as transient, and a newline throws FormatException
+    // (Headers/HttpHeaders.cs, CheckContainsNewLineOrNull), which it reports as api_error. A space,
+    // a tab or DEL goes into the header as it is (observed with .NET 10). Checked here, each exits
+    // 3 before any call, which tells an agent that retrying cannot help.
+    public static string? TokenFrom(string? text, string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (text is null)
+        {
+            return null;
+        }
+
+        var token = (text.Length > 0 && text[0] == ByteOrderMark ? text[1..] : text).Trim();
+
+        if (token.Length == 0)
+        {
+            return null;
+        }
+
+        return token.All(character => character is >= '!' and <= '~')
+            ? token
+            : throw new CliException(ErrorCode.TokenInvalid, $"The token from {source} holds a space, a control character or a character outside ASCII, which a personal access token does not hold. Give the token as the portal issued it; personal access tokens are created on the account page of the Enclave portal.");
     }
 
     /// <summary>

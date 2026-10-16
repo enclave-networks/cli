@@ -20,6 +20,7 @@ internal static class OrgUseCommand
         var id = verb.Add(CliOptions.Id("--id", "The organisation's ID.", IdFormats.Guid, "orgId"));
         verb.ExactlyOne(name, id);
         OrganisationResolver.RefuseBlankName(verb, name);
+        EnclaveDirectory.RequireHome(verb);
 
         verb.SetHandler(async context =>
         {

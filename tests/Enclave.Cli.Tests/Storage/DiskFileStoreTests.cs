@@ -213,4 +213,33 @@ public class DiskFileStoreTests
     {
         Assert.That(_store.Delete(CredentialsPath), Is.False);
     }
+
+    // A path that is not fully qualified resolves against the current directory, so the CLI would
+    // read a credentials.json from wherever it is run and send the token to that file's baseUrl, or
+    // write the token there. The store refuses such a path whatever its caller passes. The relative
+    // path here leads from the current directory to this test's own file, so a store that resolved
+    // it would write or delete that file, which the checks on the disk show, and stays within this
+    // test's directory.
+    [Test]
+    public void Every_operation_refuses_a_path_that_is_not_fully_qualified()
+    {
+        var relativePath = Path.GetRelativePath(Environment.CurrentDirectory, CredentialsPath);
+        Assume.That(Path.IsPathFullyQualified(relativePath), Is.False, "The temporary directory is on another drive from the current directory, so no relative path leads to it.");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => _store.WriteText(relativePath, "{}", privateToUser: true), Throws.ArgumentException);
+            Assert.That(File.Exists(CredentialsPath), Is.False, "WriteText wrote the file.");
+        });
+
+        Directory.CreateDirectory(EnclaveDirectory);
+        File.WriteAllText(CredentialsPath, "{}");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => _store.ReadText(relativePath), Throws.ArgumentException);
+            Assert.That(() => _store.Delete(relativePath), Throws.ArgumentException);
+            Assert.That(File.Exists(CredentialsPath), Is.True, "Delete deleted the file.");
+        });
+    }
 }

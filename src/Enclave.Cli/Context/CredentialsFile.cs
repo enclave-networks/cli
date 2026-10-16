@@ -12,21 +12,17 @@ namespace Enclave.Cli.Context;
 /// </summary>
 internal static class CredentialsFile
 {
-    public static string PathFor(CliHost host)
-    {
-        ArgumentNullException.ThrowIfNull(host);
-
-        return Path.Combine(host.HomeDirectory, ".enclave", "credentials.json");
-    }
+    /// <summary>
+    /// The file's path, or null when there is no home directory (EnclaveDirectory.HomeFrom).
+    /// </summary>
+    public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "credentials.json");
 
     /// <summary>
-    /// What the file holds, or null when there is no file.
+    /// What the file holds, or null when there is no file or no home directory.
     /// </summary>
     public static StoredCredentials? Read(CliHost host)
     {
-        var text = host.Files.ReadText(PathFor(host));
-
-        if (text is null)
+        if (PathFor(host) is not { } path || host.Files.ReadText(path) is not { } text)
         {
             return null;
         }
@@ -48,12 +44,13 @@ internal static class CredentialsFile
 
     /// <summary>
     /// Writes the file with the token and base URL, and the partner API's base URL when one is
-    /// given, readable by the current user only.
+    /// given, readable by the current user only. Exits 2 when there is no home directory.
     /// </summary>
     public static void Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
     {
         ArgumentNullException.ThrowIfNull(host);
 
+        var path = PathFor(host) ?? throw EnclaveDirectory.NoHome();
         var file = new JsonObject
         {
             ["personalAccessToken"] = token,
@@ -65,7 +62,7 @@ internal static class CredentialsFile
             file["partnerApiBaseUrl"] = partnerApiBaseUrl;
         }
 
-        host.Files.WriteText(PathFor(host), file.ToJsonString(CliJson.Output) + "\n", privateToUser: true);
+        host.Files.WriteText(path, file.ToJsonString(CliJson.Output) + "\n", privateToUser: true);
     }
 
     private static string? Text(JsonObject file, string name)

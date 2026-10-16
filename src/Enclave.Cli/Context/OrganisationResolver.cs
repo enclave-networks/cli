@@ -189,10 +189,7 @@ internal static class OrganisationResolver
     // falls through to the lookup.
     private static OrganisationChoice? Saved(CliHost host)
     {
-        var path = SettingsFile.PathFor(host);
-        var saved = SettingsFile.Read(host)?["org"];
-
-        if (saved is null)
+        if (SettingsFile.PathFor(host) is not { } path || SettingsFile.Read(host)?["org"] is not { } saved)
         {
             return null;
         }

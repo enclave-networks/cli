@@ -499,7 +499,10 @@ public partial class PolicyCommandTests
     }
 
     // Anything outside <days> <start>-<end> [<zone>], with days mon to sun and 24-hour HH:MM times,
-    // exits 2 ("Details").
+    // exits 2 ("Details"). "" and only white space set no hours, and a create has no restriction to
+    // remove, so there an empty value means nothing and exits 2 as well.
+    [TestCase("")]
+    [TestCase(" ")]
     [TestCase("mon-fri")]
     [TestCase("mon-fri 08:00")]
     [TestCase("weekdays 08:00-18:00")]

@@ -35,10 +35,7 @@ internal static class PartnerResolver
                 : throw CliErrors.InvalidArgument(IdVariable, $"{IdVariable} takes a partner ID: {IdFormats.Guid.Describe}.");
         }
 
-        var path = SettingsFile.PathFor(host);
-        var saved = SettingsFile.Read(host)?["partner"];
-
-        if (saved is null)
+        if (SettingsFile.PathFor(host) is not { } path || SettingsFile.Read(host)?["partner"] is not { } saved)
         {
             return null;
         }

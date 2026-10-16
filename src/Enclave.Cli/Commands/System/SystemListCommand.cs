@@ -76,6 +76,16 @@ internal static class SystemListCommand
             }
         });
 
+        // --not-seen-for asks the API for disconnected systems only, so --state connected contradicts
+        // it ("Filters").
+        verb.Check(context =>
+        {
+            if (context.IsGiven(notSeenFor) && context.Get(state) == "connected")
+            {
+                throw CliErrors.InvalidArgument(state.Name, "--not-seen-for lists disconnected systems only, so --state connected cannot be given with it.");
+            }
+        });
+
         verb.SetHandler(async context =>
         {
             // A duration that reaches back before the earliest time the CLI holds is an argument
@@ -89,11 +99,32 @@ internal static class SystemListCommand
 
             var search = new SearchText(context.Get(filter))
                 .Add("tags", context.Get(tags))
-                .Add("state", context.Get(state))
+                .Add("state", unseenSince is null ? context.Get(state) : null)
                 .Add("os", context.Get(os))
                 .Add("type", context.Get(type))
                 .AddFlag("gateway", context.Get(gateway))
                 .ToSearchTerm();
+
+            // --not-seen-for asks the API for disconnected systems: state:disconnected matches a
+            // system whose session is Disconnected or GracefulDisconnected, or that has no session,
+            // whether or not it is enabled (portal
+            // Enclave.Configuration.Data/Modules/Systems/SystemSearchKeyService.cs:192-207). The
+            // search is what leaves out a disabled system that is connected: the API gives a disabled
+            // system the state Disabled whether or not it is connected (portal
+            // Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:43-52), so with
+            // --include-disabled such a system passes the check on state below.
+            //
+            // The API reads the first state: term of a search and no later one: its parser adds a
+            // repeated key's values after the first (portal
+            // Enclave.Configuration.Data/Modules/Search/BaseSearchKeyService.cs:616-639,
+            // AddOrUpdateQueryDetails), and the state key reads Values[0]
+            // (SystemSearchKeyService.cs:194). So the term goes ahead of the --filter text, where a
+            // state: term in the filter cannot replace it. --state disconnected is the same term, and
+            // is not sent twice.
+            if (unseenSince is not null)
+            {
+                search = search is null ? "state:disconnected" : $"state:disconnected {search}";
+            }
 
             if (context.Get(pending))
             {
@@ -127,8 +158,9 @@ internal static class SystemListCommand
                     perPage: perPage),
                 context.CancellationToken);
 
-            // --not-seen-for has no API search key either. A system never seen counts from when it
-            // enrolled, so one that has just enrolled is not listed for removal ("Filters").
+            // The time --not-seen-for gives has no API search key either. A system never seen counts
+            // from when it enrolled, so one that has just enrolled is not listed for removal
+            // ("Filters").
             //
             // A connected system is being seen now, so it is never listed, whatever its lastSeen.
             // lastSeen is when the discovery service last wrote the system's session (portal
@@ -138,7 +170,8 @@ internal static class SystemListCommand
             // session), and a system that stays connected can go long without that write; the portal
             // shows lastSeen for disconnected systems only (portal-spa
             // src/modules/Systems/Columns/Status.tsx). Reading lastSeen alone would put live systems
-            // in the list that example 14 revokes.
+            // in the list that example 14 revokes. The search for disconnected systems keeps them
+            // out, and the check on state is a second guard.
             if (unseenSince is { } lastSeenBy)
             {
                 systems = systems
