@@ -110,4 +110,4 @@
 
 ---
 
-For the full CLI reference, see [docs.enclave.io](https://docs.enclave.io).
+For command syntax, options and examples, see the [command reference](docs/commands/README.md).

@@ -23,6 +23,8 @@ Where a command acts:
 
 ## Commands
 
+Each command has a user-facing reference page under `docs/commands/`, named for its command words (for example, `docs/commands/system/approve.md`). The [command index](../docs/commands/README.md) links to every page. The repository README links to the index. These pages explain use, examples and output; this specification remains the source for command behaviour.
+
 ```
 enclave-cli
 ├── login --token-stdin                         check a personal access token and save it
