@@ -120,7 +120,7 @@ public class OptionValueTests
             Assert.That(lowerRequest.QueryValue(parameter), Is.EqualTo(expected));
             Assert.That(otherRequest.Path, Is.EqualTo(lowerRequest.Path));
             Assert.That(otherRequest.Query, Is.EquivalentTo(lowerRequest.Query));
-            Assert.That(otherResult.Stdout, Is.EqualTo(lowerResult.Stdout));
+            Assert.That(otherRun.Comparable(otherResult.Stdout), Is.EqualTo(lowerRun.Comparable(lowerResult.Stdout)));
         });
     }
 

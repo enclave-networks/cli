@@ -240,8 +240,8 @@ public class TokenTests
     }
 
     // A printed token lands in CI logs and agent transcripts. The token is the same from every
-    // source, so one check covers them all. A run that calls the API writes diagnostics ("Details"),
-    // which the check covers.
+    // source, so one check covers them all. A run that calls the API prints a trace, so the check
+    // covers it.
     [TestCaseSource(nameof(TokenRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr(string name)
     {
@@ -262,7 +262,8 @@ public class TokenTests
             {
                 Assert.That(requests, Is.Not.Empty);
                 Assert.That(requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
-                Assert.That(result.Diagnostics, Is.Not.Empty, result.ToString());
+                var trace = result.ExitCode == 0 ? result.StdoutTrace : result.StderrTrace;
+                Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.Not.Empty, result.ToString());
             }
             else
             {
@@ -271,8 +272,8 @@ public class TokenTests
         });
     }
 
-    // ToString is what interpolation, an exception message or a diagnostic prints. Every value is
-    // given, so a text that lists them all shows the token.
+    // ToString is what interpolation or an exception message prints. Every value is given, so a
+    // text that lists them all shows the token.
     [Test]
     public void Saved_credentials_leave_the_token_out_of_their_text()
     {

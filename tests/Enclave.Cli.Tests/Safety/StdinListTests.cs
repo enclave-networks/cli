@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
@@ -25,6 +26,23 @@ public class StdinListTests
             Assert.That(request.Path, Is.EqualTo(command.Path));
             Assert.That(string.Join(",", request.BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
         });
+    }
+
+    [Test]
+    public async Task Dash_reads_the_list_a_list_command_printed_with_its_trace()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("systems/disable");
+        run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"), ApiJson.System("FGHIJ"));
+        run.StubBulk("PUT", path, "systemsUpdated", 2);
+        var listed = await run.RunAsync("system", "list");
+        Assert.That(listed.StdoutTrace.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        run.StdinText = listed.Stdout;
+
+        var result = await run.RunAsync("system", "disable", "-");
+
+        CliAssert.Bulk(result, requested: 2, affected: 2);
+        Assert.That(string.Join(",", run.RequestsTo("PUT", path).Single().BodyIds("systemIds")), Is.EqualTo("ABCDE,FGHIJ"));
     }
 
     // Several kinds share an ID format, so a list of the wrong kind would act on whatever items share
@@ -162,7 +180,7 @@ public class StdinListTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
         });
     }
 

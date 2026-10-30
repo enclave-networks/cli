@@ -23,8 +23,7 @@ internal static class PartnerUseCommand
         {
             var partnerId = context.Get(id)!.Value;
 
-            SettingsFile.SavePartner(context.Host, partnerId);
-            context.Diagnostic($"Saved {partnerId:D} as the default partner in {SettingsFile.PathFor(context.Host)}.");
+            context.Trace.Saved(SettingsFile.SavePartner(context.Host, partnerId));
 
             await context.Output.WriteAsync(new JsonObject { ["id"] = partnerId.ToString("D") }, context.CancellationToken);
         });

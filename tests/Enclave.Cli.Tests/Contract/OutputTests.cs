@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Web;
 using Enclave.Api.Modules.OrganisationManagement;
 using Enclave.Api.Modules.SystemManagement.Dns.Models;
 using Enclave.Api.Modules.SystemManagement.EnrolmentKeys.Models;
@@ -65,9 +64,10 @@ public class OutputTests
         Assert.That(result.Stderr, Is.Empty);
     }
 
-    // A caller finds an error at the first stderr line that starts with "{" ("Details").
+    // DnsRecordModel.Systems is an IAsyncEnumerable, which only the asynchronous serializer writes,
+    // so dns show-hostname shows the model is written whole.
     [TestCaseSource(nameof(SingleItemCommands))]
-    public async Task A_command_that_prints_one_item_prints_the_api_model_unchanged_and_no_error(string command, string path, Type model, string json)
+    public async Task A_command_that_prints_one_item_prints_the_api_model_unchanged_then_its_trace(string command, string path, Type model, string json)
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
@@ -80,11 +80,12 @@ public class OutputTests
         var expected = await ApiJson.AsSdkModelAsync(json, model);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(path));
+            Assert.That(result.StdoutTrace.ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(
-                JsonElement.DeepEquals(result.StdoutJson, expected),
+                JsonElement.DeepEquals(JsonRead.WithoutTrace(result.StdoutJson), expected),
                 Is.True,
                 $"Expected the {model.Name} as Enclave.Sdk.Api writes it:{Environment.NewLine}{expected}{Environment.NewLine}Found:{Environment.NewLine}{result.Stdout}");
         });
@@ -142,69 +143,6 @@ public class OutputTests
 
         CliAssert.Succeeded(result);
         Assert.That(JsonAssert.Property(result.StdoutJson, "created").GetString(), Is.EqualTo(printed), result.ToString());
-    }
-
-    // Diagnostics are for the person reading the call, so each is a line of plain text, and every
-    // run writes them ("Details").
-    [Test]
-    public async Task Every_run_writes_each_diagnostic_as_a_line_of_plain_text()
-    {
-        using var run = CliRun.Start();
-        var path = TestData.OrgPath("systems");
-        StubSystems(run, path);
-
-        var result = await run.RunAsync("system", "list");
-
-        CliAssert.Succeeded(result);
-        Assert.That(result.Diagnostics, Has.Some.StartsWith($"GET {run.ApiBaseUrl}{path}?"), result.ToString());
-    }
-
-    // The calling program parses stdout, which holds the JSON alone ("Output"). The token never
-    // appears ("Login, logout and status").
-    [TestCase("system list", "systems")]
-    [TestCase("system show ABCDE", "systems/ABCDE")]
-    public async Task Diagnostics_go_to_stderr_and_leave_stdout_to_the_json(string command, string pathSuffix)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        ArgumentNullException.ThrowIfNull(pathSuffix);
-        using var run = CliRun.Start();
-        var path = TestData.OrgPath(pathSuffix);
-        StubSystems(run, path);
-
-        var result = await run.RunAsync(command.Split(' '));
-
-        CliAssert.Succeeded(result);
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo($"GET {path}"));
-            Assert.That(result.StdoutJson.ValueKind, Is.EqualTo(JsonValueKind.Object));
-            Assert.That(result.Diagnostics, Is.Not.Empty);
-            Assert.That(result.ErrorText, Is.Empty);
-            TokenAssert.Absent(result);
-        });
-    }
-
-    // A caller sees what was sent and where without a proxy ("Details"). The list reads two pages,
-    // so a CLI that logged one request per command fails; the bulk disable covers a change.
-    [TestCase("system list", "GET")]
-    [TestCase("system disable ABCDE", "PUT")]
-    public async Task Diagnostics_log_the_method_and_url_of_each_request_in_the_order_sent(string command, string method)
-    {
-        ArgumentNullException.ThrowIfNull(command);
-        using var run = CliRun.Start();
-        run.StubPages(TestData.OrgPath("systems"), 1, ApiJson.System("ABCDE"), ApiJson.System("FGHIJ"));
-        run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
-
-        var result = await run.RunAsync(command.Split(' '));
-
-        CliAssert.Succeeded(result);
-        var received = run.Requests.Select(request => Describe(request.Method, new Uri(run.ApiUrl, request.Path), request.Query)).ToArray();
-        Assert.Multiple(() =>
-        {
-            Assert.That(received, Is.Not.Empty.And.All.StartWith(method + " "));
-            Assert.That(LoggedRequests(result), Is.EqualTo(received));
-            TokenAssert.Absent(result);
-        });
     }
 
     // Enclave.Sdk.Api.Data names this member Prioritised, and output keeps the API's name
@@ -282,36 +220,7 @@ public class OutputTests
     private static TestCaseData SingleItem(string command, string pathSuffix, Type model, string json) =>
         new TestCaseData(command, TestData.OrgPath(pathSuffix), model, json).SetArgDisplayNames(command);
 
-    // A request as "METHOD scheme://host:port/path?query", with the query parameters in name order,
-    // so a URL logged with its parameters in another order compares equal.
-    private static string Describe(string method, Uri url, IReadOnlyDictionary<string, string> query)
-    {
-        var parameters = string.Join("&", query.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key}={pair.Value}"));
-        return $"{method} {url.GetLeftPart(UriPartial.Path)}?{parameters}";
-    }
-
-    // The requests the diagnostics logged: each diagnostic that starts with an HTTP method and an
-    // absolute URL.
-    private static string[] LoggedRequests(CliResult result)
-    {
-        var logged = new List<string>();
-
-        foreach (var line in result.Diagnostics)
-        {
-            var words = line.Split(' ');
-
-            if (words.Length >= 2
-                && words[0] is "GET" or "POST" or "PUT" or "PATCH" or "DELETE"
-                && Uri.TryCreate(words[1], UriKind.Absolute, out var url))
-            {
-                var query = HttpUtility.ParseQueryString(url.Query);
-                var parameters = query.AllKeys.OfType<string>().ToDictionary(key => key, key => query[key] ?? string.Empty, StringComparer.Ordinal);
-                logged.Add(Describe(words[0], url, parameters));
-            }
-        }
-
-        return [.. logged];
-    }
+    private static TestCaseData Succeeding(params string[] args) => CommandCases.Described(string.Join(' ', args), args);
 
     private static void StubSystems(CliRun run, string path)
     {

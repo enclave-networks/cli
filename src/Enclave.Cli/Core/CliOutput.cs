@@ -11,19 +11,22 @@ internal sealed class CliOutput
 
     private readonly TextWriter _stderr;
 
-    private readonly StringBuilder _pending = new();
+    private readonly List<object> _pending = [];
 
     private readonly bool _dropCommandOutput;
 
     // Under --dry-run the command's own output comes from answers the API never sent (DryRun.Answer),
     // so it is dropped and WriteDryRunAsync prints the report in its place (spec/cli-surface.md "Dry
     // run").
-    public CliOutput(TextWriter stdout, TextWriter stderr, bool dryRun = false)
+    public CliOutput(TextWriter stdout, TextWriter stderr, CliTrace trace, bool dryRun = false)
     {
         _stdout = stdout;
         _stderr = stderr;
+        Trace = trace;
         _dropCommandOutput = dryRun;
     }
+
+    public CliTrace Trace { get; }
 
     // Under --dry-run it prints nothing. T decides the properties written, whatever the value's
     // runtime type.
@@ -54,20 +57,25 @@ internal sealed class CliOutput
     {
         if (!_dropCommandOutput)
         {
-            _pending.Append(text);
+            _pending.Add(text);
         }
 
         return Task.CompletedTask;
     }
 
-    // Written as it happens, on every run (spec/cli-surface.md "Details"). Never pass the token.
-    public void Diagnostic(string message) => _stderr.WriteLine(message);
-
     // Call once the command has succeeded.
     public async Task FlushAsync()
     {
-        await _stdout.WriteAsync(_pending.ToString());
+        var trace = Trace.ToJson();
+        var text = new StringBuilder();
+
+        foreach (var entry in _pending)
+        {
+            text.Append(entry is JsonObject document ? Print(document, trace) + "\n" : entry);
+        }
+
         _pending.Clear();
+        await _stdout.WriteAsync(text.ToString());
     }
 
     public async Task WriteErrorAsync(CliException error)
@@ -75,10 +83,21 @@ internal sealed class CliOutput
         ArgumentNullException.ThrowIfNull(error);
 
         _pending.Clear();
-        await _stderr.WriteLineAsync(Format(error));
+        await _stderr.WriteLineAsync(Print(Describe(error), Trace.ToJson(error)));
     }
 
+    // For an error before any command runs, which has no trace.
     public static string Format(CliException error) => Describe(error).ToJsonString(CliJson.Output);
+
+    private static string Print(JsonObject document, JsonObject? trace)
+    {
+        if (trace is not null)
+        {
+            document["trace"] = trace.DeepClone();
+        }
+
+        return document.ToJsonString(CliJson.Output);
+    }
 
     private static JsonObject Describe(CliException error)
     {
@@ -119,12 +138,15 @@ internal sealed class CliOutput
     }
 
     // Some Enclave.Sdk.Api models hold IAsyncEnumerable properties, which only the asynchronous
-    // serializer writes; JsonSerializer.Serialize throws NotSupportedException for them.
+    // serializer writes, so the document is read back from its output to add the trace.
     private async Task AppendJsonAsync<T>(T value, CancellationToken cancellationToken)
     {
         using var stream = new MemoryStream();
         await JsonSerializer.SerializeAsync(stream, value, CliJson.Output, cancellationToken);
-        _pending.Append(Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length)).Append('\n');
+        stream.Position = 0;
+
+        _pending.Add(await JsonNode.ParseAsync(stream, cancellationToken: cancellationToken) as JsonObject
+            ?? throw new InvalidOperationException($"{typeof(T).Name} is not written as a JSON object, so no trace can end it."));
     }
 
     private sealed record ListEnvelope<T>(string Kind, IReadOnlyCollection<T> Items, int Total);

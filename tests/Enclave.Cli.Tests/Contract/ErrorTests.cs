@@ -1,4 +1,3 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
@@ -17,16 +16,13 @@ public class ErrorTests
 
     private static readonly string SystemsPath = TestData.OrgPath("systems");
 
-    private static readonly string[] ErrorOnly = ["error"];
+    private static readonly string[] ErrorThenTrace = ["error", "trace"];
 
     private static readonly string[] ErrorFields = ["code", "status", "title", "detail", "errors"];
 
     private static readonly string[] ValidationErrors = [ValidationError];
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
-
-    // As CliJson.Output writes JSON: indented, with the relaxed encoder.
-    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     // Each item is an ID, or an invite's email address, which the API cancels by (Enclave.Sdk.Api
     // OrganisationScopedClient.CancelInviteAync), so no lookup comes first and the failing request
@@ -93,7 +89,7 @@ public class ErrorTests
         var error = CliAssert.Failed(result, code);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(result.StderrJson), Is.EqualTo(ErrorOnly));
+            Assert.That(JsonRead.PropertyNames(result.StderrJson), Is.EqualTo(ErrorThenTrace));
             Assert.That(JsonRead.PropertyNames(error), Is.EquivalentTo(ErrorFields));
             Assert.That(error.GetProperty("errors").ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(JsonRead.PropertyNames(error.GetProperty("errors")), Is.Empty);
@@ -119,21 +115,8 @@ public class ErrorTests
 
         var result = await run.RunAsync(command.Split(' '));
 
-        var indented = JsonSerializer.Serialize(result.StderrJson, IndentedJson) + Environment.NewLine;
-        Assert.That(result.ErrorText.ReplaceLineEndings(), Is.EqualTo(indented.ReplaceLineEndings()), result.ToString());
-    }
-
-    // A program finds the error at the first line that starts with "{" ("Details").
-    [Test]
-    public async Task The_error_follows_the_diagnostics()
-    {
-        using var run = CliRun.Start();
-        run.StubProblem("GET", SystemsPath, 403, "Forbidden");
-
-        var result = await run.RunAsync("system", "list");
-
-        CliAssert.Failed(result, "forbidden");
-        Assert.That(result.Diagnostics, Has.Some.StartsWith("GET "), result.ToString());
+        var indented = JsonRead.Indented(result.StderrJson) + Environment.NewLine;
+        Assert.That(result.Stderr.ReplaceLineEndings(), Is.EqualTo(indented.ReplaceLineEndings()), result.ToString());
     }
 
     // not_found tells the caller the item it named does not exist ("Several IDs").

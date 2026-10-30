@@ -4,7 +4,7 @@ using Enclave.Sdk.Api;
 namespace Enclave.Cli.Context;
 
 // A class, not a record: a record's generated ToString lists every property, and the token must
-// never reach output, diagnostics included.
+// never reach output.
 internal sealed class ApiAccess
 {
     public const string TokenVariable = "ENCLAVE_TOKEN";
@@ -34,6 +34,9 @@ internal sealed class ApiAccess
 
     // From PartnerApiBaseUrlFrom; null leaves Enclave.Sdk.Api's default, production.
     public Uri? PartnerApiBaseUrl { get; }
+
+    public Uri? PartnerApiUrl =>
+        PartnerApiBaseUrl ?? (new EnclaveClientOptions().PartnerApiBaseUrl is { } fallback ? new Uri(fallback) : null);
 
     // The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on every
     // command"), with the base URLs from BaseUrlFrom and PartnerApiBaseUrlFrom whichever source gave

@@ -120,7 +120,7 @@ public class ListTests
         var printed = CliAssert.List(result, list.Kind);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
             Assert.That(run.Calls(), Is.All.EqualTo($"GET {list.Path}"));
             Assert.That(run.PagesRequested(list.Path), Is.EqualTo("0"));
             Assert.That(printed.GetArrayLength(), Is.EqualTo(3));
@@ -142,7 +142,7 @@ public class ListTests
         var printed = CliAssert.List(result, kind);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
             Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo($"GET {path}"));
             Assert.That(printed.GetArrayLength(), Is.EqualTo(items.Length));
         });
@@ -166,7 +166,7 @@ public class ListTests
         var requests = run.Requests;
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
             Assert.That(run.PagesRequested(list.Path), Is.EqualTo(pages));
             Assert.That(requests.Select(request => $"{request.Method} {request.Path}"), Is.All.EqualTo($"GET {list.Path}"));
             Assert.That(requests.Select(request => request.QueryValue("per_page")), Is.All.EqualTo(PageSize));

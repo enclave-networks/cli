@@ -2,14 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Enclave.Cli.Core;
 
-// Logs each request as a diagnostic; under --dry-run sends the reads and captures each change in
-// place of sending it.
 // It sits beneath Enclave.Sdk.Api's problem details handler, so it sees the Authorization header
-// (EnclaveClient.SetupHttpClient). It logs and captures only the method, URL and body, which keeps
-// the token out of diagnostics and dry-run output.
+// (EnclaveClient.SetupHttpClient), and takes only the method, URL and body to keep the token out of
+// the trace and the dry-run output.
 internal sealed class ApiRequestHandler : DelegatingHandler
 {
-    private readonly CliOutput _output;
+    private readonly CliTrace _trace;
 
     private readonly DryRun? _dryRun;
 
@@ -18,10 +16,10 @@ internal sealed class ApiRequestHandler : DelegatingHandler
     // constructor: DelegatingHandler disposes its inner handler (dotnet/runtime release/10.0,
     // DelegatingHandler.Dispose), and CliContext disposes this one.
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "DelegatingHandler disposes its inner handler.")]
-    public ApiRequestHandler(CliOutput output, DryRun? dryRun, HttpMessageHandler? network = null)
+    public ApiRequestHandler(CliTrace trace, DryRun? dryRun, HttpMessageHandler? network = null)
         : base(network ?? new HttpClientHandler())
     {
-        _output = output;
+        _trace = trace;
         _dryRun = dryRun;
     }
 
@@ -29,18 +27,15 @@ internal sealed class ApiRequestHandler : DelegatingHandler
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var url = request.RequestUri?.AbsoluteUri;
-
         // The reads a change depends on run under --dry-run (spec/cli-surface.md "Dry run"). Every
         // Enclave.Sdk.Api read is a GET.
         if (_dryRun is not null && request.Method != HttpMethod.Get)
         {
-            _output.Diagnostic($"{request.Method} {url} (not sent: --dry-run)");
             await _dryRun.CaptureAsync(request, cancellationToken);
             return DryRun.Answer(request);
         }
 
-        _output.Diagnostic($"{request.Method} {url}");
+        _trace.Sent(request);
         return await base.SendAsync(request, cancellationToken);
     }
 }

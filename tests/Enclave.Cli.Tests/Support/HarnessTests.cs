@@ -32,10 +32,6 @@ public class HarnessTests
     // The options Enclave.Sdk.Api's EnclaveClient.ReadCredentialsFile reads credentials.json with.
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    private static readonly string[] LookupDiagnostics = ["Looking up the token's organisations.", "GET http://127.0.0.1/account/orgs"];
-
-    private static readonly string[] TwoDiagnostics = ["first", "second"];
-
     private static readonly string EmptyObject = Text(new JsonObject());
 
     public static IEnumerable<TestCaseData> ResourceBodies()
@@ -167,12 +163,15 @@ public class HarnessTests
     {
         yield return Printed(ListOf("system", 0));
         yield return Printed(new JsonObject { ["total"] = 1, ["items"] = new JsonArray(new JsonObject { ["systemId"] = "A" }), ["kind"] = "system" });
+        yield return Printed(new JsonObject { ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = 0, ["trace"] = new JsonObject() });
     }
 
     // A command reading a list from stdin rejects any other kind, so the kind is compared exactly.
-    // The other cases break the envelope or the rule that total counts the items.
+    // The other cases break the envelope, the rule that total counts the items, or the rule that
+    // trace comes last.
     public static IEnumerable<TestCaseData> NotSystemLists()
     {
+        yield return Printed(0, new JsonObject { ["trace"] = new JsonObject(), ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = 0 });
         yield return Printed(0, ListOf("pending-system", 0));
         yield return Printed(0, ListOf("System", 0));
         yield return Printed(0, ListOf("system", 2, new JsonObject { ["systemId"] = "A" }));
@@ -185,14 +184,24 @@ public class HarnessTests
         yield return Printed(1, ListOf("system", 0));
     }
 
+    public static IEnumerable<TestCaseData> DocumentsNotEndingInATrace()
+    {
+        yield return Printed(new JsonObject { ["requested"] = 1 });
+        yield return Printed(new JsonObject { ["trace"] = new JsonObject(), ["requested"] = 1 });
+        yield return Printed(new JsonObject { ["requested"] = 1, ["trace"] = "GET http://127.0.0.1/" });
+        yield return Printed(new JsonArray(new JsonObject { ["trace"] = new JsonObject() }));
+    }
+
     public static IEnumerable<TestCaseData> BulkCounts()
     {
         yield return Printed(new JsonObject { ["requested"] = 3, ["affected"] = 2 });
         yield return Printed(new JsonObject { ["affected"] = 2, ["requested"] = 3 });
+        yield return Printed(new JsonObject { ["requested"] = 3, ["affected"] = 2, ["trace"] = new JsonObject() });
     }
 
     public static IEnumerable<TestCaseData> NotBulkCounts()
     {
+        yield return Printed(0, new JsonObject { ["trace"] = new JsonObject(), ["requested"] = 3, ["affected"] = 2 });
         yield return Printed(0, new JsonObject { ["requested"] = 2, ["affected"] = 3 });
         yield return Printed(0, new JsonObject { ["requested"] = 3 });
         yield return Printed(0, new JsonObject { ["requested"] = 3, ["affected"] = 2, ["failed"] = 1 });
@@ -1056,17 +1065,15 @@ public class HarnessTests
     }
 
     [Test]
-    public void Result_error_returns_the_indented_error_object_after_the_diagnostics()
+    public void Result_error_returns_the_error_object_of_the_indented_error()
     {
-        // Every line ends in \r\n, as on Windows, inside the error as well as before it.
-        var stderr = string.Concat(LookupDiagnostics.Select(line => line + "\n")) + ErrorText("not_found", 404);
-        var result = new CliResult(5, string.Empty, stderr.ReplaceLineEndings("\r\n"));
+        // Every line ends in \r\n, as on Windows.
+        var result = new CliResult(5, string.Empty, ErrorText("not_found", 404).ReplaceLineEndings("\r\n"));
 
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("not_found"));
             Assert.That(JsonAssert.Property(result.Error, "Status").GetInt32(), Is.EqualTo(404));
-            Assert.That(result.Diagnostics, Is.EqualTo(LookupDiagnostics));
         });
     }
 
@@ -1079,11 +1086,43 @@ public class HarnessTests
     }
 
     [Test]
-    public void Result_diagnostics_are_every_stderr_line_when_there_is_no_error()
+    public void Result_trace_returns_the_trace_object_that_ends_the_document()
     {
-        var result = new CliResult(0, EmptyObject, "first\n\nsecond\r\n");
+        var trace = new JsonObject { ["requests"] = new JsonArray("GET http://127.0.0.1/account/orgs") };
+        var stdout = new JsonObject { ["requested"] = 1, ["affected"] = 1, ["trace"] = trace.DeepClone() };
+        var stderr = new JsonObject { ["error"] = new JsonObject(), ["trace"] = trace.DeepClone() };
+        var result = new CliResult(0, stdout.ToJsonString(CliJson.Output), stderr.ToJsonString(CliJson.Output));
 
-        Assert.That(result.Diagnostics, Is.EqualTo(TwoDiagnostics));
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.StringList(result.StdoutTrace.GetProperty("requests")), Is.EqualTo("GET http://127.0.0.1/account/orgs"));
+            Assert.That(JsonRead.StringList(result.StderrTrace.GetProperty("requests")), Is.EqualTo("GET http://127.0.0.1/account/orgs"));
+        });
+    }
+
+    [TestCaseSource(nameof(DocumentsNotEndingInATrace))]
+    public void Result_trace_fails_the_test_unless_the_document_ends_with_a_trace_object(string json)
+    {
+        var result = new CliResult(0, json, json);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<AssertionException>(() => _ = result.StdoutTrace);
+            Assert.Throws<AssertionException>(() => _ = result.StderrTrace);
+        });
+    }
+
+    [Test]
+    public void WithoutTrace_leaves_out_only_a_trace_that_comes_last()
+    {
+        var last = JsonRead.Parse(Text(new JsonObject { ["id"] = 7, ["trace"] = new JsonObject() }));
+        var first = JsonRead.Parse(Text(new JsonObject { ["trace"] = new JsonObject(), ["id"] = 7 }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.PropertyNameList(JsonRead.WithoutTrace(last)), Is.EqualTo("id"));
+            Assert.That(JsonRead.PropertyNameList(JsonRead.WithoutTrace(first)), Is.EqualTo("trace,id"));
+        });
     }
 
     [Test]

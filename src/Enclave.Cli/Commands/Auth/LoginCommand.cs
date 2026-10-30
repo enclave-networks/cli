@@ -30,25 +30,22 @@ internal static class LoginCommand
                 context.Get(tokenStdin) ? "stdin" : ApiAccess.TokenVariable,
                 ApiAccess.BaseUrlFrom(host, stored),
                 ApiAccess.PartnerApiBaseUrlFrom(host, stored));
-            context.Diagnostic($"Checking the token at {access.BaseUrl}.");
 
             // A token the API refuses throws here, before anything is written, so it never replaces a
             // working one.
             var organisations = await context.CreateClient(access).GetOrganisationsAsync();
 
-            CredentialsFile.Write(
+            context.Trace.Saved(CredentialsFile.Write(
                 host,
                 token,
                 ApiAccess.ApiUrlFromVariable(host)?.AbsoluteUri ?? stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri,
-                ApiAccess.PartnerApiUrlFromVariable(host)?.AbsoluteUri ?? stored?.PartnerApiBaseUrl);
-            context.Diagnostic($"Saved the token in {CredentialsFile.PathFor(host)}.");
+                ApiAccess.PartnerApiUrlFromVariable(host)?.AbsoluteUri ?? stored?.PartnerApiBaseUrl));
 
             // With several, the default the user chose with org use stays as it is.
             if (organisations.Count == 1)
             {
                 var only = organisations[0];
-                SettingsFile.SaveOrganisation(host, only.OrgId, only.OrgName);
-                context.Diagnostic($"Saved {only.OrgId} as the default organisation.");
+                context.Trace.Saved(SettingsFile.SaveOrganisation(host, only.OrgId, only.OrgName));
             }
 
             await context.Output.WriteListAsync(ListKind.Org, organisations, context.CancellationToken);

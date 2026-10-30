@@ -12,16 +12,13 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
     // The non-blank lines of stdout, with any trailing carriage return removed.
     public string[] StdoutLines => Lines(Stdout);
 
-    // The non-blank lines of stderr before the error, each a diagnostic. A diagnostic doesn't start
-    // with "{", so the error starts at the first line that does ("Details").
-    public string[] Diagnostics => Lines(Stderr[..ErrorStart]);
+    // Fails the test when stderr is not one JSON value.
+    public JsonElement StderrJson => ParseJson(Stderr, "stderr");
 
-    // stderr after its diagnostics: the error, or empty when there is none.
-    public string ErrorText => Stderr[ErrorStart..];
+    // Fails the test unless stdout is a JSON object whose last property is a "trace" object.
+    public JsonElement StdoutTrace => TraceOf(StdoutJson, "stdout");
 
-    // The one JSON value stderr holds after its diagnostics. Fails the test unless there is exactly
-    // one.
-    public JsonElement StderrJson => ParseJson(ErrorText, "stderr after its diagnostics");
+    public JsonElement StderrTrace => TraceOf(StderrJson, "stderr");
 
     // The "error" object of the one error stderr holds. Fails the test unless that error is a JSON
     // object with an "error" object.
@@ -51,22 +48,6 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
         return true;
     }
 
-    private int ErrorStart
-    {
-        get
-        {
-            var start = 0;
-
-            while (start < Stderr.Length && Stderr[start] != '{')
-            {
-                var end = Stderr.IndexOf('\n', start);
-                start = end < 0 ? Stderr.Length : end + 1;
-            }
-
-            return start;
-        }
-    }
-
     private static string[] Lines(string text) =>
         text.Split('\n')
             .Select(line => line.TrimEnd('\r'))
@@ -84,6 +65,15 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
         {
             throw Failure($"Expected {source} to be JSON: {ex.Message}");
         }
+    }
+
+    private JsonElement TraceOf(JsonElement document, string source)
+    {
+        var properties = document.ValueKind == JsonValueKind.Object ? document.EnumerateObject().ToArray() : [];
+
+        return properties is [.., { Name: "trace", Value.ValueKind: JsonValueKind.Object } last]
+            ? last.Value
+            : throw Failure($"Expected {source} to be a JSON object whose last property is a \"trace\" object.");
     }
 
     // Assert.Fail inside Assert.Multiple records the failure and returns

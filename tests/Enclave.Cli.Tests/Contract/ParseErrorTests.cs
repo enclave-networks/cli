@@ -69,8 +69,8 @@ public class ParseErrorTests
         yield return CommandCases.RejectedThenCorrected("policy update --id 42 --template", "policy update --id 42 --notes Reviewed", "PATCH", TestData.OrgPath("policies/42"), ApiJson.Policy(42));
     }
 
-    // A value given to an unknown option could be a token passed by mistake, so no error or
-    // diagnostic repeats any part of it ("Errors and exit codes"). A token glued to a name,
+    // A value given to an unknown option could be a token passed by mistake, so no error
+    // repeats any part of it ("Errors and exit codes"). A token glued to a name,
     // or a name with a capital, leaves the option unnamed. Each case gives the value, the names
     // errors is keyed by in order (null for an unnamed option), and the suggestion detail carries.
     public static IEnumerable<TestCaseData> UnknownOptionsWithValues()

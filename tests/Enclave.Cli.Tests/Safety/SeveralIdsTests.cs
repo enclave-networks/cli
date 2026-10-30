@@ -62,7 +62,7 @@ public class SeveralIdsTests
         Assert.Multiple(() =>
         {
             Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
         });
     }
 

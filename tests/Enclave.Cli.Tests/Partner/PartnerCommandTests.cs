@@ -147,7 +147,7 @@ public class PartnerCommandTests
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(TestData.CustomerPath(TestData.CustomerOrgId)));
             Assert.That(Unchanged(result.StdoutJson, ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName)), Is.True, result.ToString());
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
         });
     }
 
@@ -616,7 +616,7 @@ public class PartnerCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Calls().LastOrDefault(), Is.EqualTo(lastCall));
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
         });
     }
 
@@ -638,7 +638,7 @@ public class PartnerCommandTests
             Assert.That(singularRun.Calls(), Is.Not.Empty);
             Assert.That(pluralRun.Calls(), Is.EqualTo(singularRun.Calls()));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
+            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
         });
     }
 
@@ -928,7 +928,7 @@ public class PartnerCommandTests
     // Compared as values, so indentation does not matter and a field the model drops or retypes
     // shows.
     private static bool Unchanged(JsonElement printed, string body) =>
-        JsonElement.DeepEquals(printed, JsonRead.Parse(body));
+        JsonElement.DeepEquals(JsonRead.WithoutTrace(printed), JsonRead.Parse(body));
 
     private static bool Unchanged(JsonElement printedItems, string[] bodies) =>
         printedItems.ValueKind == JsonValueKind.Array

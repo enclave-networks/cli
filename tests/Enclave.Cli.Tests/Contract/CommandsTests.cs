@@ -128,11 +128,10 @@ public class CommandsTests
     ];
 
     // AGENTS.md "CLI contract" rules out output formats, confirmation, file input and a token
-    // argument; no row of "Command options" lists --all, --search or --expiry-action; and every run
-    // writes its diagnostics ("Details"), so none takes --verbose.
+    // argument; no row of "Command options" lists --all, --search or --expiry-action.
     private static readonly string[] OptionsNoCommandHas =
     [
-        "-o", "--output", "--yes", "--from-file", "--template", "--token", "--all", "--search", "--expiry-action", "--verbose",
+        "-o", "--output", "--yes", "--from-file", "--template", "--token", "--all", "--search", "--expiry-action",
     ];
 
     // "Command options", the `system list` and `system list --pending` rows.
@@ -615,7 +614,7 @@ public class CommandsTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
             Assert.That(entries.Keys, Is.EqualTo(new[] { list }));
         });
 

@@ -5,8 +5,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 // spec/cli-surface.md "Login, logout and status". Each test also checks what the command did, so a
 // command that printed nothing because it did nothing does not pass, and a command that calls the
-// API is checked to have written diagnostics, which stderr holds on every run ("Details").
-// Partner/ covers the partner commands.
+// API is checked to print a trace, so the check covers it. Partner/ covers the partner commands.
 public class TokenOutputTests
 {
     // The change request carrying the token shows the CLI held the token it left out.
@@ -22,7 +21,7 @@ public class TokenOutputTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(result.Diagnostics, Is.Not.Empty);
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -40,7 +39,7 @@ public class TokenOutputTests
         {
             Assert.That(JsonAssert.Property(result.StdoutJson, "dryRun").GetBoolean(), Is.True);
             Assert.That(command.ChangeRequests(run), Is.Empty);
-            Assert.That(result.Diagnostics, Is.Not.Empty);
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -59,7 +58,7 @@ public class TokenOutputTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(result.Diagnostics, Is.Not.Empty);
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo(run.CredentialsPath), result.ToString());
             TokenAssert.Absent(result);
         });
     }

@@ -71,17 +71,14 @@ internal static class OrganisationResolver
 
         if (choice?.Id is { } id)
         {
-            context.Diagnostic($"Organisation {id} from {choice.Source}.");
             return new OrganisationInUse(id, choice.Name, null, choice.Source, client.CreateOrganisationClient(id));
         }
 
-        context.Diagnostic("Looking up the token's organisations.");
         var organisations = await client.GetOrganisationsAsync();
 
         if (choice?.Name is { } name)
         {
             var match = MatchName(name, organisations, choice.Source);
-            context.Diagnostic($"Organisation {match.OrgId} from {choice.Source}.");
             return new OrganisationInUse(match.OrgId, match.OrgName, match.Role, choice.Source, client.CreateOrganisationClient(match));
         }
 
@@ -95,7 +92,6 @@ internal static class OrganisationResolver
         }
 
         var only = organisations[0];
-        context.Diagnostic($"Organisation {only.OrgId}, the only one the token sees.");
         return new OrganisationInUse(only.OrgId, only.OrgName, only.Role, OnlyOrganisation, client.CreateOrganisationClient(only));
     }
 

@@ -4,8 +4,8 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Support;
 
 // Reads what --dry-run prints,
-// { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
-// (spec/cli-surface.md "Dry run"), failing the test when its shape is wrong.
+// { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }, and
+// any trace after them (spec/cli-surface.md "Dry run"), failing the test when its shape is wrong.
 internal static class DryRunOutput
 {
     private const string RequestFields = "body,method,url";
@@ -27,11 +27,11 @@ internal static class DryRunOutput
         var requests = JsonAssert.Property(output, "requests");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(OutputFields), result.ToString());
+            Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(OutputFields), result.ToString());
             Assert.That(JsonAssert.Property(output, "dryRun").ValueKind, Is.EqualTo(JsonValueKind.True));
             Assert.That(org.ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array));
-            Assert.That(result.ErrorText, Is.Empty);
+            Assert.That(result.Stderr, Is.Empty);
         });
 
         var items = requests.EnumerateArray().ToArray();

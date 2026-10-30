@@ -30,7 +30,7 @@ internal sealed class CliAction : AsynchronousCommandLineAction
         ArgumentNullException.ThrowIfNull(parseResult);
 
         var dryRun = _verb?.DryRunOption is { } dryRunOption && parseResult.GetResult(dryRunOption) is { Implicit: false } ? new DryRun() : null;
-        var output = new CliOutput(parseResult.InvocationConfiguration.Output, parseResult.InvocationConfiguration.Error, dryRun is not null);
+        var output = new CliOutput(parseResult.InvocationConfiguration.Output, parseResult.InvocationConfiguration.Error, new CliTrace(), dryRun is not null);
         using var context = new CliContext(parseResult, CliRootCommand.HostOf(parseResult), output, _verb, dryRun, cancellationToken);
 
         try
@@ -69,12 +69,6 @@ internal sealed class CliAction : AsynchronousCommandLineAction
         catch (Exception exception)
         {
             var error = ApiErrors.ToCliException(exception);
-
-            if (error.InnerException is { } cause)
-            {
-                output.Diagnostic($"{cause.GetType().FullName}: {cause.Message}");
-            }
-
             await output.WriteErrorAsync(error);
             return error.Code.ExitCode;
         }

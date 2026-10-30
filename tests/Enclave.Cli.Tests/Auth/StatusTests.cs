@@ -53,7 +53,7 @@ public class StatusTests
         var org = JsonAssert.Property(output, "org");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(StatusFields));
+            Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(StatusFields));
             Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "token")), Is.EquivalentTo(TokenFields));
             Assert.That(JsonRead.PropertyNames(org), Is.EquivalentTo(OrgFields));
             Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "partner")), Is.EquivalentTo(PartnerFields));

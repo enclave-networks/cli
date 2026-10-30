@@ -85,7 +85,7 @@ public class PartnerSafetyTests
         var partner = JsonAssert.Property(output, "partner");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(DryRunFields), result.ToString());
+            Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(DryRunFields), result.ToString());
             Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
             Assert.That(JsonRead.PropertyNameList(partner), Is.EqualTo("id"));
             Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId));
@@ -132,8 +132,7 @@ public class PartnerSafetyTests
     // A printed token lands in CI logs and agent transcripts, and does not expire (portal
     // TokensApiController.Create). Each run must succeed and send its requests with the token, so a
     // command that printed nothing because it did nothing does not pass. create under --dry-run
-    // sends nothing; its report shows it ran. stderr holds the diagnostics, each request among them
-    // ("Details").
+    // sends nothing; its report shows it ran. The run prints a trace, so the check covers it.
     [TestCaseSource(nameof(CustomerCommandRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls, string? withheldChange)
     {
@@ -145,7 +144,7 @@ public class PartnerSafetyTests
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(result.Diagnostics, Is.Not.Empty, result.ToString());
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
@@ -165,7 +164,7 @@ public class PartnerSafetyTests
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(result.Diagnostics, Is.Not.Empty, result.ToString());
+            Assert.That(JsonRead.StringList(JsonAssert.Property(result.StdoutTrace, "saved")), Is.EqualTo(run.CliConfigPath), result.ToString());
             Assert.That(run.Requests, Is.Empty);
         });
 

@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Enclave.Cli.Core;
 using NUnit.Framework;
 using WireMock.Matchers;
 using WireMock.Server;
@@ -253,6 +254,18 @@ internal sealed class CliRun : IDisposable
     // answers every call after it.
     public void StubBulk(string method, string path, string resultField, params int[] affected) =>
         StubSequence(method, path, affected.Select(count => (200, ApiJson.Bulk(resultField, count))).ToArray());
+
+    // The trace names each run's own API addresses and home directory, so output from two runs
+    // compares equal once they are placeholders; the home directory is matched as JSON escapes it.
+    public string Comparable(string output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        return output
+            .Replace(JsonSerializer.Serialize(Home, CliJson.Output)[1..^1], "<home>", StringComparison.Ordinal)
+            .Replace(PartnerApiBaseUrl, "<partner-api>", StringComparison.Ordinal)
+            .Replace(ApiBaseUrl, "<api>", StringComparison.Ordinal);
+    }
 
     // The requests after the first skip, each as "METHOD path".
     public string[] Calls(int skip = 0) =>
