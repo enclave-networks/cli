@@ -34,7 +34,7 @@ internal static class SystemUpdateCommand
         verb.Exclusive(enableGatewayFor, disableGateway);
 
         // A waiting system has no gateway routes to set: UnapprovedSystemPatchModel takes a
-        // description, notes and tags only (Enclave.Sdk.Api.Data 304.48.0), so the gateway flags exit
+        // description, notes and tags only (Enclave.Sdk.Api.Data), so the gateway flags exit
         // 2 with --pending ("Details").
         Option[] enrolledOnly = [enableGatewayFor, disableGateway];
         verb.Check(context =>

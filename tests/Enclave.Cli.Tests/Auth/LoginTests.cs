@@ -20,7 +20,7 @@ public class LoginTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.2.0), which the
+    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile), which the
     // CLI must not change (AGENTS.md "CLI contract"). The file can also hold partnerApiBaseUrl, which
     // login keeps when it is there and never adds.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
@@ -201,7 +201,7 @@ public class LoginTests
     // login prints the organisations the token can see as an org list ("Login, logout and status",
     // "Output"), so the caller learns which organisations the token reaches without a second call.
     // The items are AccountOrganisationModel unchanged, and Enclave.Sdk.Api writes orgId as 32 hex
-    // digits (OrganisationGuid JSON converter, Enclave.Sdk.Api.Data 304.48.0).
+    // digits (OrganisationGuid JSON converter, Enclave.Sdk.Api.Data).
     [Test]
     public async Task Login_prints_the_organisations_the_token_can_see_as_an_org_list()
     {
@@ -302,7 +302,7 @@ public class LoginTests
     // login writes credentials.json after its check passes, so a token the API refuses is never
     // saved: a saved bad token makes every later command fail. Enclave.Sdk.Api raises
     // EnclaveApiException only for problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0), so the plain cases, a proxy
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29), so the plain cases, a proxy
     // or server answering without problem details, reach the CLI as HttpRequestException, which
     // the CLI maps to the same codes ("Errors and exit codes"). 403 means the token lacks
     // ReadOrgList, which the check needs.

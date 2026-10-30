@@ -146,7 +146,7 @@ public class TagCommandTests
     }
 
     // The patch holds only the fields given ("Create and update"). Enclave.Sdk.Api keys a PATCH
-    // body by the C# property name (PatchClient.Set, version 1.2.0).
+    // body by the C# property name (PatchClient.Set).
     [Test]
     public async Task Tag_set_on_a_tag_that_exists_patches_only_the_fields_given_and_prints_the_tag()
     {
@@ -191,7 +191,7 @@ public class TagCommandTests
     // TagModifyHandler.GetResponseAsync:58), so tag set creates it ("Command options", "Calls per
     // command"). A create sends a value for every setting, and an empty list for a list flag left
     // out, so the trust requirements go as [] ("Create and update", "Details"): the body is
-    // TagCreateModel in camelCase, every property written (Enclave.Sdk.Api 1.2.0
+    // TagCreateModel in camelCase, every property written (Enclave.Sdk.Api
     // TagsClient.CreateAsync with Constants.JsonSerializerOptions, which ignores no property). The
     // output is the model the API answered with, whose colour and notes differ from those sent, read
     // with exact names, since JsonAssert.Property also matches a name in another case.
@@ -436,7 +436,7 @@ public class TagCommandTests
     }
 
     // A command that takes several items always makes the bulk call, and the tag bulk delete takes
-    // names in a "tags" array (Enclave.Sdk.Api 1.2.0, TagsClient.DeleteTagsAsync). affected below
+    // names in a "tags" array (Enclave.Sdk.Api, TagsClient.DeleteTagsAsync). affected below
     // requested is a success ("Several IDs").
     [Test]
     public async Task Tag_delete_sends_every_tag_named_in_one_bulk_call()

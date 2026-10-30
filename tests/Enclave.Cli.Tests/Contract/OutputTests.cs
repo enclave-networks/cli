@@ -107,7 +107,7 @@ public class OutputTests
     // src/libraries/System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and
     // writes each as it holds it: the first with the machine's offset, +00:00 on a machine at UTC,
     // and the second with no zone. The API's times are UTC, so a time without a zone is UTC too, as
-    // log reads it. EnrolmentKeyModel.Created is a DateTime (Enclave.Sdk.Api.Data 304.48.0). The
+    // log reads it. EnrolmentKeyModel.Created is a DateTime (Enclave.Sdk.Api.Data). The
     // expected text is exact, so it differs from what the machine's offset gives on every machine.
     [TestCase("2026-10-08T12:00:00+05:30", "2026-10-08T06:30:00Z")]
     [TestCase("2026-10-08T12:00:00", "2026-10-08T12:00:00Z")]
@@ -182,7 +182,7 @@ public class OutputTests
     }
 
     // The API names the gateway priority that follows the order of the gateways Ordered, and
-    // Enclave.Sdk.Api.Data 304.48.0 names that enum member Prioritised (proposed-cli-surface.md
+    // Enclave.Sdk.Api.Data names that enum member Prioritised (proposed-cli-surface.md
     // "`Enclave.Sdk.Api` changes", item 9). Output keeps the API's names ("Output"), so a policy the
     // API sends as Ordered prints as Ordered, in a single item and in a list.
     [TestCase("policy show --id 7")]

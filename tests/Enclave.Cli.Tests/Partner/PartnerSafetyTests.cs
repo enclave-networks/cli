@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Partner;
 
 // Every ID is checked before any call, and one bad ID exits 2 naming it (proposed-cli-surface.md
 // "ID checks"). Organisation IDs (a partner's customers included), account IDs and partner IDs are
-// GUIDs. Enclave.Sdk.Api 1.2.0 puts customer and account IDs into the partner API's paths as their
+// GUIDs. Enclave.Sdk.Api puts customer and account IDs into the partner API's paths as their
 // typed IDs write them (CustomersClient.CustomerRoute), so a value that is not a GUID never reaches
 // a path; "../x" is the value that matters most, since a path holding it unchecked would send the
 // request to another resource. A rejection alone does not show the command exists, so each ID case

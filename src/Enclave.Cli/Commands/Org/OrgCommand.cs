@@ -122,7 +122,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetOrganisationUsersAsync returns every user in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api), so there are no pages to read.
             var users = await org.Client.GetOrganisationUsersAsync();
 
             await context.Output.WriteListAsync(ListKind.User, users, context.CancellationToken);
@@ -140,7 +140,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // GetPendingInvitesAsync returns every invite in one response
-            // (OrganisationScopedClient.cs, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
+            // (OrganisationScopedClient.cs, Enclave.Sdk.Api), so there are no pages to read.
             var invites = await org.Client.GetPendingInvitesAsync();
 
             await context.Output.WriteListAsync(ListKind.Invite, invites, context.CancellationToken);
@@ -150,7 +150,7 @@ internal static class OrgCommand
     }
 
     // A failed invite or cancel-invite is reported, with or without problem details: Enclave.Sdk.Api
-    // 1.2.0 checks the status of these responses before it reads the body
+    // checks the status of these responses before it reads the body
     // (OrganisationScopedClient.ReadModelAsync; proposed-cli-surface.md "`Enclave.Sdk.Api`
     // changes", item 6), and CliAction maps its exception like any other.
     private static CliVerb Invite()
@@ -165,8 +165,8 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // The API answers an invite with the invite's model (portal
-            // OrganisationController.CreateInvite), which InviteUserAsync returns (Enclave.Sdk.Api
-            // 1.2.0). It holds the address the invite was first sent to, which can differ in case
+            // OrganisationController.CreateInvite), which InviteUserAsync returns (Enclave.Sdk.Api).
+            // It holds the address the invite was first sent to, which can differ in case
             // from the one given, so the output shows the invite as the API holds it.
             var invite = await org.Client.InviteUserAsync(context.Get(email)!);
 
@@ -193,8 +193,8 @@ internal static class OrgCommand
             // ("Several IDs").
             //
             // The API answers a cancelled invite with the invite's model (portal
-            // OrganisationController.DeleteInvite), which CancelInviteAync returns (Enclave.Sdk.Api
-            // 1.2.0), and a single-ID command prints the model ("Several IDs").
+            // OrganisationController.DeleteInvite), which CancelInviteAync returns (Enclave.Sdk.Api),
+            // and a single-ID command prints the model ("Several IDs").
             var cancelled = await SingleItem.CallAsync(() => org.Client.CancelInviteAync(context.Get(email)!));
 
             await context.Output.WriteAsync(cancelled, context.CancellationToken);

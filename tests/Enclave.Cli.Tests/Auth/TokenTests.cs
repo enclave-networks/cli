@@ -122,7 +122,7 @@ public class TokenTests
     }
 
     // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made, from
-    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api 1.2.0), so
+    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api), so
     // an address that is not a URL fails every command. The CLI reports it as a bad setting naming
     // the file, as it does a bad baseUrl, before any call.
     [TestCase("not a url")]

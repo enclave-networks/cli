@@ -23,7 +23,7 @@ public readonly record struct BulkCommand(
     string OtherKind,
     string MalformedId)
 {
-    // Routes, body fields and result fields are those of Enclave.Sdk.Api 1.2.0 (SystemsClient,
+    // Routes, body fields and result fields are those of Enclave.Sdk.Api (SystemsClient,
     // UnapprovedSystemsClient, EnrolmentKeysClient, PoliciesClient, TagsClient, DnsClient,
     // TrustRequirementsClient) and of the portal's bulk result models. Key delete is
     // EnrolmentKeysClient.BulkDeleteAsync, which reads keysDeleted, where the bulk enable and

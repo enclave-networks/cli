@@ -11,7 +11,7 @@ namespace Enclave.Cli.Commands.Partner.Customer;
 /// (proposed-cli-surface.md "Commands", "Partner API"). A customer is an organisation, given by
 /// name or by --org-id, its organisation ID.
 /// </summary>
-// Every call goes through Enclave.Sdk.Api 1.2.0's partner client (IPartnerClient.Customers), one
+// Every call goes through Enclave.Sdk.Api's partner client (IPartnerClient.Customers), one
 // call per command. A customer given by name, an admin given by email address and an invite given
 // by email address each add one read (proposed-cli-surface.md "Calls per command").
 internal static class PartnerCustomerCommand
@@ -85,7 +85,7 @@ internal static class PartnerCustomerCommand
         verb.SetHandler(async context =>
         {
             // The owner, domain and contact have no portal default and are sent without a value
-            // when left out; Enclave.Sdk.Api 1.2.0 writes every property of the model, so they go as
+            // when left out; Enclave.Sdk.Api writes every property of the model, so they go as
             // null (ClientBase.CreateJsonContent).
             var model = new CustomerCreateModel
             {
@@ -192,7 +192,7 @@ internal static class PartnerCustomerCommand
         SetHandler(verb, customer, async (context, customers, id) =>
         {
             // GetAdminsAsync returns every owner and admin in one response
-            // (CustomersClient.GetAdminsAsync, Enclave.Sdk.Api 1.2.0), so there are no pages to read.
+            // (CustomersClient.GetAdminsAsync, Enclave.Sdk.Api), so there are no pages to read.
             var admins = await SingleItem.CallAsync(() => customers.GetAdminsAsync(id));
 
             await context.Output.WriteListAsync(ListKind.Admin, admins, context.CancellationToken);
@@ -242,7 +242,7 @@ internal static class PartnerCustomerCommand
         SetHandler(verb, customer, async (context, customers, id) =>
         {
             // GetPendingInvitesAsync returns every invite in one response
-            // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api 1.2.0), so there are no pages
+            // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api), so there are no pages
             // to read.
             var invites = await SingleItem.CallAsync(() => customers.GetPendingInvitesAsync(id));
 
@@ -279,7 +279,7 @@ internal static class PartnerCustomerCommand
     // For a customer the partner does not have, the auto-sync routes answer 204 with no body where
     // the other customer routes answer 404, and Enclave.Sdk.Api reports it by throwing
     // InvalidOperationException (ICustomersClient.EnableAutoSyncAsync and DisableAutoSyncAsync,
-    // CustomersClient.SetAutoSyncAsync, 1.2.0). That is the unknown customer a single-ID command
+    // CustomersClient.SetAutoSyncAsync). That is the unknown customer a single-ID command
     // exits 5 for (proposed-cli-surface.md "Several IDs").
     private static CliVerb AutoSync(string name, string description, Func<ICustomersClient, OrganisationGuid, Task<CustomerModel>> call)
     {
@@ -312,7 +312,7 @@ internal static class PartnerCustomerCommand
     // argument checks, before the token and any call (proposed-cli-surface.md "Errors and exit
     // codes"). Passed on, it would cost the customer lookup and then match nothing, or reach
     // ICustomersClient.InviteAdminAsync, which throws ArgumentException for a blank address
-    // (Enclave.Sdk.Api 1.2.0), or reach the API as create's owner, which the API refuses (portal
+    // (Enclave.Sdk.Api), or reach the API as create's owner, which the API refuses (portal
     // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:20,
     // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
     // 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid).

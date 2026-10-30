@@ -10,7 +10,7 @@ namespace Enclave.Cli.Tests.Contract;
 // addresses a released CLI uses.
 public class ProductionAddressTests
 {
-    // Enclave.Sdk.Api 1.2.0's production addresses (src/Enclave.Sdk.Api/Constants.cs:27-29, ApiUrl
+    // Enclave.Sdk.Api's production addresses (src/Enclave.Sdk.Api/Constants.cs:27-29, ApiUrl
     // and PartnerApiUrl, which the EnclaveClientOptions constructor sets; EnclaveClient.cs:185
     // names the partner one).
     private const string ProductionApi = "https://api.enclave.io";

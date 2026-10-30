@@ -9,7 +9,7 @@ namespace Enclave.Cli.Tests.Support;
 /// </summary>
 internal static partial class ApiJson
 {
-    // The options Enclave.Sdk.Api 1.2.0 reads and writes models with (Constants.JsonSerializerOptions,
+    // The options Enclave.Sdk.Api reads and writes models with (Constants.JsonSerializerOptions,
     // internal to the package): camelCase names, the gateway priority Prioritised as the API's
     // Ordered, and other enums as their member names. The gateway priority converter goes first,
     // since System.Text.Json uses the first converter that can convert a type.

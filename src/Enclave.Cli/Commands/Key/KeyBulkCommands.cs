@@ -62,7 +62,7 @@ internal static class KeyBulkCommands
     }
 
     // One key makes the bulk call too, so the output is { requested, affected } however many keys
-    // are given ("Several IDs"); Enclave.Sdk.Api 1.2.0 IEnrolmentKeysClient.DeleteAsync, the
+    // are given ("Several IDs"); Enclave.Sdk.Api IEnrolmentKeysClient.DeleteAsync, the
     // single delete, is left unused.
     public static CliVerb Delete()
     {

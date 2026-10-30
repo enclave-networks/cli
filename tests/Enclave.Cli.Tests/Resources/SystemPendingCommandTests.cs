@@ -38,7 +38,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api 1.2.0
+    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api
     // UnapprovedSystemsClient.BuildQueryString). Example 3, first command.
     [Test]
     public async Task System_list_pending_key_id_sends_the_enrolment_key_parameter()
@@ -102,6 +102,7 @@ public class SystemPendingCommandTests
     [TestCase("recently-enrolled", "RecentlyEnrolled")]
     [TestCase("description", "Description")]
     [TestCase("enrolment-key-used", "EnrolmentKeyUsed")]
+    [TestCase("description-or-hostname", "DescriptionOrHostname")]
     public async Task System_list_pending_sort_sends_the_api_sort_name(string sort, string expected)
     {
         using var run = CliRun.Start();
@@ -113,16 +114,19 @@ public class SystemPendingCommandTests
     }
 
     // With --pending, --sort takes the waiting systems' sort values (proposed-cli-surface.md
-    // "Details"), and UnapprovedSystemQuerySortMode has no RecentlyConnected member.
-    [Test]
-    public async Task System_list_pending_with_a_sort_only_enrolled_systems_have_exits_2_without_a_request()
+    // "Details"), and UnapprovedSystemQuerySortMode has none of these members.
+    [TestCase("recently-connected")]
+    [TestCase("last-connected")]
+    [TestCase("state")]
+    [TestCase("version")]
+    public async Task System_list_pending_with_a_sort_only_enrolled_systems_have_exits_2_without_a_request(string sort)
     {
         using var run = CliRun.Start();
         run.Stub("GET", PendingPath, json: ApiJson.Page());
 
         await CliAssert.RejectedThenAcceptedAsync(
             run,
-            ["system", "list", "--pending", "--sort", "recently-connected"],
+            ["system", "list", "--pending", "--sort", sort],
             ["system", "list", "--pending", "--sort", "recently-enrolled"],
             "GET",
             PendingPath);
@@ -288,7 +292,7 @@ public class SystemPendingCommandTests
     }
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update").
-    // Enclave.Sdk.Api 1.2.0 keys the patch body by UnapprovedSystemPatchModel's property names
+    // Enclave.Sdk.Api keys the patch body by UnapprovedSystemPatchModel's property names
     // (PatchClient.Set). The output is the model the API returned.
     [Test]
     public async Task System_update_pending_sends_the_description_notes_and_tags_to_the_waiting_system()
@@ -408,7 +412,7 @@ public class SystemPendingCommandTests
 
     // approve and decline act on waiting systems only (proposed-cli-surface.md "Commands"), in one
     // bulk call for any number of systems ("Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api 1.2.0 UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
+    // Enclave.Sdk.Api UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
     // approve succeeds when some systems were not approved (portal UnapprovedSystemsController.cs:
     // 170-177), so the API counts one of the two and the output carries its count.
     [TestCase("approve", "PUT", "unapproved-systems/approve", "systemsApproved")]

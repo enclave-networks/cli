@@ -28,7 +28,7 @@ internal static class LoopbackApi
 
     internal const string JsonContentType = "application/json";
 
-    // Enclave.Sdk.Api 1.2.0 throws EnclaveApiException only for this media type
+    // Enclave.Sdk.Api throws EnclaveApiException only for this media type
     // (Handlers/ProblemDetailsHttpMessageHandler.cs:29); any other error body reaches the caller as
     // HttpRequestException.
     internal const string ProblemContentType = "application/problem+json";
@@ -53,7 +53,7 @@ internal static class LoopbackApi
             Urls = ["http://127.0.0.1:0"],
 
             // Enclave.Sdk.Api sends bulk revoke, decline and delete requests as DELETE with a JSON body
-            // (Enclave.Sdk.Api 1.2.0, SystemsClient.RevokeSystemsAsync), so every method's body
+            // (Enclave.Sdk.Api, SystemsClient.RevokeSystemsAsync), so every method's body
             // is read and recorded.
             AllowBodyForAllHttpMethods = true,
 
@@ -140,7 +140,7 @@ internal static class LoopbackApi
     /// for page 0.
     /// </summary>
     // The API reads a missing page parameter as page 0 (portal PaginatedRequestModel.Page), and
-    // Enclave.Sdk.Api 1.2.0 leaves the parameter out when it is given no page number
+    // Enclave.Sdk.Api leaves the parameter out when it is given no page number
     // (SystemsClient.BuildQueryString and the other list clients). A parameter that is not a whole
     // number matches no page.
     internal static IRequestBuilder MatchingPage(string path, int page) =>

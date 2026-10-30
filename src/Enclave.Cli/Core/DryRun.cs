@@ -58,10 +58,10 @@ internal sealed class DryRun
     // ClientBase.DeserialiseAsync and check it with EnsureNotNull, as PatchClient.ApplyAsync and
     // CustomersClient.ReadAsync do; RemoveUserAsync, InviteUserAsync and CancelInviteAync throw
     // InvalidOperationException for an empty body or JSON null and deserialise any other
-    // (OrganisationScopedClient.ReadModelAsync, OrganisationScopedClient.cs:158-176; Enclave.Sdk.Api
-    // 1.2.0). {} passes both: it is neither empty nor null, and it reads as a model whose fields hold
+    // (OrganisationScopedClient.ReadModelAsync, OrganisationScopedClient.cs:158-176; Enclave.Sdk.Api).
+    // {} passes both: it is neither empty nor null, and it reads as a model whose fields hold
     // their default values, or a bulk count of 0, since no model has a required member (neither
-    // Enclave.Sdk.Api 1.2.0 nor Enclave.Sdk.Api.Data 304.48.0 uses RequiredMemberAttribute or
+    // Enclave.Sdk.Api nor Enclave.Sdk.Api.Data uses RequiredMemberAttribute or
     // JsonRequiredAttribute). Every call then completes, so a bulk command over 200 IDs goes on to
     // show each of its calls.
     //

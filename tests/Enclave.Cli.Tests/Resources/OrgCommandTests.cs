@@ -95,7 +95,7 @@ public class OrgCommandTests
     }
 
     // The API returns the users in one body, with no pages
-    // (OrganisationScopedClient.GetOrganisationUsersAsync, Enclave.Sdk.Api 1.2.0), and the CLI prints
+    // (OrganisationScopedClient.GetOrganisationUsersAsync, Enclave.Sdk.Api), and the CLI prints
     // them as a user list (proposed-cli-surface.md "Output").
     [Test]
     public async Task Org_list_users_prints_the_organisation_users_as_a_user_list()
@@ -271,10 +271,10 @@ public class OrgCommandTests
     }
 
     // Example 64 in proposed-cli-surface.md, first command. The API takes the invite as
-    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.2.0). The API
+    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api). The API
     // answers with the invite's model (portal OrganisationController.CreateInvite), which the
     // command prints. The invite holds the address it was first sent to, which can differ in case
-    // from the one given (IOrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api 1.2.0), so the
+    // from the one given (IOrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api), so the
     // fake answers with another case, and output copied from the argument does not match.
     [Test]
     public async Task Org_invite_posts_the_email_address_and_prints_the_invite_the_api_returns()
@@ -297,8 +297,8 @@ public class OrgCommandTests
     }
 
     // Example 19 in proposed-cli-surface.md, second command. The main API cancels an invite by email
-    // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api
-    // 1.2.0), so the CLI sends the address and makes no lookup ("Partner API"). The API answers with
+    // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api),
+    // so the CLI sends the address and makes no lookup ("Partner API"). The API answers with
     // the cancelled invite's model (portal OrganisationController.DeleteInvite), which a single-ID
     // command prints ("Several IDs"). The fake answers with the address in another case, as the
     // invite test above does, so output copied from the argument does not match.
@@ -401,7 +401,7 @@ public class OrgCommandTests
 
     // A change the API did not make must never be reported as made. A plain 502 from a proxy is a
     // failure without problem details, which the CLI maps to transient ("Errors and exit codes").
-    // These calls report it because Enclave.Sdk.Api 1.2.0 checks their status before it reads the
+    // These calls report it because Enclave.Sdk.Api checks their status before it reads the
     // body (OrganisationScopedClient.ReadModelAsync; proposed-cli-surface.md "`Enclave.Sdk.Api`
     // changes", item 6), so the HTML body is never read as a model.
     [TestCase("org invite alex@example.com", "POST", "invites")]

@@ -23,7 +23,7 @@ public class IdCheckTests
     // proposed-cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
     // exits 2 naming it and sends nothing. Put into a URL path unescaped, this ID would send DELETE
     // org/<id>/systems/ABCDE and revoke system ABCDE, since .NET resolves ".." when it combines the
-    // path with the base address; Enclave.Sdk.Api 1.2.0 escapes it (ClientBase.PathSegment), and the
+    // path with the base address; Enclave.Sdk.Api escapes it (ClientBase.PathSegment), and the
     // check does not depend on that. Every route the ID could reach is answered, so any request it
     // caused would be recorded.
     [Test]
@@ -363,7 +363,7 @@ public class IdCheckTests
         yield return Case("trust update --id ../5", ["trust", "update", "--id", "../5", "--description", "uk only"], ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only"));
 
         // Organisations and accounts: GUIDs. RemoveUserAsync takes the account ID as a string
-        // (Enclave.Sdk.Api 1.2.0, OrganisationScopedClient.RemoveUserAsync), so the path carries
+        // (Enclave.Sdk.Api, OrganisationScopedClient.RemoveUserAsync), so the path carries
         // whichever GUID form the CLI passes.
         yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));

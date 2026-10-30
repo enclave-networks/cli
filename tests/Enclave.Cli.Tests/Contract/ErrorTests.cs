@@ -34,7 +34,7 @@ public class ErrorTests
     private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2030, 3, 14, 20, 0, 0, TimeSpan.Zero), TestData.LocalZone);
 
     // The items are given by ID, or are an invite's email address, which the API cancels by
-    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api 1.2.0), so no lookup comes first
+    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api), so no lookup comes first
     // and the request that fails is the command's own ("Several IDs": single-ID commands are show, update,
     // --for and --until, dns delete-zone, org remove-user and org cancel-invite).
     public static IEnumerable<TestCaseData> SingleIdCommands()
@@ -72,7 +72,7 @@ public class ErrorTests
                 .Select(value => new TestCaseData(command, value).SetArgDisplayNames(command.Name, $"--id \"{value}\"")));
 
     // Enclave.Sdk.Api throws EnclaveApiException for application/problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0). The error carries the
+    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29). The error carries the
     // problem's status, title and detail through, so the caller sees what the API said. A list is
     // not a single-ID command, so a 404 on one is an API error like any other status the table does
     // not name. The error object holds exactly code, status, title, detail and errors (AGENTS.md
@@ -132,7 +132,7 @@ public class ErrorTests
     }
 
     // Validation failures list the offending fields in the problem's "errors" (an RFC 9457
-    // extension member, which Enclave.Sdk.Api 1.2.0 reads into ProblemDetails.Errors). The CLI
+    // extension member, which Enclave.Sdk.Api reads into ProblemDetails.Errors). The CLI
     // passes them through with their keys unchanged, so an agent can fix the named field.
     [Test]
     public async Task A_validation_problem_exits_1_with_api_error_carrying_the_errors_through()
@@ -165,7 +165,7 @@ public class ErrorTests
     }
 
     // A response that is not problem+json reaches the CLI as HttpRequestException with the status
-    // code (Enclave.Sdk.Api 1.2.0 throws EnclaveApiException only for problem+json,
+    // code (Enclave.Sdk.Api throws EnclaveApiException only for problem+json,
     // ProblemDetailsHttpMessageHandler.cs:29). A proxy in front of the API answers this way, and the
     // CLI maps these statuses to the same codes ("Errors and exit codes").
     [TestCase(401, "text/plain", "Unauthorized", "token_invalid")]

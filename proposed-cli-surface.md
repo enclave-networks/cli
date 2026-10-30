@@ -1,6 +1,6 @@
 # Proposed CLI surface
 
-`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api` 1.2.0. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
+`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api`. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
 
 ## Shape and naming
 
@@ -255,7 +255,7 @@ enclave-cli system list --pending --key-id 12 | enclave-cli system approve -
 
 ## Filters
 
-`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type` and `--gateway`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). `--key-id` uses the API's `enrolment_key` parameter, which takes one key's ID (portal `SystemsRequestModel.cs:16-18`) and which `Enclave.Sdk.Api` 1.2.0 passes (`ISystemsClient.GetSystemsAsync`); `--key` looks the key up by name first, then does the same. On `key list` and `policy list`, `--state disabled` lists disabled items without `--include-disabled`.
+`list` commands return every matching item: the CLI reads every page. `log` is the exception (see "Command options"). `--filter <text>` works as the portal's search box does: the text is sent as typed, so it takes the API's search syntax as well as plain words (`--filter "web tags:|prod,staging version:>2024.8.0"`), and plain words match the list's main field, such as a system's name, ID or hostname (portal-spa `ApiService.ts:123-141`; portal `BaseSearchKeyService.cs`). Lists also take one flag per search key the API defines for that resource (portal `Enclave.Configuration.Data/Modules/*/*SearchKeyService.cs`): for `system list`, `--tag`, `--state`, `--os`, `--type` and `--gateway`. The CLI adds them to the `--filter` text (`tags:web state:connected`), and they combine: `system list --tag web --state connected` lists connected systems tagged `web`. `--tag web,db` lists items with every tag given. On `policy list`, `--tag` matches sender or receiver tags (portal `PolicySearchKeyService.cs`). `--key-id` uses the API's `enrolment_key` parameter, which takes one key's ID (portal `SystemsRequestModel.cs:16-18`) and which `Enclave.Sdk.Api` passes (`ISystemsClient.GetSystemsAsync`); `--key` looks the key up by name first, then does the same. On `key list` and `policy list`, `--state disabled` lists disabled items without `--include-disabled`.
 
 Flag values are written as the API's search values, which are not always the CLI's (portal `*SearchKeyService.cs`):
 
@@ -282,7 +282,7 @@ Keys, policies, DNS zones, hostnames and trust requirements are given as argumen
 
 ## ID checks
 
-Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` escapes IDs in URL paths from 1.1.0, so `system decline ../systems/ABCDE` cannot reach another route, as it could with 1.0.5. The CLI also checks every ID itself, so a malformed one exits 2 with an error that names it, and no request is sent.
+Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` escapes IDs in URL paths, so `system decline ../systems/ABCDE` cannot reach another route. The CLI also checks every ID itself, so a malformed one exits 2 with an error that names it, and no request is sent.
 
 | ID | Format |
 |---|---|
@@ -310,7 +310,7 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 - Partner customer commands take `--dry-run` like any other command that changes something. They print `"partner": { "id" }` in place of `org`.
 - `login`, `logout`, `org use` and `partner use` change only local files and do not take `--dry-run`.
 
-The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api` 1.2.0). Printing the captured request keeps URL building in one place and shows exactly what would be sent. The CLI answers each captured change itself, with status 200 and the body `{}`, which every `Enclave.Sdk.Api` call accepts, so the command goes on to its next call; nothing read from that answer is printed.
+The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api`). Printing the captured request keeps URL building in one place and shows exactly what would be sent. The CLI answers each captured change itself, with status 200 and the body `{}`, which every `Enclave.Sdk.Api` call accepts, so the command goes on to its next call; nothing read from that answer is printed.
 
 ## Create and update
 
@@ -384,13 +384,13 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 - Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2), then the call. A command with bad arguments fails the same way with or without a token.
 - `--help` and `--version` print text for people, and are the only output that is not JSON. `enclave-cli` with no arguments prints the help and exits 0.
 
-`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:29`, 1.2.0), and throws `HttpRequestException` with the status for any other failure. The CLI maps those status codes to the same exit codes, so a plain 401 or a proxy's 502 gets 3 or 6 as well.
+`Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs:29`), and throws `HttpRequestException` with the status for any other failure. The CLI maps those status codes to the same exit codes, so a plain 401 or a proxy's 502 gets 3 or 6 as well.
 
 ## Login, logout and status
 
 - `login --token-stdin` reads the token from stdin, without a trailing newline; with `ENCLAVE_TOKEN` set, `login` saves that token. `--token-stdin` wins over `ENCLAVE_TOKEN`. It never prompts: `--token-stdin` with stdin a terminal exits 2, and no token, or empty stdin, exits 3 `token_missing`. An empty `ENCLAVE_TOKEN` counts as unset, as does any empty environment variable the CLI reads.
 - `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
-- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`, 1.2.0). `login` keeps an existing `baseUrl` and `partnerApiBaseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
+- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`). `login` keeps an existing `baseUrl` and `partnerApiBaseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
 - The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and `ENCLAVE_TOKEN` keeps the file's `baseUrl`.
 - When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables work against the default API address, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
 - `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
@@ -457,7 +457,7 @@ Known, and left as they are. The CLI passes the API's answers on as they come.
 
 ## `Enclave.Sdk.Api` changes
 
-These were added to `Enclave.Sdk.Api`, with tests there, for the CLI: number 5 in 1.0.5, number 10 in 1.2.0, and the rest in 1.1.0. The API itself did not change. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
+These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API itself did not change for numbers 1 to 10. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
 
 1. IDs are escaped in URL paths, and an empty ID, `.` or `..` throws.
 2. `EnclaveClientOptions.HttpMessageHandler` sends every request through a caller's handler, which `--dry-run` uses to capture the requests and `--verbose` to log them.
@@ -467,8 +467,9 @@ These were added to `Enclave.Sdk.Api`, with tests there, for the CLI: number 5 i
 6. A failed response that is not problem+json throws `HttpRequestException` with its status, on every call, including `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync`, which reported such failures as success.
 7. `GetSearchKeysAsync` on the systems, unapproved systems, enrolment keys, policies and tags clients, so `commands` can describe the keys `--filter` accepts.
 8. `CreatePartnerClient(PartnerId)`, whose `Customers` client covers the customer routes. `EnclaveClientOptions.PartnerApiBaseUrl` defaults to `https://partner-api.enclave.io`.
-9. `GatewayPriorityType.Prioritised` is sent and read as `Ordered`, the API's name for it. `Enclave.Sdk.Api.Data` 304.48.0 names it `Prioritised` (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the sdk repository's enum (`Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `GatewayPriorityTypeJsonConverter` does the mapping, and the CLI adds it to the options it prints models with.
+9. `GatewayPriorityType.Prioritised` is sent and read as `Ordered`, the API's name for it. `Enclave.Sdk.Api.Data` names it `Prioritised` (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the sdk repository's enum (`Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `GatewayPriorityTypeJsonConverter` does the mapping, and the CLI adds it to the options it prints models with.
 10. `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync` return the model the API answers with (portal `OrganisationController.cs`), so `org remove-user`, `org invite` and `org cancel-invite` print it. A successful response with no model throws `InvalidOperationException`.
+11. The sort modes the API added in portal PR #648: `LastConnected`, `State` and `Version` for the systems list, and `DescriptionOrHostname` for the waiting systems list.
 
 ## Changes to AGENTS.md
 
@@ -629,7 +630,7 @@ enclave-cli status
 # 37. Find every gateway and the subnets it serves
 enclave-cli system list --gateway
 
-# 38. List systems, most recently connected first
+# 38. List systems: connected ones first, then the most recently seen
 enclave-cli system list --sort recently-connected
 
 # 39. Find systems running an agent older than 2024.8.0, using the API's search syntax

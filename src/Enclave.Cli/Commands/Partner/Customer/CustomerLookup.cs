@@ -50,7 +50,7 @@ internal static class CustomerLookup
         ArgumentNullException.ThrowIfNull(customers);
 
         // GetAdminsAsync returns every owner and admin in one response (CustomersClient.GetAdminsAsync,
-        // Enclave.Sdk.Api 1.2.0), so the address is matched in that one list.
+        // Enclave.Sdk.Api), so the address is matched in that one list.
         var admins = await SingleItem.CallAsync(() => customers.GetAdminsAsync(customerId));
 
         return One(
@@ -76,7 +76,7 @@ internal static class CustomerLookup
         ArgumentNullException.ThrowIfNull(customers);
 
         // GetPendingInvitesAsync returns every invite in one response
-        // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api 1.2.0).
+        // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api).
         var invites = await SingleItem.CallAsync(() => customers.GetPendingInvitesAsync(customerId));
 
         return One(

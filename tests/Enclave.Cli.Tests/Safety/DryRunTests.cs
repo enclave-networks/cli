@@ -246,7 +246,7 @@ public class DryRunTests
 
     // An update sends only the fields given (proposed-cli-surface.md "Create and update"), and the
     // printed body is the one Enclave.Sdk.Api would send, so it holds the description alone.
-    // PatchClient keys the body by the model's property name (Enclave.Sdk.Api 1.2.0,
+    // PatchClient keys the body by the model's property name (Enclave.Sdk.Api,
     // PatchClient.cs, Set), which JsonAssert.Property matches ignoring case.
     [Test]
     public async Task Dry_run_of_an_update_prints_a_body_holding_only_the_fields_given()
@@ -269,7 +269,7 @@ public class DryRunTests
         });
     }
 
-    // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api 1.2.0), which the dry run
+    // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api), which the dry run
     // shows as "body": null (proposed-cli-surface.md "Dry run").
     [Test]
     public async Task Dry_run_of_a_request_without_a_body_prints_a_null_body()

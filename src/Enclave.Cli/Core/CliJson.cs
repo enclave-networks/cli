@@ -11,10 +11,10 @@ namespace Enclave.Cli.Core;
 internal static class CliJson
 {
     // The naming policy and the first two converters are the ones Enclave.Sdk.Api reads and writes
-    // models with (Constants.JsonSerializerOptions, Enclave.Sdk.Api 1.2.0), which the package keeps
+    // models with (Constants.JsonSerializerOptions, Enclave.Sdk.Api), which the package keeps
     // internal, so a model prints with the API's field names and enum names; UtcDateTimeConverter is
     // the CLI's own, and prints times in UTC. GatewayPriorityTypeJsonConverter writes the gateway
-    // priority Enclave.Sdk.Api.Data 304.48.0 names Prioritised as Ordered, the API's name for it
+    // priority Enclave.Sdk.Api.Data names Prioritised as Ordered, the API's name for it
     // (proposed-cli-surface.md "`Enclave.Sdk.Api` changes", item 9). It goes ahead of the enum
     // converter because System.Text.Json uses the first converter in the list that can convert a type
     // (https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/converters-how-to#converter-registration-precedence),

@@ -21,7 +21,7 @@ using static System.FormattableString;
 namespace Enclave.Cli.Tests.Support;
 
 // The tests in this project trust three things this fixture proves: that every ApiJson body is JSON
-// Enclave.Sdk.Api 1.2.0 reads into the model it names, field for field, that a CliRun confines the
+// Enclave.Sdk.Api reads into the model it names, field for field, that a CliRun confines the
 // CLI to its own environment, home directory, stdin, network and fake APIs, and that the stubs, the
 // request records and the CliAssert and TokenAssert checks behave as their documentation says. A
 // check that passed everything would let every test that relies on it pass, so each check is shown
@@ -32,7 +32,7 @@ public class HarnessTests
 
     private const int ResourceId = 7;
 
-    // The options Enclave.Sdk.Api 1.2.0 reads and writes JSON with (Constants.JsonSerializerOptions,
+    // The options Enclave.Sdk.Api reads and writes JSON with (Constants.JsonSerializerOptions,
     // which is internal to the package): the gateway priority converter goes ahead of the enum
     // converter, since System.Text.Json uses the first converter that can convert a type.
     private static readonly JsonSerializerOptions SdkJsonOptions = new()
@@ -41,7 +41,7 @@ public class HarnessTests
         Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
     };
 
-    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api 1.2.0).
+    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api).
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static IEnumerable<TestCaseData> ResourceBodies()
@@ -656,7 +656,7 @@ public class HarnessTests
 
     // A proxy in front of the API answers with its own error page, which Enclave.Sdk.Api passes on as
     // HttpRequestException with the status (it reads problem details from application/problem+json
-    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29, version 1.2.0).
+    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29).
     [Test]
     public void StubRaw_reaches_the_sdk_as_an_http_error_without_problem_details()
     {
@@ -851,7 +851,7 @@ public class HarnessTests
     }
 
     // A stub goes to the fake that serves its path, and each fake answers the other API's routes
-    // with 421 Misdirected Request, which Enclave.Sdk.Api 1.2.0 raises as EnclaveApiException for a
+    // with 421 Misdirected Request, which Enclave.Sdk.Api raises as EnclaveApiException for a
     // problem details body. The client with the addresses swapped sends each call to the wrong fake;
     // the client with them right shows both stubs exist.
     [Test]
@@ -1263,7 +1263,7 @@ public class HarnessTests
 
     private static EnclaveClient Connect(CliRun run) => Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
 
-    // The partner API address is always given: left out, Enclave.Sdk.Api 1.2.0 uses production's
+    // The partner API address is always given: left out, Enclave.Sdk.Api uses production's
     // (EnclaveClientOptions.PartnerApiBaseUrl).
     private static EnclaveClient Connect(string baseUrl, string partnerApiBaseUrl) => new(new EnclaveClientOptions
     {

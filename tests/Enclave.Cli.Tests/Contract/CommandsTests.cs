@@ -161,6 +161,7 @@ public class CommandsTests
     private static readonly string[] SystemSortValues =
     [
         "recently-enrolled", "recently-connected", "description", "description-or-hostname", "enrolment-key-used",
+        "last-connected", "state", "version",
     ];
 
     private static readonly string[] SystemStateValues = ["connected", "disconnected"];
@@ -217,7 +218,7 @@ public class CommandsTests
         yield return Options("commands", "--search-keys --pending --org --org-id --verbose", "--dry-run --partner-id");
     }
 
-    // The lists whose search keys Enclave.Sdk.Api 1.2.0 reads (GetSearchKeysAsync on
+    // The lists whose search keys Enclave.Sdk.Api reads (GetSearchKeysAsync on
     // ISystemsClient, IUnapprovedSystemsClient, IEnrolmentKeysClient, IPoliciesClient and
     // ITagsClient), each with the route the call takes and a body for the fake API to serve there
     // ("Details"). --pending chooses the systems waiting for approval, as it does on system list.

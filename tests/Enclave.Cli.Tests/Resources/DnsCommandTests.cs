@@ -320,7 +320,7 @@ public class DnsCommandTests
 
     // Example 62 in proposed-cli-surface.md. --zone takes the zone's name, looked up with one call,
     // and --zone-id its ID, which needs no lookup ("Names and IDs"); either way every page asks the
-    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api 1.2.0).
+    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api).
     [TestCase("dns list-hostnames --zone internal", true)]
     [TestCase("dns list-hostnames --zone-id 4", false)]
     public async Task Dns_list_hostnames_in_a_zone_asks_the_api_for_that_zone_only(string commandLine, bool lookup)
@@ -342,7 +342,7 @@ public class DnsCommandTests
     }
 
     // Example 16 in proposed-cli-surface.md. --filter is sent as typed, as the API's search
-    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api 1.2.0).
+    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api).
     [Test]
     public async Task Dns_list_hostnames_sends_the_filter_as_the_api_search()
     {

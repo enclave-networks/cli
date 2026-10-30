@@ -36,12 +36,15 @@ internal static class SystemListCommand
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled systems."));
         var sort = verb.Add(CliOptions.Enum(
             "--sort",
-            "The order to list systems in. With --pending: recently-enrolled, description or enrolment-key-used.",
+            "The order to list systems in. With --pending: recently-enrolled, description, enrolment-key-used or description-or-hostname.",
             SystemQuerySortMode.RecentlyEnrolled,
             SystemQuerySortMode.RecentlyConnected,
             SystemQuerySortMode.Description,
             SystemQuerySortMode.DescriptionOrHostname,
-            SystemQuerySortMode.EnrolmentKeyUsed));
+            SystemQuerySortMode.EnrolmentKeyUsed,
+            SystemQuerySortMode.LastConnected,
+            SystemQuerySortMode.State,
+            SystemQuerySortMode.Version));
         var pending = verb.Add(CliOptions.Flag("--pending", "List the systems waiting for approval."));
         var waitingFor = verb.Add(CliOptions.Duration("--waiting-for", "With --pending: systems that have waited at least this long."));
 
@@ -50,7 +53,7 @@ internal static class SystemListCommand
 
         // The API keeps waiting systems apart, and their list request has no include_disabled or dns
         // parameter (portal UnapprovedSystems/Models/UnapprovedSystemsRequestModel.cs;
-        // UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api 1.2.0). Its search is parsed by
+        // UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api). Its search is parsed by
         // the same search key service as the enrolled systems' list (portal
         // UnapprovedSystems/Handlers/PaginatedUnapprovedSystemsHandler.cs:49,75 pass it to
         // Enclave.Configuration.Data/Modules/Systems/SystemRepository.cs:513-515), so --filter takes
@@ -72,7 +75,7 @@ internal static class SystemListCommand
 
             if (context.Get(sort) is { } mode && PendingSort(mode) is null)
             {
-                throw CliErrors.InvalidArgument(sort.Name, "With --pending, --sort takes one of: recently-enrolled, description, enrolment-key-used.");
+                throw CliErrors.InvalidArgument(sort.Name, "With --pending, --sort takes one of: recently-enrolled, description, enrolment-key-used, description-or-hostname.");
             }
         });
 
@@ -213,6 +216,7 @@ internal static class SystemListCommand
         SystemQuerySortMode.RecentlyEnrolled => UnapprovedSystemQuerySortMode.RecentlyEnrolled,
         SystemQuerySortMode.Description => UnapprovedSystemQuerySortMode.Description,
         SystemQuerySortMode.EnrolmentKeyUsed => UnapprovedSystemQuerySortMode.EnrolmentKeyUsed,
+        SystemQuerySortMode.DescriptionOrHostname => UnapprovedSystemQuerySortMode.DescriptionOrHostname,
         _ => null,
     };
 

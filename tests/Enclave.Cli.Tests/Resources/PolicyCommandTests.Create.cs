@@ -139,8 +139,7 @@ public partial class PolicyCommandTests
     }
 
     // --acl takes a protocol and, for TCP and UDP, a port or range ("Command options"). The API
-    // names the protocols Any, Tcp, Udp and Icmp (PolicyAclProtocol, Enclave.Sdk.Api.Data
-    // 304.48.0).
+    // names the protocols Any, Tcp, Udp and Icmp (PolicyAclProtocol, Enclave.Sdk.Api.Data).
     [TestCase("any", "Any|(none)|(none)")]
     [TestCase("icmp", "Icmp|(none)|(none)")]
     [TestCase("tcp:22", "Tcp|22|(none)")]
@@ -346,7 +345,7 @@ public partial class PolicyCommandTests
     }
 
     // Example 53. --mode takes the API's GatewayPriority values, matched ignoring case, and the
-    // CLI writes Ordered where Enclave.Sdk.Api.Data 304.48.0 names the value Prioritised
+    // CLI writes Ordered where Enclave.Sdk.Api.Data names the value Prioritised
     // ("`Enclave.Sdk.Api` changes", item 9; sdk
     // Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs).
     [TestCase("balanced", "Balanced")]

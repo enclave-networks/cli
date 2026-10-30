@@ -12,7 +12,7 @@ public class OptionDecidesParsingTests
 {
     // 12 is the ID of one key and the description of another, so the systems request shows which
     // reading the CLI took. --key-id uses the API's enrolment_key parameter (proposed-cli-surface.md
-    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api 1.2.0).
+    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api).
     [Test]
     public async Task Key_id_option_reads_its_value_as_a_key_id_and_makes_no_lookup()
     {

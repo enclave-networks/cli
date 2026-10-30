@@ -5,8 +5,8 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-// Property names are the camelCase names of the Enclave.Sdk.Api.Data 304.48.0 models, and enums
-// are written as the names Enclave.Sdk.Api 1.2.0 reads them by (Constants.JsonSerializerOptions):
+// Property names are the camelCase names of the Enclave.Sdk.Api.Data models, and enums
+// are written as the names Enclave.Sdk.Api reads them by (Constants.JsonSerializerOptions):
 // their member names, and Ordered for the gateway priority Prioritised. GUID identifiers (OrganisationGuid, AccountGuid) are 32 hex
 // digits without hyphens, the only form their JSON converters read and the form they write. Each
 // body carries every property of the model it represents, with DateTime values ending in Z and

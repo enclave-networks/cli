@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Resources;
 
 // policy update (proposed-cli-surface.md "Command options" and "Create and update"). An update
 // sends only the fields given, as a PolicyPatchModel; Enclave.Sdk.Api keys a PATCH body by the C#
-// property name (PatchClient.Set, version 1.2.0), so the keys are PascalCase. --set-acl and
+// property name (PatchClient.Set), so the keys are PascalCase. --set-acl and
 // --set-subnet-filter read the policy first so that entries which stay keep their labels ("Calls
 // per command"); the other flags make no read. The label rules of --set-subnet-filter, examples 75
 // and 77 to 80, are tested in Editing/LabelTests.cs, on the policy by ID and by description and on
@@ -198,7 +198,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // The CLI writes Ordered where Enclave.Sdk.Api.Data 304.48.0 names the value Prioritised
+    // The CLI writes Ordered where Enclave.Sdk.Api.Data names the value Prioritised
     // ("`Enclave.Sdk.Api` changes", item 9).
     [TestCase("balanced", "Balanced")]
     [TestCase("ordered", "Ordered")]

@@ -27,7 +27,7 @@ public partial class PolicyCommandTests
     private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");
 
     // TestData.OtherOrgPath writes the organisation ID as Enclave.Sdk.Api does, 32 hex digits
-    // (OrganisationGuid.ToString, Enclave.Sdk.Api.Data 304.48.0).
+    // (OrganisationGuid.ToString, Enclave.Sdk.Api.Data).
     private static readonly string OtherOrgPoliciesPath = TestData.OtherOrgPath("policies");
 
     private static readonly string[] TagsWebAndDb = ["tags:web,db"];
@@ -125,7 +125,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Enclave.Sdk.Api 1.2.0 writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
+    // Enclave.Sdk.Api writes the flag with bool.ToString (PoliciesClient.BuildQueryString), so
     // the value is compared ignoring case.
     [Test]
     public async Task Policy_list_with_include_disabled_asks_the_api_for_disabled_policies()

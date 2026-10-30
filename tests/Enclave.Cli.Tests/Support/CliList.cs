@@ -36,7 +36,7 @@ internal static class CliList
     // cancels an invite by email, OrganisationClient.CancelInviteAync, and a partner customer's
     // invite is looked up by its email address, proposed-cli-surface.md "Partner API"), and
     // organisations, users, customers and customer admins by their GUID
-    // (AccountOrganisationModel.OrgId, OrganisationUser.Id, and Enclave.Sdk.Api 1.2.0's
+    // (AccountOrganisationModel.OrgId, OrganisationUser.Id, and Enclave.Sdk.Api's
     // CustomerModel.Id and CustomerUserModel.Id). Log entries have no ID (LogEntryModel).
 
     /// <summary>

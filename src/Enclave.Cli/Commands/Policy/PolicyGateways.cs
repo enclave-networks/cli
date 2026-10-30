@@ -14,8 +14,8 @@ internal static class PolicyGateways
     /// --mode's values, each standing for the API's GatewayPriority value (sdk
     /// Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs, which the API uses).
     /// </summary>
-    // Enclave.Sdk.Api.Data 304.48.0 names the API's Ordered value Prioritised (portal
-    // Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs). Enclave.Sdk.Api 1.2.0 sends and reads
+    // Enclave.Sdk.Api.Data names the API's Ordered value Prioritised (portal
+    // Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs). Enclave.Sdk.Api sends and reads
     // Prioritised as Ordered (Data/GatewayPriorityTypeJsonConverter.cs, which every client uses), so
     // ordered stands for Prioritised ("`Enclave.Sdk.Api` changes", item 9).
     public static (string Value, GatewayPriorityType Result)[] Modes { get; } =

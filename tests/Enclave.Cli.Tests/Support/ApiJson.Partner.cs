@@ -4,7 +4,7 @@ using System.Text.Json.Nodes;
 namespace Enclave.Cli.Tests.Support;
 
 // Partner API bodies have the property names, value types and nullability of the partner API's
-// models, which Enclave.Sdk.Api 1.2.0 defines in Enclave.Sdk.Api.Partner.Models and the deployed
+// models, which Enclave.Sdk.Api defines in Enclave.Sdk.Api.Partner.Models and the deployed
 // schema gives (https://partner-api.enclave.io/swagger/v1/swagger.json, components.schemas
 // CustomerModel, CustomerUsersModel, CustomerUserModel, CustomerPendingAdminInvitesModel and
 // CustomerAdminInviteModel). As for the main API's bodies, each carries every property of its
@@ -23,7 +23,7 @@ internal static partial class ApiJson
     /// <summary>
     /// A CustomerModel, the customer GET, create, update, convert and auto-sync body and the customer
     /// list item, for the customer with this organisation ID. Only the customer list sets
-    /// oldestEnclaveVersion (CustomerModel.OldestEnclaveVersion, Enclave.Sdk.Api 1.2.0).
+    /// oldestEnclaveVersion (CustomerModel.OldestEnclaveVersion, Enclave.Sdk.Api).
     /// </summary>
     public static string Customer(string orgId, string name, string? oldestEnclaveVersion = null) => new JsonObject
     {
@@ -93,7 +93,7 @@ internal static partial class ApiJson
     /// <summary>
     /// A CustomerAdminInviteModel: one item of <see cref="CustomerInvites"/>, and the body an invite
     /// returns. The API writes the invite ID as a string, the organisation ID and a number joined by a
-    /// hyphen (Enclave.Sdk.Api 1.2.0, CustomersClientTests).
+    /// hyphen (Enclave.Sdk.Api, CustomersClientTests).
     /// </summary>
     public static string CustomerInvite(string orgId, int number, string email) => new JsonObject
     {
@@ -104,7 +104,7 @@ internal static partial class ApiJson
     /// <summary>
     /// The body the API answers a cancelled invite with: the email address, and the ID written as
     /// null (portal DeleteCustomerPendingAdminInviteHandler.cs leaves it unset, as
-    /// CustomersClient.CancelInviteAsync records, Enclave.Sdk.Api 1.2.0).
+    /// CustomersClient.CancelInviteAsync records, Enclave.Sdk.Api).
     /// </summary>
     public static string CancelledCustomerInvite(string email) => new JsonObject
     {

@@ -25,7 +25,7 @@ internal static class JsonAssert
         }
 
         // Enclave.Sdk.Api's PatchClient keys a PATCH body by the C# property name
-        // (PatchClient.cs, Set: property.Member.Name, version 1.2.0), so PATCH bodies use PascalCase
+        // (PatchClient.cs, Set: property.Member.Name), so PATCH bodies use PascalCase
         // keys while every other body uses camelCase.
         foreach (var property in obj.EnumerateObject())
         {

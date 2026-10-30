@@ -27,7 +27,7 @@ public class OrgContextTests
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
     // The same path form as TestData.OrgPath: Enclave.Sdk.Api writes the organisation ID as 32 hex
-    // digits (OrganisationGuid.ToString, Enclave.Sdk.Api.Data 304.48.0).
+    // digits (OrganisationGuid.ToString, Enclave.Sdk.Api.Data).
     private static readonly string ThirdOrgSystems = $"/org/{ThirdOrgId:N}/systems";
 
     // Precedence is --org or --org-id, then ENCLAVE_ORG or ENCLAVE_ORG_ID, then the default org use
@@ -612,7 +612,7 @@ public class OrgContextTests
     // org use prints the organisation's model (AccountOrganisationModel, printed unchanged:
     // "Output"), so a caller that chose by name learns the ID and one that chose by ID learns the
     // name. Enclave.Sdk.Api writes orgId as 32 hex digits (OrganisationGuid JSON converter,
-    // Enclave.Sdk.Api.Data 304.48.0).
+    // Enclave.Sdk.Api.Data).
     [TestCase("globex")]
     [TestCase("--id")]
     public async Task Org_use_prints_the_organisation_it_saves(string choice)

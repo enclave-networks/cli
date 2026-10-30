@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Partner customer commands call the partner API through Enclave.Sdk.Api 1.2.0's partner client
+// Partner customer commands call the partner API through Enclave.Sdk.Api's partner client
 // (IPartnerClient.Customers), one call per command. A customer given by name, an admin given by
 // email address and an invite given by email address each add one read: the customer list, the
 // customer's admins and the customer's invites (proposed-cli-surface.md "Calls per command", "Names
@@ -30,7 +30,7 @@ public class PartnerCommandTests
 
     private static readonly string[] InvalidBillingMonths = ["0", "2", "6", "13", "48", "twelve"];
 
-    // Every field of the API's CustomerCreateModel (Enclave.Sdk.Api 1.2.0, which writes it in
+    // Every field of the API's CustomerCreateModel (Enclave.Sdk.Api, which writes it in
     // camelCase; the partner API schema). A create sends each one ("Command options").
     private static readonly string[] CreateFields =
     [
@@ -359,7 +359,7 @@ public class PartnerCommandTests
     // An update sends only the fields given (proposed-cli-surface.md "Create and update"). --systems
     // sets LicensedAgentsCount and --gateways LicensedGatewaysCount (portal
     // CustomerPatchModelValidator.cs:14-16), and each --no- flag sends false. Enclave.Sdk.Api keys a
-    // PATCH body by the model's property names (PatchClient.Set, 1.2.0), and the API reads names
+    // PATCH body by the model's property names (PatchClient.Set), and the API reads names
     // ignoring case, so the names are compared ignoring case.
     [TestCase("--name", "Globex Limited", "Name", "\"Globex Limited\"")]
     [TestCase("--contact", "Jo Bloggs", "ContactName", "\"Jo Bloggs\"")]
@@ -438,7 +438,7 @@ public class PartnerCommandTests
     }
 
     // The API returns the owners and admins in one body, with no pages (CustomersClient.GetAdminsAsync,
-    // Enclave.Sdk.Api 1.2.0), and the CLI prints them as an admin list ("Output").
+    // Enclave.Sdk.Api), and the CLI prints them as an admin list ("Output").
     [Test]
     public async Task Partner_customer_list_admins_prints_the_admins_as_an_admin_list()
     {
@@ -532,7 +532,7 @@ public class PartnerCommandTests
     }
 
     // The API returns the pending invites in one body, with no pages
-    // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api 1.2.0), and the CLI prints them as an
+    // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api), and the CLI prints them as an
     // invite list ("Output").
     [Test]
     public async Task Partner_customer_list_invites_prints_the_pending_invites_as_an_invite_list()
@@ -575,7 +575,7 @@ public class PartnerCommandTests
     // customer's invites, matching whole and ignoring case (proposed-cli-surface.md "Partner API",
     // "Names and IDs"). Sam's invite is the second the lookup reads, so a lookup that took the first
     // cancels Kim's. The API answers with the invite's email address and a null ID, and
-    // Enclave.Sdk.Api 1.2.0 gives the cancelled invite the ID it sent (CustomersClient.CancelInviteAsync).
+    // Enclave.Sdk.Api gives the cancelled invite the ID it sent (CustomersClient.CancelInviteAsync).
     [TestCase(TestData.CustomerInviteEmail)]
     [TestCase("SAM@GLOBEX.example")]
     public async Task Partner_customer_cancel_invite_looks_the_email_up_and_deletes_that_invite(string email)
@@ -638,7 +638,7 @@ public class PartnerCommandTests
     // Partner customer commands exit 5 for an unknown customer ("Several IDs"). For a customer the
     // partner does not have, the auto-sync routes answer 204 with no body (portal
     // CustomersController.cs, EnableAutoSync and DisableAutoSync; CustomersClient.SetAutoSyncAsync,
-    // Enclave.Sdk.Api 1.2.0), where the other routes answer 404.
+    // Enclave.Sdk.Api), where the other routes answer 404.
     [TestCase("enable-auto-sync")]
     [TestCase("disable-auto-sync")]
     public async Task Partner_customer_auto_sync_for_a_customer_the_partner_does_not_have_exits_5(string verb)

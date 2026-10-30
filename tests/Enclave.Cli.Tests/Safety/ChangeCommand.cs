@@ -31,7 +31,7 @@ public readonly record struct ChangeCommand(
     // commands use the partner API; they are tested in Partner/. Items are given by ID where the
     // command allows it, so the change is the only request; dns create-hostname finds its zone from
     // the hostname, and tag set reads the tag to choose between the API's update and create calls
-    // ("Dry run"), so those reads are answered. Routes are those of Enclave.Sdk.Api 1.2.0.
+    // ("Dry run"), so those reads are answered. Routes are those of Enclave.Sdk.Api.
     //
     // RemoveUserAsync takes the account ID as a string (OrganisationScopedClient.cs:92), so the path
     // carries whichever GUID form the CLI passes, and both forms are answered.

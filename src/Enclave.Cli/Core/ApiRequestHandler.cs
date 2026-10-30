@@ -8,7 +8,7 @@ namespace Enclave.Cli.Core;
 /// under --dry-run it sends the reads and captures each change in place of sending it.
 /// </summary>
 // Enclave.Sdk.Api puts this handler beneath its problem details handler, so it sees each request
-// with the Authorization header set (EnclaveClient.SetupHttpClient, Enclave.Sdk.Api 1.2.0). It logs
+// with the Authorization header set (EnclaveClient.SetupHttpClient, Enclave.Sdk.Api). It logs
 // and captures the method, URL and body only, so the token stays out of every diagnostic and of the
 // dry-run output.
 internal sealed class ApiRequestHandler : DelegatingHandler
@@ -18,7 +18,7 @@ internal sealed class ApiRequestHandler : DelegatingHandler
     private readonly DryRun? _dryRun;
 
     // HttpClientHandler is the handler Enclave.Sdk.Api sends through when given none
-    // (ProblemDetailsHttpMessageHandler, Enclave.Sdk.Api 1.2.0), so requests reach the network as
+    // (ProblemDetailsHttpMessageHandler, Enclave.Sdk.Api), so requests reach the network as
     // they would without this one; a test gives its own network in its place
     // (CliHost.CreateNetworkHandler). DelegatingHandler disposes its inner handler when it is disposed
     // (dotnet/runtime src/libraries/System.Net.Http/src/System/Net/Http/DelegatingHandler.cs,

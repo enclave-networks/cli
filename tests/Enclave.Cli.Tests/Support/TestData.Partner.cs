@@ -51,7 +51,7 @@ internal static partial class TestData
 
     // Every partner API route is under /partner/{partnerId}/, and Enclave.Sdk.Api builds it from
     // PartnerId.ToString(), which writes the GUID as 32 hex digits without hyphens (PartnerClient
-    // constructor, Enclave.Sdk.Api 1.2.0, with Enclave.Sdk.Api.Data 304.48.0). Customer and account
+    // constructor, Enclave.Sdk.Api, with Enclave.Sdk.Api.Data). Customer and account
     // IDs are OrganisationGuid and AccountGuid and go into the path in the same form
     // (CustomersClient.CustomerRoute, AddAdminAsync and RemoveAdminAsync).
 
@@ -86,7 +86,7 @@ internal static partial class TestData
 
     /// <summary>
     /// The ID of a customer's admin invite: its organisation ID and a number, joined by a hyphen
-    /// (portal OrganisationInviteId.Create, as Enclave.Sdk.Api 1.2.0's CustomersClientTests write it).
+    /// (portal OrganisationInviteId.Create, as Enclave.Sdk.Api's CustomersClientTests write it).
     /// </summary>
     public static string CustomerInviteId(string customerOrgId, int number) =>
         string.Create(CultureInfo.InvariantCulture, $"{Guid.Parse(customerOrgId, CultureInfo.InvariantCulture):N}-{number}");

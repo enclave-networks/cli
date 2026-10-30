@@ -88,6 +88,7 @@ Applies to code comments, AGENTS.md, README and every other document in this rep
 - Plain, factual register; no intensifiers ("critically", "truly", "real").
 - State things as they are. NEVER frame a statement as a contrast ("X, not Y", "rather than", "instead of") unless the alternative is the point of the sentence.
 - Behaviour that depends on an external system (OS, API, library) cites its primary source: URL, spec section, or file and function, with the version it applies to.
+- Exception: `Enclave.Sdk.Api` and `Enclave.Sdk.Api.Data` are cited without a version, and documents never record which release added what. Their citations apply to the versions `Directory.Packages.props` pins, with `Enclave.Sdk.Api.Data` taken through `Enclave.Sdk.Api`. The cost is that a version bump re-checks every citation of them against the diff between releases; that is less work than rewriting a version number in every comment on each bump.
 - No status or timeline wording: "today", "currently", "until fixed".
 
 Code comments also:

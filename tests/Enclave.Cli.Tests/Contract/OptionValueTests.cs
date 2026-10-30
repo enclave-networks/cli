@@ -17,7 +17,7 @@ public class OptionValueTests
     // Each --sort value with the API enum member it names: SystemQuerySortMode,
     // EnrolmentKeySortOrder, PolicySortOrder, TagQuerySortOrder and TrustRequirementSortOrder in the
     // portal's Enclave.Configuration.Data/Modules/*/Enums, and UnapprovedSystemQuerySortMode in
-    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api 1.2.0 writes
+    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api writes
     // the member name into the sort parameter (each list client's BuildQueryString).
     public static IEnumerable<TestCaseData> SortValues()
     {
@@ -26,9 +26,13 @@ public class OptionValueTests
         yield return Sort("system list", "systems", "description", "Description");
         yield return Sort("system list", "systems", "description-or-hostname", "DescriptionOrHostname");
         yield return Sort("system list", "systems", "enrolment-key-used", "EnrolmentKeyUsed");
+        yield return Sort("system list", "systems", "last-connected", "LastConnected");
+        yield return Sort("system list", "systems", "state", "State");
+        yield return Sort("system list", "systems", "version", "Version");
         yield return Sort("system list --pending", "unapproved-systems", "recently-enrolled", "RecentlyEnrolled");
         yield return Sort("system list --pending", "unapproved-systems", "description", "Description");
         yield return Sort("system list --pending", "unapproved-systems", "enrolment-key-used", "EnrolmentKeyUsed");
+        yield return Sort("system list --pending", "unapproved-systems", "description-or-hostname", "DescriptionOrHostname");
         yield return Sort("key list", "enrolment-keys", "description", "Description");
         yield return Sort("key list", "enrolment-keys", "last-used", "LastUsed");
         yield return Sort("key list", "enrolment-keys", "approval-mode", "ApprovalMode");

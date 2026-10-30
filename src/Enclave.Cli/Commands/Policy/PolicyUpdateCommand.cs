@@ -133,7 +133,7 @@ internal static class PolicyUpdateCommand
 
             // "" removes the restriction ("Command options") by patching ActiveHours to null, and
             // only white space reads as "" does ("Details").
-            // Enclave.Sdk.Api 1.2.0 sends a null patch value as JSON null, and the API applies every
+            // Enclave.Sdk.Api sends a null patch value as JSON null, and the API applies every
             // field the body holds, a null one included (Data/PatchClient.cs, Set, citing portal
             // Enclave.Api.Scaffolding PatchModel.WasSet).
             if (context.Get(activeHours) is { } hours)

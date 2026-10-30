@@ -416,7 +416,7 @@ internal sealed class CliRun : IDisposable
 
     /// <summary>
     /// Puts ~/.enclave/credentials.json in <see cref="Files"/>, private to the user as login writes
-    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile, version 1.2.0). The
+    /// it, in the format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile). The
     /// base URL defaults to the fake API's. The file holds partnerApiBaseUrl only when one is given.
     /// </summary>
     public void SaveCredentials(string token, string? baseUrl = null, string? partnerApiBaseUrl = null)
