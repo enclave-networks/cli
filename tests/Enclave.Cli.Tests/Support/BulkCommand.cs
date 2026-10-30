@@ -2,17 +2,15 @@ namespace Enclave.Cli.Tests.Support;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
 
-/// <summary>
-/// A command that takes several items: the bulk call it makes and the kind of list it reads after "-".
-/// </summary>
-/// <param name="Name">The command words, such as "system disable".</param>
-/// <param name="Method">The HTTP method of the bulk call.</param>
-/// <param name="PathSuffix">The bulk call's path below /org/{orgId}/.</param>
-/// <param name="BodyField">The request body property holding the IDs.</param>
-/// <param name="ResultField">The response body property holding the count of items affected.</param>
-/// <param name="Kind">The list kind the command reads after "-", whose IDs are the command's IDs.</param>
-/// <param name="OtherKind">A list kind the command refuses, whose IDs are also valid IDs for the command.</param>
-/// <param name="MalformedId">An ID the command's ID check refuses.</param>
+// A command that takes several items: the bulk call it makes and the kind of list it reads after "-".
+// Name: The command words, such as "system disable".
+// Method: The HTTP method of the bulk call.
+// PathSuffix: The bulk call's path below /org/{orgId}/.
+// BodyField: The request body property holding the IDs.
+// ResultField: The response body property holding the count of items affected.
+// Kind: The list kind the command reads after "-", whose IDs are the command's IDs.
+// OtherKind: A list kind the command refuses, whose IDs are also valid IDs for the command.
+// MalformedId: An ID the command's ID check refuses.
 public readonly record struct BulkCommand(
     string Name,
     string Method,
@@ -50,9 +48,7 @@ public readonly record struct BulkCommand(
         new("trust delete", "DELETE", "trust-requirements", "requirementIds", "requirementsDeleted", "trust", "policy", "five"),
     ];
 
-    /// <summary>
-    /// The bulk call's full URL path for the test organisation.
-    /// </summary>
+    // The bulk call's full URL path for the test organisation.
     public string Path => TestData.OrgPath(PathSuffix);
 
     // These commands take names as arguments, so their IDs go after --id (spec/cli-surface.md
@@ -75,29 +71,21 @@ public readonly record struct BulkCommand(
 
     public string[] StdinArgs() => [.. Words, "-"];
 
-    /// <summary>
-    /// Valid, distinct IDs of the command's kind.
-    /// </summary>
+    // Valid, distinct IDs of the command's kind.
     public string[] Ids(int count) => TestData.Ids(Kind, count);
 
-    /// <summary>
-    /// A list of the command's kind, as a list command prints it, with one item per ID.
-    /// </summary>
+    // A list of the command's kind, as a list command prints it, with one item per ID.
     public string List(params string[] ids) => CliList.WithIds(Kind, ids);
 
     // NUnit names each test case after its arguments' ToString.
     public override string ToString() => Name;
 
-    /// <summary>
-    /// Answers successive bulk calls with these counts; the last count answers every call after it.
-    /// </summary>
+    // Answers successive bulk calls with these counts; the last count answers every call after it.
     internal void StubBulk(CliRun run, params int[] affected) => run.StubBulk(Method, Path, ResultField, affected);
 
     internal IReadOnlyList<RecordedRequest> BulkCalls(CliRun run) => run.RequestsTo(Method, Path);
 
-    /// <summary>
-    /// The IDs of each bulk call joined with commas, and the calls joined with "|".
-    /// </summary>
+    // The IDs of each bulk call joined with commas, and the calls joined with "|".
     internal string IdsSent(CliRun run)
     {
         // A lambda in a struct cannot use the struct's own members, so the field is copied first.
@@ -106,9 +94,7 @@ public readonly record struct BulkCommand(
         return string.Join("|", BulkCalls(run).Select(request => string.Join(",", request.BodyIds(field))));
     }
 
-    /// <summary>
-    /// The IDs in calls of 200, in the form <see cref="IdsSent"/> gives.
-    /// </summary>
+    // The IDs in calls of 200, in the form IdsSent gives.
     // spec/cli-surface.md "Several IDs"; portal HardLimits.MaxBulkIds.
     internal static string Batches(string[] ids) =>
         string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));

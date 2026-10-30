@@ -7,14 +7,8 @@ namespace Enclave.Cli.Commands.Dns;
 
 internal static class DnsLookup
 {
-    /// <summary>
-    /// An ID needs no lookup. A name that matches no zone, or several, exits 2 with the candidates.
-    /// </summary>
-    /// <param name="context">The command's context.</param>
-    /// <param name="org">The organisation in use.</param>
-    /// <param name="name">The zone's name; read when <paramref name="id"/> is null.</param>
-    /// <param name="id">The zone's ID, which needs no lookup.</param>
-    /// <param name="key">The option or argument the name came from, for errors.</param>
+    // An ID needs no lookup; name is read only when id is null. A name that matches no zone, or
+    // several, exits 2 with the candidates, naming key, the option or argument it came from.
     public static async Task<DnsZoneId> ZoneIdAsync(CliContext context, OrganisationInUse org, string? name, int? id, string key)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -47,10 +41,8 @@ internal static class DnsLookup
         return Paging.ReadAllAsync((page, perPage) => org.Client.Dns.GetZonesAsync(page, perPage), context.CancellationToken);
     }
 
-    /// <summary>
-    /// The hostnames in the order given. A name that matches no hostname, or several, exits 2 with
-    /// the candidates.
-    /// </summary>
+    // The hostnames in the order given. A name that matches no hostname, or several, exits 2 with
+    // the candidates.
     // Matched on fqdn, since db.internal and db.lab are both the record "db". The list is read
     // without a search, since the API reads search text in its own syntax (spec/cli-surface.md
     // "Filters").
@@ -69,14 +61,11 @@ internal static class DnsLookup
             context.CancellationToken);
     }
 
-    /// <summary>
-    /// The record name is what the API takes in place of the full name (portal
-    /// DnsRecordCreateModel, DnsRecordPatchModel). Exits 2 when the hostname is a zone's name or is
-    /// in no zone.
-    /// </summary>
-    /// <param name="hostname">The full hostname, such as db.eu.internal.</param>
-    /// <param name="zones">The organisation's zones.</param>
-    /// <param name="key">The option or argument the hostname came from, for errors.</param>
+    // The record name is what the API takes in place of the full name (portal
+    // DnsRecordCreateModel, DnsRecordPatchModel). Exits 2 when the hostname is a zone's name or is
+    // in no zone.
+    // hostname is the full name, such as db.eu.internal; errors name key, the option or argument
+    // it came from.
     public static (DnsZoneSummaryModel Zone, string RecordName) Place(string hostname, IReadOnlyCollection<DnsZoneSummaryModel> zones, string key)
     {
         ArgumentNullException.ThrowIfNull(hostname);

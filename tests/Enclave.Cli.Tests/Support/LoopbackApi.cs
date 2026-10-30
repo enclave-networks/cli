@@ -11,9 +11,7 @@ using WireMock.Types;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Starts fake APIs that listen on 127.0.0.1 only, stubs their answers and reads their requests.
-/// </summary>
+// Starts fake APIs that listen on 127.0.0.1 only, stubs their answers and reads their requests.
 internal static class LoopbackApi
 {
     // WireMock.Net serves a request from the matching mapping with the lowest priority number, so a
@@ -36,9 +34,7 @@ internal static class LoopbackApi
     // 15.5.20).
     private const int MisdirectedRequest = 421;
 
-    /// <summary>
-    /// Returns the fake API with its URL, http://127.0.0.1:{port} without a trailing slash.
-    /// </summary>
+    // Returns the fake API with its URL, http://127.0.0.1:{port} without a trailing slash.
     public static (WireMockServer Api, string Url) Start()
     {
         var api = WireMockServer.Start(new WireMockServerSettings
@@ -68,9 +64,7 @@ internal static class LoopbackApi
         return (api, string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{api.Ports[0]}"));
     }
 
-    /// <summary>
-    /// Answers this method and path, whatever the query, with a JSON body.
-    /// </summary>
+    // Answers this method and path, whatever the query, with a JSON body.
     public static void Stub(WireMockServer api, string method, string path, int status = 200, string? json = null) =>
         api.Given(Matching(method, path)).AtPriority(GeneralPriority)
             .RespondWith(Respond(status, json, JsonContentType));
@@ -78,10 +72,8 @@ internal static class LoopbackApi
     public static IReadOnlyList<RecordedRequest> Received(WireMockServer api) =>
         Log(api).Select(Record).ToArray();
 
-    /// <summary>
-    /// Answers every request whose path <paramref name="path"/> accepts, and that no stub answers,
-    /// with 421 Misdirected Request.
-    /// </summary>
+    // Answers every request whose path path accepts, and that no stub answers, with 421 Misdirected
+    // Request.
     internal static void Misdirect(WireMockServer api, IStringMatcher path, string detail) =>
         api.Given(Request.Create().WithPath(path)).AtPriority(MisdirectedPriority)
             .RespondWith(Respond(MisdirectedRequest, ApiJson.Problem(MisdirectedRequest, "Misdirected Request", detail), ProblemContentType));
@@ -123,10 +115,8 @@ internal static class LoopbackApi
     internal static IRequestBuilder Matching(string method, string path) =>
         Request.Create().UsingMethod(method).WithPath(new ExactMatcher(path));
 
-    /// <summary>
-    /// Matches page=<paramref name="page"/>, or no page parameter for page 0, as the API reads it
-    /// (portal PaginatedRequestModel.Page). A page that is not a whole number matches none.
-    /// </summary>
+    // Matches page=page, or no page parameter for page 0, as the API reads it (portal
+    // PaginatedRequestModel.Page). A page that is not a whole number matches none.
     internal static IRequestBuilder MatchingPage(string path, int page) =>
         Matching("GET", path).WithParam(query => RequestedPage(query) == page);
 

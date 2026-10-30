@@ -15,9 +15,7 @@ internal static class PolicyGateways
         ("geographic", GatewayPriorityType.Geographic),
     ];
 
-    /// <summary>
-    /// Reads one --gateway value, systemId:route,...; null when it is not that form.
-    /// </summary>
+    // Reads one --gateway value, systemId:route,...; null when it is not that form.
     // A system ID holds no ":", so the first one ends it, and an IPv6 route keeps its own. An empty
     // route usually comes from an unset shell variable, so it fails the form, as an empty entry of a
     // comma-list option does (CliOptions.Pieces).
@@ -37,9 +35,7 @@ internal static class PolicyGateways
         return routes.Any(route => route.Length == 0) ? null : new PolicyGateway { SystemId = systemId, Routes = routes };
     }
 
-    /// <summary>
-    /// Exits 2 for a value that is not systemId:route,....
-    /// </summary>
+    // Exits 2 for a value that is not systemId:route,....
     public static void Check(string option, IReadOnlyList<string>? values)
     {
         if (values is not null && values.Any(value => Parse(value) is null))

@@ -42,8 +42,6 @@ internal sealed class SearchText
 
     public SearchText AddFlag(string key, bool given) => given ? Add(key, "true") : this;
 
-    /// <summary>
-    /// Null when there is no term, so the list call sends no search.
-    /// </summary>
+    // Null when there is no term, so the list call sends no search.
     public string? ToSearchTerm() => _terms.Count == 0 ? null : string.Join(' ', _terms);
 }

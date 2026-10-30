@@ -2,10 +2,8 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Logs each request under --verbose; under --dry-run sends the reads and captures each change in
-/// place of sending it.
-/// </summary>
+// Logs each request under --verbose; under --dry-run sends the reads and captures each change in
+// place of sending it.
 // It sits beneath Enclave.Sdk.Api's problem details handler, so it sees the Authorization header
 // (EnclaveClient.SetupHttpClient). It logs and captures only the method, URL and body, which keeps
 // the token out of diagnostics and dry-run output.

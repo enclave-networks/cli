@@ -8,10 +8,8 @@ internal static class PartnerResolver
 {
     public const string IdVariable = "ENCLAVE_PARTNER_ID";
 
-    /// <summary>
-    /// Null when no source chooses one. A lower source is read only when no higher one gives a
-    /// value. An empty variable counts as unset, and a malformed source that is read exits 2.
-    /// </summary>
+    // Null when no source chooses one. A lower source is read only when no higher one gives a
+    // value. An empty variable counts as unset, and a malformed source that is read exits 2.
     public static PartnerChoice? Choose(CliContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -35,9 +33,7 @@ internal static class PartnerResolver
             : null;
     }
 
-    /// <summary>
-    /// Exits 2 with no_partner when none is chosen.
-    /// </summary>
+    // Exits 2 with no_partner when none is chosen.
     public static PartnerChoice Resolve(CliContext context) =>
         Choose(context)
         ?? throw new CliException(

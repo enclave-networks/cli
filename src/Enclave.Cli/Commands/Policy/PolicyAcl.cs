@@ -6,12 +6,8 @@ using Enclave.Sdk.Network.NetworkPolicy;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// One ACL rule: a protocol and, for TCP and UDP, a port or range.
-/// </summary>
-/// <param name="Protocol">The protocol.</param>
-/// <param name="Start">The first port, or null for any and icmp.</param>
-/// <param name="End">The last port, the same as <paramref name="Start"/> for one port.</param>
+// One ACL rule: a protocol and, for TCP and UDP, a port or range. Start is null for any and icmp;
+// End is the same as Start for one port.
 internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start, int? End)
 {
     private const int MaxPort = 65535;
@@ -24,22 +20,16 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         ("icmp", PolicyAclProtocol.Icmp, false),
     ];
 
-    /// <summary>
-    /// The ports as the API takes them: "5432", "8000-8100", or null for any and icmp.
-    /// </summary>
+    // The ports as the API takes them: "5432", "8000-8100", or null for any and icmp.
     public string? Ports => Start is not { } start
         ? null
         : start == End ? start.ToString(CultureInfo.InvariantCulture) : string.Create(CultureInfo.InvariantCulture, $"{start}-{End}");
 
-    /// <summary>
-    /// The rule as --acl writes it, lower case. Two rules that allow the same traffic have the same
-    /// text.
-    /// </summary>
+    // The rule as --acl writes it, lower case. Two rules that allow the same traffic have the same
+    // text.
     public string Text => Ports is { } ports ? $"{Name(Protocol)}:{ports}" : Name(Protocol);
 
-    /// <summary>
-    /// Reads --acl's value without its label; null when it is not a rule ("Details").
-    /// </summary>
+    // Reads --acl's value without its label; null when it is not a rule ("Details").
     public static PolicyAcl? Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -84,9 +74,7 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         return start <= end ? new PolicyAcl(protocol, start, end) : null;
     }
 
-    /// <summary>
-    /// Null when the ACL's ports cannot be read.
-    /// </summary>
+    // Null when the ACL's ports cannot be read.
     // The API writes a range with spaces, "8000 - 8100" (portal PolicyModelExtensions.FormatPorts),
     // and reads it with or without them (AclConversionExtensions.TryParsePorts).
     public static PolicyAcl? FromModel(PolicyAclModel acl)
@@ -122,10 +110,8 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         return given.Select(value => Parse(value.Value)!.ToModel(value.Label)).ToArray();
     }
 
-    /// <summary>
-    /// Each rule given keeps the label of the policy's rule that allows the same traffic, unless it
-    /// has one of its own.
-    /// </summary>
+    // Each rule given keeps the label of the policy's rule that allows the same traffic, unless it
+    // has one of its own.
     public static PolicyAclModel[] Keep(IReadOnlyList<LabelledValue> given, IEnumerable<PolicyAclModel> existing)
     {
         ArgumentNullException.ThrowIfNull(given);
@@ -139,9 +125,7 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         return rules.Zip(kept, (rule, entry) => rule.ToModel(entry.Label)).ToArray();
     }
 
-    /// <summary>
-    /// Exits 2 for a value that is not a rule.
-    /// </summary>
+    // Exits 2 for a value that is not a rule.
     public static void Check(string option, IReadOnlyList<LabelledValue>? values)
     {
         if (values is not null && values.Any(value => Parse(value.Value) is null))

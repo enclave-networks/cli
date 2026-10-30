@@ -3,10 +3,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// A file store held in memory. It keeps whether each file was written as private, so a test can
-/// check the CLI asked for that.
-/// </summary>
+// A file store held in memory. It keeps whether each file was written as private, so a test can
+// check the CLI asked for that.
 internal sealed class MemoryFileStore : IFileStore
 {
     // The CLI and the tests both build paths from CliRun.Home, so the same file always has the same
@@ -15,9 +13,7 @@ internal sealed class MemoryFileStore : IFileStore
 
     private readonly HashSet<string> _read = new(StringComparer.Ordinal);
 
-    /// <summary>
-    /// Every path that holds a file, in no particular order.
-    /// </summary>
+    // Every path that holds a file, in no particular order.
     public IReadOnlyCollection<string> Paths => _files.Keys;
 
     public string? ReadText(string path)
@@ -34,15 +30,11 @@ internal sealed class MemoryFileStore : IFileStore
 
     public bool Exists(string path) => _files.ContainsKey(Normalise(path));
 
-    /// <summary>
-    /// Whether anything read this path through <see cref="ReadText"/>, with or without a file there.
-    /// </summary>
+    // Whether anything read this path through ReadText, with or without a file there.
     public bool WasRead(string path) => _read.Contains(Normalise(path));
 
-    /// <summary>
-    /// Whether the file's last write asked for it to be private to the user. Fails the test when
-    /// there is no such file.
-    /// </summary>
+    // Whether the file's last write asked for it to be private to the user. Fails the test when
+    // there is no such file.
     public bool IsPrivate(string path) =>
         _files.TryGetValue(Normalise(path), out var file)
             ? file.Private

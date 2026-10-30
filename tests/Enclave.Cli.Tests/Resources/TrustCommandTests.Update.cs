@@ -9,10 +9,6 @@ namespace Enclave.Cli.Tests.Resources;
 // The API's patch replaces the whole settings object (portal TrustRequirementPatchModel), so a
 // --set- flag reads the requirement and sends the rest back as it was. Enclave.Sdk.Api keys a PATCH
 // body by the C# property name (PatchClient.Set).
-
-/// <summary>
-/// Tests for trust update.
-/// </summary>
 public partial class TrustCommandTests
 {
     // Example 58. FR is not given, so it goes; the ranges and the blocked country are other kinds and

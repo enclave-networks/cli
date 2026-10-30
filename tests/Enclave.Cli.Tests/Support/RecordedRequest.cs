@@ -12,9 +12,7 @@ internal sealed record RecordedRequest(
     string? Body,
     string? Authorization)
 {
-    /// <summary>
-    /// Fails the test when there is no body or it is not JSON.
-    /// </summary>
+    // Fails the test when there is no body or it is not JSON.
     public JsonElement BodyJson
     {
         get
@@ -38,17 +36,13 @@ internal sealed record RecordedRequest(
         }
     }
 
-    /// <summary>
-    /// "METHOD path", the form CliRun.Calls lists requests in.
-    /// </summary>
+    // "METHOD path", the form CliRun.Calls lists requests in.
     public string Call => $"{Method} {Path}";
 
     public string? QueryValue(string name) => Query.TryGetValue(name, out var value) ? value : null;
 
-    /// <summary>
-    /// The page query parameter, or 0 when there is none, as the API reads it (portal
-    /// PaginatedRequestModel.Page). Fails the test when it is not a whole number.
-    /// </summary>
+    // The page query parameter, or 0 when there is none, as the API reads it (portal
+    // PaginatedRequestModel.Page). Fails the test when it is not a whole number.
     public int PageNumber
     {
         get
@@ -66,10 +60,8 @@ internal sealed record RecordedRequest(
         }
     }
 
-    /// <summary>
-    /// The IDs in an array property of the JSON body, each as text; typed integer IDs are written
-    /// as numbers. Fails the test when the property is not an array of strings and integers.
-    /// </summary>
+    // The IDs in an array property of the JSON body, each as text; typed integer IDs are written
+    // as numbers. Fails the test when the property is not an array of strings and integers.
     public string[] BodyIds(string field)
     {
         var array = JsonAssert.Property(BodyJson, field);
@@ -89,9 +81,7 @@ internal sealed record RecordedRequest(
             .ToArray();
     }
 
-    /// <summary>
-    /// The IDs <see cref="BodyIds"/> reads, sorted and joined with commas.
-    /// </summary>
+    // The IDs BodyIds reads, sorted and joined with commas.
     // The order of a bulk call's IDs or names does not change what it does.
     public string SortedBodyIds(string field) => string.Join(",", BodyIds(field).Order(StringComparer.Ordinal));
 

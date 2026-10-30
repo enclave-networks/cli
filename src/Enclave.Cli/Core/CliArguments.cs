@@ -23,10 +23,8 @@ internal static class CliArguments
             Arity = ArgumentArity.ZeroOrOne,
         };
 
-    /// <summary>
-    /// A blank name is a parse error. <paramref name="takes"/> says what the name is, for errors:
-    /// "a key's description".
-    /// </summary>
+    // A blank name is a parse error. takes says what the name is, for errors: "a key's
+    // description".
     public static Argument<string> Name(string name, string description, string takes) =>
         new(name)
         {
@@ -35,9 +33,7 @@ internal static class CliArguments
             CustomParser = result => ReadName(result, name, takes) ?? string.Empty,
         };
 
-    /// <summary>
-    /// A blank name is a parse error.
-    /// </summary>
+    // A blank name is a parse error.
     public static Argument<string?> OptionalName(string name, string description, string takes) =>
         new(name)
         {
@@ -65,10 +61,8 @@ internal static class CliArguments
             },
         };
 
-    /// <summary>
-    /// Names, or IDs in <paramref name="format"/> when it is given, or "-" alone for a list on stdin
-    /// (ItemSelection). Empty when none is given.
-    /// </summary>
+    // Names, or IDs in format when it is given, or "-" alone for a list on stdin (ItemSelection).
+    // Empty when none is given.
     public static Argument<IReadOnlyList<string>> Many(string name, string description, IdFormat<string>? format = null) =>
         AnyNumber(name, description, (values, result) =>
         {
@@ -89,10 +83,8 @@ internal static class CliArguments
             }
         });
 
-    /// <summary>
-    /// Names of items to look up, or "-" alone for a list on stdin (ItemSelection). Empty when none
-    /// is given. <paramref name="takes"/> says what each name is, for errors.
-    /// </summary>
+    // Names of items to look up, or "-" alone for a list on stdin (ItemSelection). Empty when none
+    // is given. takes says what each name is, for errors.
     // A blank name among others is refused as one alone is: dropped, the command would act on the
     // others only; sent, it would cost a lookup and match nothing.
     public static Argument<IReadOnlyList<string>> Names(string name, string description, string takes) =>

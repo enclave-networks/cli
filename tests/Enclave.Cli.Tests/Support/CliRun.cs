@@ -8,10 +8,8 @@ using WireMock.Server;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// One test's sandbox for running the CLI in-process: fake main and partner APIs on loopback,
-/// files in memory, and the only environment, stdin and API URLs the CLI sees.
-/// </summary>
+// One test's sandbox for running the CLI in-process: fake main and partner APIs on loopback,
+// files in memory, and the only environment, stdin and API URLs the CLI sees.
 // Each fake answers the other API's routes (spec/cli-surface.md "Partner API") with 421, which the
 // CLI reports as api_error, so a call sent to the wrong address fails whatever a test expects.
 internal sealed class CliRun : IDisposable
@@ -39,50 +37,34 @@ internal sealed class CliRun : IDisposable
 
     public WireMockServer Api { get; }
 
-    /// <summary>
-    /// http://127.0.0.1:{port}, without a trailing slash.
-    /// </summary>
+    // http://127.0.0.1:{port}, without a trailing slash.
     public string ApiBaseUrl { get; }
 
     public Uri ApiUrl => new(ApiBaseUrl);
 
-    /// <summary>
-    /// The fake partner API. <see cref="Stub"/> and the other Stub methods send a path under
-    /// /partner/ here.
-    /// </summary>
+    // The fake partner API. Stub and the other Stub methods send a path under /partner/ here.
     public WireMockServer PartnerApi { get; }
 
-    /// <summary>
-    /// http://127.0.0.1:{port}, without a trailing slash.
-    /// </summary>
+    // http://127.0.0.1:{port}, without a trailing slash.
     public string PartnerApiBaseUrl { get; }
 
     public Uri PartnerApiUrl => new(PartnerApiBaseUrl);
 
-    /// <summary>
-    /// The default partner API URL the CLI receives. Null leaves Enclave.Sdk.Api's default,
-    /// production's. A run with any URL but the fake's must set <see cref="NetworkHandler"/>, so
-    /// nothing reaches the live partner API.
-    /// </summary>
+    // The default partner API URL the CLI receives. Null leaves Enclave.Sdk.Api's default,
+    // production's. A run with any URL but the fake's must set NetworkHandler, so nothing reaches
+    // the live partner API.
     public Uri? DefaultPartnerApiUrl { get; set; }
 
-    /// <summary>
-    /// Replaces the network beneath the CLI's own handler (CliHost.CreateNetworkHandler), such as
-    /// with <see cref="FailingNetwork.CreateHandler"/>.
-    /// </summary>
+    // Replaces the network beneath the CLI's own handler (CliHost.CreateNetworkHandler), such as
+    // with FailingNetwork.CreateHandler.
     public Func<HttpMessageHandler>? NetworkHandler { get; set; }
 
-    /// <summary>
-    /// The user profile path the CLI receives. Nothing exists at it on disk; its files are in
-    /// <see cref="Files"/>. A test sets "" or a relative path for a profile path that names no home
-    /// directory; <see cref="Files"/> resolves a relative path against the current directory, as
-    /// the disk does.
-    /// </summary>
+    // The user profile path the CLI receives. Nothing exists at it on disk; its files are in Files.
+    // A test sets "" or a relative path for a profile path that names no home directory; Files
+    // resolves a relative path against the current directory, as the disk does.
     public string Home { get; set; }
 
-    /// <summary>
-    /// The path <see cref="WriteFile"/> puts input files under.
-    /// </summary>
+    // The path WriteFile puts input files under.
     public string WorkDirectory { get; }
 
     public MemoryFileStore Files { get; } = new();
@@ -91,9 +73,7 @@ internal sealed class CliRun : IDisposable
 
     public string CliConfigPath => Path.Combine(Home, ".enclave", "cli.json");
 
-    /// <summary>
-    /// The only environment the CLI sees. A missing key or a null value is an unset variable.
-    /// </summary>
+    // The only environment the CLI sees. A missing key or a null value is an unset variable.
     // ENCLAVE_ORG_ID needs no lookup call (spec/cli-surface.md "Context"), so a test's requests are
     // the command's own.
     public IDictionary<string, string?> Environment { get; } = new Dictionary<string, string?>(StringComparer.Ordinal)
@@ -102,24 +82,16 @@ internal sealed class CliRun : IDisposable
         ["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString(),
     };
 
-    /// <summary>
-    /// What the CLI reads from stdin while <see cref="StdinIsTerminal"/> is not set.
-    /// </summary>
+    // What the CLI reads from stdin while StdinIsTerminal is not set.
     public string StdinText { get; set; } = string.Empty;
 
-    /// <summary>
-    /// While set, any read of stdin fails the run.
-    /// </summary>
+    // While set, any read of stdin fails the run.
     public bool StdinIsTerminal { get; set; }
 
-    /// <summary>
-    /// A test whose result depends on the time sets a <see cref="FixedTimeProvider"/> here.
-    /// </summary>
+    // A test whose result depends on the time sets a FixedTimeProvider here.
     public TimeProvider Time { get; set; } = TimeProvider.System;
 
-    /// <summary>
-    /// Every request the two fake APIs received, in the order received.
-    /// </summary>
+    // Every request the two fake APIs received, in the order received.
     // The CLI sends one request at a time, so ordering by receive time (RequestMessage.DateTime,
     // WireMock.Net 2.18.0) gives the order sent. A clock step backwards could swap requests to the
     // two fakes; one command calls one API, so only the order across commands is at risk, which is
@@ -147,10 +119,8 @@ internal sealed class CliRun : IDisposable
         return new CliRun(api, apiUrl, partnerApi, partnerApiUrl, root);
     }
 
-    /// <summary>
-    /// The host RunAsync gives the CLI. Its default API URLs are the fakes', so a run cannot reach
-    /// the live APIs.
-    /// </summary>
+    // The host RunAsync gives the CLI. Its default API URLs are the fakes', so a run cannot reach
+    // the live APIs.
     public CliHost CreateHost()
     {
         if (DefaultPartnerApiUrl != PartnerApiUrl && NetworkHandler is null)
@@ -203,38 +173,28 @@ internal sealed class CliRun : IDisposable
         return new CliResult(exitCode, stdout.ToString(), stderr.ToString());
     }
 
-    /// <summary>
-    /// Answers this method and path, whatever the query, with a JSON body.
-    /// </summary>
+    // Answers this method and path, whatever the query, with a JSON body.
     public void Stub(string method, string path, int status = 200, string? json = null) =>
         LoopbackApi.Stub(FakeFor(path), method, path, status, json);
 
-    /// <summary>
-    /// Takes precedence over <see cref="Stub"/> for the same path.
-    /// </summary>
+    // Takes precedence over Stub for the same path.
     public void StubWithQuery(string method, string path, string parameter, string value, int status = 200, string? json = null) =>
         FakeFor(path).Given(LoopbackApi.Matching(method, path).WithParam(parameter, new ExactMatcher(value))).AtPriority(LoopbackApi.SpecificPriority)
             .RespondWith(LoopbackApi.Respond(status, json, LoopbackApi.JsonContentType));
 
-    /// <summary>
-    /// Answers with an RFC 9457 problem details body, the form the Enclave API reports errors in.
-    /// </summary>
+    // Answers with an RFC 9457 problem details body, the form the Enclave API reports errors in.
     public void StubProblem(string method, string path, int status, string title, string? detail = null) =>
         FakeFor(path).Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
             .RespondWith(LoopbackApi.Respond(status, ApiJson.Problem(status, title, detail), LoopbackApi.ProblemContentType));
 
-    /// <summary>
-    /// Answers with a body of any content type, such as a proxy's HTML error page.
-    /// </summary>
+    // Answers with a body of any content type, such as a proxy's HTML error page.
     public void StubRaw(string method, string path, int status, string contentType, string body) =>
         FakeFor(path).Given(LoopbackApi.Matching(method, path)).AtPriority(LoopbackApi.GeneralPriority)
             .RespondWith(LoopbackApi.Respond(status, body, contentType));
 
-    /// <summary>
-    /// Serves <paramref name="items"/> as a list, <paramref name="pageSize"/> to a page whatever
-    /// per_page a request asks for. No page parameter means page 0. The page after the last is
-    /// empty, as the API answers it; any later page gets WireMock.Net's 404.
-    /// </summary>
+    // Serves items as a list, pageSize to a page whatever per_page a request asks for. No page
+    // parameter means page 0. The page after the last is empty, as the API answers it; any later
+    // page gets WireMock.Net's 404.
     // A stub per page means a CLI that asks for the wrong page receives the wrong items.
     public void StubPages(string path, int pageSize, params string[] items)
     {
@@ -251,19 +211,14 @@ internal sealed class CliRun : IDisposable
         }
     }
 
-    /// <summary>
-    /// Answers one page with a problem details body, in place of the page <see cref="StubPages"/>
-    /// serves.
-    /// </summary>
+    // Answers one page with a problem details body, in place of the page StubPages serves.
     public void StubPageProblem(string path, int page, int status, string title, string? detail = null) =>
         FakeFor(path).Given(LoopbackApi.MatchingPage(path, page)).AtPriority(LoopbackApi.SpecificPriority)
             .RespondWith(LoopbackApi.Respond(status, ApiJson.Problem(status, title, detail), LoopbackApi.ProblemContentType));
 
-    /// <summary>
-    /// Answers successive requests with the responses in order; the last answers every request
-    /// after it. A 2xx response is sent as application/json, any other as application/problem+json
-    /// (build it with ApiJson.Problem).
-    /// </summary>
+    // Answers successive requests with the responses in order; the last answers every request
+    // after it. A 2xx response is sent as application/json, any other as application/problem+json
+    // (build it with ApiJson.Problem).
     // A mapping with no next state puts a WireMock.Net scenario back to the start (WireMock.Net
     // 2.18.0), so the final mapping sets its own state again to keep answering.
     public void StubSequence(string method, string path, params (int Status, string Json)[] responses)
@@ -294,16 +249,12 @@ internal sealed class CliRun : IDisposable
         }
     }
 
-    /// <summary>
-    /// Answers successive bulk calls with { "<paramref name="resultField"/>": n }, one count per
-    /// call; the last count answers every call after it.
-    /// </summary>
+    // Answers successive bulk calls with { "resultField": n }, one count per call; the last count
+    // answers every call after it.
     public void StubBulk(string method, string path, string resultField, params int[] affected) =>
         StubSequence(method, path, affected.Select(count => (200, ApiJson.Bulk(resultField, count))).ToArray());
 
-    /// <summary>
-    /// The requests after the first <paramref name="skip"/>, each as "METHOD path".
-    /// </summary>
+    // The requests after the first skip, each as "METHOD path".
     public string[] Calls(int skip = 0) =>
         Requests.Skip(skip).Select(request => request.Call).ToArray();
 
@@ -312,16 +263,12 @@ internal sealed class CliRun : IDisposable
             .Where(request => string.Equals(request.Method, method, StringComparison.Ordinal) && string.Equals(request.Path, path, StringComparison.Ordinal))
             .ToArray();
 
-    /// <summary>
-    /// The page numbers of the GET requests for this path, such as "0,1,2"; no page parameter
-    /// counts as page 0.
-    /// </summary>
+    // The page numbers of the GET requests for this path, such as "0,1,2"; no page parameter
+    // counts as page 0.
     public string PagesRequested(string path) =>
         string.Join(",", RequestsTo("GET", path).Select(request => request.PageNumber.ToString(CultureInfo.InvariantCulture)));
 
-    /// <summary>
-    /// Asserts the fake API received exactly one request, and returns it.
-    /// </summary>
+    // Asserts the fake API received exactly one request, and returns it.
     public RecordedRequest SingleRequest()
     {
         var requests = Requests;
@@ -335,9 +282,7 @@ internal sealed class CliRun : IDisposable
         return requests[0];
     }
 
-    /// <summary>
-    /// Puts a file under <see cref="WorkDirectory"/> and returns its full path.
-    /// </summary>
+    // Puts a file under WorkDirectory and returns its full path.
     public string WriteFile(string name, string content)
     {
         var path = Path.Combine(WorkDirectory, name);
@@ -345,11 +290,9 @@ internal sealed class CliRun : IDisposable
         return path;
     }
 
-    /// <summary>
-    /// Puts ~/.enclave/credentials.json in <see cref="Files"/> as login writes it, in the format
-    /// Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile). The base URL defaults to the fake
-    /// API's; partnerApiBaseUrl is written only when given.
-    /// </summary>
+    // Puts ~/.enclave/credentials.json in Files as login writes it, in the format Enclave.Sdk.Api
+    // reads (EnclaveClient.ReadCredentialsFile). The base URL defaults to the fake API's;
+    // partnerApiBaseUrl is written only when given.
     public void SaveCredentials(string token, string? baseUrl = null, string? partnerApiBaseUrl = null)
     {
         var credentials = new JsonObject

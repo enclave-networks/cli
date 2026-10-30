@@ -365,10 +365,8 @@ public class PartnerContextTests
         yield return PartnerCommandTests.Pair(PartnerCommandTests.Line("show", "--org-id", "../x"), PartnerCommandTests.Line("show", "--org-id", TestData.CustomerOrgId));
     }
 
-    /// <summary>
-    /// Chooses the test partner through <paramref name="source"/> and returns the options a partner
-    /// command then needs, which are empty for every source but --partner-id.
-    /// </summary>
+    // Chooses the test partner through source and returns the options a partner command then needs,
+    // which are empty for every source but --partner-id.
     private static async Task<string[]> ChooseTestPartnerAsync(CliRun run, string source)
     {
         var partnerId = TestData.PartnerId.ToString();
@@ -409,9 +407,7 @@ public class PartnerContextTests
         }
     }
 
-    /// <summary>
-    /// The named default in cli.json. Fails the test when the file or the default is missing.
-    /// </summary>
+    // The named default in cli.json. Fails the test when the file or the default is missing.
     private static JsonElement Saved(CliRun run, string name)
     {
         var text = run.Files.ReadText(run.CliConfigPath);

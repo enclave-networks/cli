@@ -2,10 +2,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// The fake partner API that partner customer commands run against, and the check that a run's
-/// calls went to it.
-/// </summary>
+// The fake partner API that partner customer commands run against, and the check that a run's
+// calls went to it.
 // The partner tests and the safety tests share this fake, so they cannot drift apart on what the
 // partner API answers.
 internal static class PartnerApiFake
@@ -25,9 +23,7 @@ internal static class PartnerApiFake
 
     public static string NewInviteBody => ApiJson.CustomerInvite(TestData.CustomerOrgId, 4, TestData.CustomerInviteEmail);
 
-    /// <summary>
-    /// A sandbox with the test partner chosen and the answers of <see cref="StubPartnerApi"/>.
-    /// </summary>
+    // A sandbox with the test partner chosen and the answers of StubPartnerApi.
     public static CliRun StartWithPartner()
     {
         var run = StartWithPartnerOnly();
@@ -35,9 +31,7 @@ internal static class PartnerApiFake
         return run;
     }
 
-    /// <summary>
-    /// A sandbox with the test partner chosen and nothing stubbed.
-    /// </summary>
+    // A sandbox with the test partner chosen and nothing stubbed.
     // For a test that serves a route differently from StubPartnerApi: two stubs for one route at one
     // priority leave WireMock.Net's choice between them unstated.
     public static CliRun StartWithPartnerOnly()
@@ -47,11 +41,9 @@ internal static class PartnerApiFake
         return run;
     }
 
-    /// <summary>
-    /// Answers every customer route for two customers: Initech, then Globex Ltd, so a name lookup
-    /// that took the first customer acts on the wrong one. Each has an owner, then the admin
-    /// alex@example.com, and invites to kim@globex.example, then sam@globex.example.
-    /// </summary>
+    // Answers every customer route for two customers: Initech, then Globex Ltd, so a name lookup
+    // that took the first customer acts on the wrong one. Each has an owner, then the admin
+    // alex@example.com, and invites to kim@globex.example, then sam@globex.example.
     public static void StubPartnerApi(CliRun run)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -62,9 +54,7 @@ internal static class PartnerApiFake
         run.Stub("POST", TestData.PartnerPath("customers"), json: ApiJson.Customer(TestData.NewCustomerOrgId, TestData.NewCustomerName));
     }
 
-    /// <summary>
-    /// Answers this partner's customer list with Initech, then Globex Ltd.
-    /// </summary>
+    // Answers this partner's customer list with Initech, then Globex Ltd.
     public static void StubCustomerList(CliRun run, Guid partnerId)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -76,10 +66,8 @@ internal static class PartnerApiFake
             ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName, "2026.1.1"));
     }
 
-    /// <summary>
-    /// Asserts the run exited 0 having sent at least one request, all to this partner's routes (the
-    /// test partner's when none is given) and none to the main API's address.
-    /// </summary>
+    // Asserts the run exited 0 having sent at least one request, all to this partner's routes (the
+    // test partner's when none is given) and none to the main API's address.
     public static void AssertSentToThePartnerApi(CliRun run, CliResult result, Guid? partnerId = null)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -94,9 +82,7 @@ internal static class PartnerApiFake
         });
     }
 
-    /// <summary>
-    /// The path of one of a customer's pending invites, as cancel-invite addresses it.
-    /// </summary>
+    // The path of one of a customer's pending invites, as cancel-invite addresses it.
     public static string InvitePath(string orgId, int number) =>
         TestData.CustomerPath(orgId, $"invites/{TestData.CustomerInviteId(orgId, number)}");
 

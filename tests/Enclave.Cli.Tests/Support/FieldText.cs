@@ -3,26 +3,17 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Text forms of the fields of a body or of output, in which a test states the values it expects.
-/// </summary>
+// Text forms of the fields of a body or of output, in which a test states the values it expects.
 internal static class FieldText
 {
-    /// <summary>
-    /// What <see cref="Text"/> reads for a field that is missing or null.
-    /// </summary>
+    // What Text reads for a field that is missing or null.
     public const string None = "(none)";
 
-    /// <summary>
-    /// What <see cref="Text"/> reads for an empty string.
-    /// </summary>
+    // What Text reads for an empty string.
     public const string Empty = "(empty)";
 
-    /// <summary>
-    /// The named field of a JSON object as text: a string as it is, <see cref="None"/> or
-    /// <see cref="Empty"/>, or json:&lt;raw&gt; for any other kind. Fails the test when the value is
-    /// not an object.
-    /// </summary>
+    // The named field of a JSON object as text: a string as it is, None or Empty, or json:<raw> for
+    // any other kind. Fails the test when the value is not an object.
     // Names match ignoring case for PATCH bodies' PascalCase keys. An empty string reads apart
     // from null, since an empty label is sent as null (spec/cli-surface.md "Details"). json:<raw>
     // keeps a boolean from passing for the string "true" a trust requirement's condition takes
@@ -52,14 +43,10 @@ internal static class FieldText
         return None;
     }
 
-    /// <summary>
-    /// The entries sorted and joined with "; ", for a list whose order does not change what it does.
-    /// </summary>
+    // The entries sorted and joined with "; ", for a list whose order does not change what it does.
     public static string Set(params string[] entries) => string.Join("; ", entries.Order(StringComparer.Ordinal));
 
-    /// <summary>
-    /// The property names of a body as <see cref="Set"/> joins them, so a test can state the exact
-    /// set of fields an update sends.
-    /// </summary>
+    // The property names of a body as Set joins them, so a test can state the exact set of fields
+    // an update sends.
     public static string Keys(JsonElement body) => Set(JsonRead.PropertyNames(body));
 }

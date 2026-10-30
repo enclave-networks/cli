@@ -5,10 +5,8 @@ namespace Enclave.Cli.Tests.Support;
 
 internal static class JsonAssert
 {
-    /// <summary>
-    /// The named property of a JSON object, matched exactly or else ignoring case. Fails the test
-    /// when the value is not an object or has no such property.
-    /// </summary>
+    // The named property of a JSON object, matched exactly or else ignoring case. Fails the test
+    // when the value is not an object or has no such property.
     public static JsonElement Property(JsonElement obj, string name)
     {
         if (obj.ValueKind != JsonValueKind.Object)
@@ -34,9 +32,7 @@ internal static class JsonAssert
         throw new AssertionException($"Expected a JSON property \"{name}\" in {obj}");
     }
 
-    /// <summary>
-    /// Fails the test when the value is not an array of strings.
-    /// </summary>
+    // Fails the test when the value is not an array of strings.
     public static string[] Strings(JsonElement array)
     {
         if (array.ValueKind != JsonValueKind.Array)

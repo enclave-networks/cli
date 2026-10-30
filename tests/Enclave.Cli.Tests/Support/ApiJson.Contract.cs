@@ -4,9 +4,8 @@ using Enclave.Sdk.Api.Data;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Response bodies as an Enclave.Sdk.Api model writes them, for checking that the CLI prints models unchanged.
-/// </summary>
+// Response bodies as an Enclave.Sdk.Api model writes them, for checking that the CLI prints models
+// unchanged.
 internal static partial class ApiJson
 {
     // A copy of Enclave.Sdk.Api's Constants.JsonSerializerOptions, which is internal. The gateway
@@ -18,10 +17,8 @@ internal static partial class ApiJson
         Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
     };
 
-    /// <summary>
-    /// The JSON Enclave.Sdk.Api writes after reading <paramref name="json"/> into
-    /// <paramref name="model"/>: what a command that prints that model prints for the body.
-    /// </summary>
+    // The JSON Enclave.Sdk.Api writes after reading json into model: what a command that prints
+    // that model prints for the body.
     public static Task<JsonElement> AsSdkModelAsync(string json, Type model) =>
         WriteSdkModelAsync(JsonSerializer.Deserialize(json, model, SdkModelJsonOptions), model);
 

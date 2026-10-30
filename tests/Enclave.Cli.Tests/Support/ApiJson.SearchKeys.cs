@@ -4,16 +4,12 @@ namespace Enclave.Cli.Tests.Support;
 // from the portal's *SearchKeyService classes. Between them they give every property a value other
 // than its default, so output that drops, renames or rewrites a property differs from the body.
 
-/// <summary>
-/// Search key lists, the GET .../meta/search-keys bodies.
-/// </summary>
+// Search key lists, the GET .../meta/search-keys bodies.
 internal static partial class ApiJson
 {
-    /// <summary>
-    /// The systems' "key" and "tags" search keys (portal SystemSearchKeyService), which the API
-    /// also serves for systems waiting for approval
-    /// (UnapprovedSystemsController.GetSearchKeyMetadata).
-    /// </summary>
+    // The systems' "key" and "tags" search keys (portal SystemSearchKeyService), which the API
+    // also serves for systems waiting for approval
+    // (UnapprovedSystemsController.GetSearchKeyMetadata).
     public static string SystemSearchKeys() => """
         [
           {
@@ -41,9 +37,7 @@ internal static partial class ApiJson
         ]
         """;
 
-    /// <summary>
-    /// The enrolment keys' "name" and "uses" search keys (portal EnrolmentKeySearchKeyService).
-    /// </summary>
+    // The enrolment keys' "name" and "uses" search keys (portal EnrolmentKeySearchKeyService).
     public static string KeySearchKeys() => """
         [
           {
@@ -71,9 +65,7 @@ internal static partial class ApiJson
         ]
         """;
 
-    /// <summary>
-    /// The policies' "state" and "tags" search keys (portal PolicySearchKeyService).
-    /// </summary>
+    // The policies' "state" and "tags" search keys (portal PolicySearchKeyService).
     public static string PolicySearchKeys() => """
         [
           {
@@ -101,9 +93,7 @@ internal static partial class ApiJson
         ]
         """;
 
-    /// <summary>
-    /// The tags' "tag" and "uses" search keys (portal TagSearchKeyService).
-    /// </summary>
+    // The tags' "tag" and "uses" search keys (portal TagSearchKeyService).
     public static string TagSearchKeys() => """
         [
           {

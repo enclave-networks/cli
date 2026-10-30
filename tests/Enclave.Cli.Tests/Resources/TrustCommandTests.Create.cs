@@ -7,10 +7,6 @@ namespace Enclave.Cli.Tests.Resources;
 
 // The configuration keys are the API's: authority, tenantId, authorityUri, clientId and aud (portal
 // UserAuthenticationConstants).
-
-/// <summary>
-/// Tests for trust create.
-/// </summary>
 public partial class TrustCommandTests
 {
     private const string Tenant = "9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31";

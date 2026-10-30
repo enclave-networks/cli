@@ -1,8 +1,5 @@
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Enrolment key list bodies.
-/// </summary>
 internal static partial class ApiJson
 {
     // For a lookup of "build agents". A key whose description starts with the same words is listed

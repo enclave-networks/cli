@@ -6,14 +6,10 @@ namespace Enclave.Cli.Tests.Support;
 // (SystemPatchModel.Tags), so a command that changes tags reads objects and sends names. Each ref
 // is new, in the form of portal TagRefId.New; no command reads it.
 
-/// <summary>
-/// Response bodies with tags, for the tests of commands that change tag lists.
-/// </summary>
+// Response bodies with tags, for the tests of commands that change tag lists.
 internal static partial class ApiJson
 {
-    /// <summary>
-    /// <paramref name="body"/> with "tags" set to an IUsedTagModel object per tag, in order.
-    /// </summary>
+    // body with "tags" set to an IUsedTagModel object per tag, in order.
     public static string WithUsedTags(string body, params string[] tags)
     {
         var item = JsonNode.Parse(body)!.AsObject();

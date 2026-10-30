@@ -2,11 +2,9 @@ namespace Enclave.Cli.Core;
 
 internal sealed record LabelledEntry(string Value, string? Label)
 {
-    /// <summary>
-    /// A value given without "=" keeps the label of the existing entry with the same value
-    /// (spec/cli-surface.md "Command options"). Values compare ordinally when comparer is null;
-    /// countries compare ignoring case.
-    /// </summary>
+    // A value given without "=" keeps the label of the existing entry with the same value
+    // (spec/cli-surface.md "Command options"). Values compare ordinally when comparer is null;
+    // countries compare ignoring case.
     public static IReadOnlyList<LabelledEntry> Keep(
         IReadOnlyList<LabelledValue> given,
         IEnumerable<LabelledEntry> existing,

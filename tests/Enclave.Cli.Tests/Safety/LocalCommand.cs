@@ -4,14 +4,11 @@ namespace Enclave.Cli.Tests.Safety;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
 
-/// <summary>
-/// A command that changes local files only: a command line that runs it, and the file whose
-/// presence afterwards shows it ran.
-/// </summary>
-/// <param name="Name">The command words, with any option that selects a different source.</param>
-/// <param name="Args">The command line.</param>
-/// <param name="WritesCredentials">Whether the file is credentials.json; otherwise it is cli.json.</param>
-/// <param name="FileExistsAfter">Whether the file exists after the command runs.</param>
+// A command that changes local files only: a command line that runs it, and the file whose
+// presence afterwards shows it ran.
+// Name: The command words, with any option that selects a different source.
+// WritesCredentials: Whether the file is credentials.json; otherwise it is cli.json.
+// FileExistsAfter: Whether the file exists after the command runs.
 public readonly record struct LocalCommand(
     string Name,
     string[] Args,
@@ -32,10 +29,8 @@ public readonly record struct LocalCommand(
     // NUnit names each test case after its arguments' ToString.
     public override string ToString() => Name;
 
-    /// <summary>
-    /// Sets up what the command needs to succeed: the organisation lookup, the token on stdin for
-    /// --token-stdin, and a saved token for logout to delete.
-    /// </summary>
+    // Sets up what the command needs to succeed: the organisation lookup, the token on stdin for
+    // --token-stdin, and a saved token for logout to delete.
     internal void Arrange(CliRun run)
     {
         run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));

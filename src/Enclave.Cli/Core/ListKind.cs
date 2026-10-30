@@ -1,8 +1,6 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// IdField is the item property a command reading the list from "-" takes each ID from.
-/// </summary>
+// IdField is the item property a command reading the list from "-" takes each ID from.
 internal sealed record ListKind(string Name, string? IdField)
 {
     // spec/cli-surface.md "Output" names the kinds. Each ID field is the model property that

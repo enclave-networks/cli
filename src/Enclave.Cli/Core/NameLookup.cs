@@ -7,14 +7,9 @@ namespace Enclave.Cli.Core;
 // spec/cli-surface.md "Names and IDs"
 internal static class NameLookup
 {
-    /// <summary>
-    /// Names match whole, ignoring case. A name that matches no item or several exits 2 with the
-    /// matches as candidates. Makes no call when <paramref name="names"/> is empty.
-    /// <paramref name="readPage"/> must ask for disabled items too, since enable takes a disabled
-    /// item by name (spec/cli-surface.md "Filters").
-    /// </summary>
-    /// <typeparam name="TItem">The list's item model.</typeparam>
-    /// <typeparam name="TId">The item's ID type.</typeparam>
+    // Names match whole, ignoring case. A name that matches no item or several exits 2 with the
+    // matches as candidates. Makes no call when names is empty. readPage must ask for disabled
+    // items too, since enable takes a disabled item by name (spec/cli-surface.md "Filters").
     public static async Task<IReadOnlyList<TItem>> FindAsync<TItem, TId>(
         IReadOnlyList<string> names,
         Func<int, int, Task<PaginatedResponseModel<TItem>>> readPage,
@@ -35,11 +30,7 @@ internal static class NameLookup
         return Match(names, items, nameOf, idOf, key, noun);
     }
 
-    /// <summary>
-    /// As <see cref="FindAsync"/>, for a list already read.
-    /// </summary>
-    /// <typeparam name="TItem">The list's item model.</typeparam>
-    /// <typeparam name="TId">The item's ID type.</typeparam>
+    // As FindAsync, for a list already read.
     public static IReadOnlyList<TItem> Match<TItem, TId>(
         IReadOnlyList<string> names,
         IReadOnlyCollection<TItem> items,
@@ -65,12 +56,8 @@ internal static class NameLookup
             .ToArray();
     }
 
-    /// <summary>
-    /// The one item whose name matches, ignoring case. No match, or several, exits 2 with noMatch
-    /// or several as the detail and the matches as candidates.
-    /// </summary>
-    /// <typeparam name="TItem">The list's item model.</typeparam>
-    /// <typeparam name="TId">The item's ID type.</typeparam>
+    // The one item whose name matches, ignoring case. No match, or several, exits 2 with noMatch
+    // or several as the detail and the matches as candidates.
     public static TItem One<TItem, TId>(
         string name,
         IReadOnlyCollection<TItem> items,

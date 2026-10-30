@@ -5,11 +5,9 @@ using System.Text;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// A fake API, listening on 127.0.0.1 only, that answers every request with a 200 whose headers
-/// promise more body than it sends, then ends the connection: with a FIN, or with a RST when made
-/// with reset set.
-/// </summary>
+// A fake API, listening on 127.0.0.1 only, that answers every request with a 200 whose headers
+// promise more body than it sends, then ends the connection: with a FIN, or with a RST when made
+// with reset set.
 // WireMock.Net cannot send this: it sets Content-Length from the body it holds, and its faults
 // send a complete response whose body is empty or garbled (WireMock.Net 2.18.0,
 // OwinResponseMapper).
@@ -36,9 +34,7 @@ internal sealed class BrokenBodyApi : IDisposable
 
     public string Url { get; }
 
-    /// <summary>
-    /// Each request as "METHOD path", without the query.
-    /// </summary>
+    // Each request as "METHOD path", without the query.
     public IReadOnlyList<string> Requests => [.. _requests];
 
     public void Dispose()

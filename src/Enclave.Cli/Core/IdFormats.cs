@@ -3,9 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// The ID forms of spec/cli-surface.md "ID checks".
-/// </summary>
+// The ID forms of spec/cli-surface.md "ID checks".
 // Enclave.Sdk.Api also escapes IDs in URL paths (ClientBase.PathSegment), so an ID such as
 // "../systems/ABCDE" cannot move a request to another route.
 internal static partial class IdFormats

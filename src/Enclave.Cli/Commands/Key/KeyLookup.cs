@@ -7,9 +7,7 @@ namespace Enclave.Cli.Commands.Key;
 
 internal static class KeyLookup
 {
-    /// <summary>
-    /// The IDs, in the order given. A description that matches no key, or several, exits 2.
-    /// </summary>
+    // The IDs, in the order given. A description that matches no key, or several, exits 2.
     // The lookup includes disabled keys, since enable takes a disabled key by name ("Filters").
     public static async Task<IReadOnlyList<EnrolmentKeyId>> FindAsync(CliContext context, OrganisationInUse org, IReadOnlyList<string> descriptions, string key)
     {
@@ -25,9 +23,7 @@ internal static class KeyLookup
         return keys.Select(enrolmentKey => enrolmentKey.Id).ToArray();
     }
 
-    /// <summary>
-    /// Declare the description and --id ExactlyOne on the command.
-    /// </summary>
+    // Declare the description and --id ExactlyOne on the command.
     public static async Task<EnrolmentKeyId> IdAsync(CliContext context, OrganisationInUse org, Argument<string?> description, Option<int?> id)
     {
         if (context.Get(id) is { } given)

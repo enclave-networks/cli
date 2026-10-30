@@ -7,9 +7,6 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-/// <summary>
-/// Tests for the policy commands: list, show, enable, disable and delete.
-/// </summary>
 public partial class PolicyCommandTests
 {
     // An --until that has passed exits 2, so tests that give a fixed --until run on this clock, the

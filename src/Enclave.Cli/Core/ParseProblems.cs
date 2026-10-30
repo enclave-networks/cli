@@ -13,9 +13,7 @@ internal static class ParseProblems
     // The errors key of an unknown option reported without its name.
     private const string UnnamedOptionKey = "options";
 
-    /// <summary>
-    /// Null when the command line parsed.
-    /// </summary>
+    // Null when the command line parsed.
     public static CliException? Find(ParseResult parseResult)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
@@ -45,9 +43,7 @@ internal static class ParseProblems
         return new CliException(ErrorCode.InvalidArgument, problems[0].Message, errors: errors);
     }
 
-    /// <summary>
-    /// Such as "partner customer list"; "enclave-cli" for the root.
-    /// </summary>
+    // Such as "partner customer list"; "enclave-cli" for the root.
     public static string CommandName(CommandResult result)
     {
         ArgumentNullException.ThrowIfNull(result);

@@ -8,10 +8,8 @@ namespace Enclave.Cli.Core;
 
 internal static class ApiErrors
 {
-    /// <summary>
-    /// Returns a <see cref="CliException"/> unchanged. With notFoundIsUnknownItem, a 404 means the
-    /// item the command named does not exist (exit 5); without it, a 404 is an API error (exit 1).
-    /// </summary>
+    // Returns a CliException unchanged. With notFoundIsUnknownItem, a 404 means the item the
+    // command named does not exist (exit 5); without it, a 404 is an API error (exit 1).
     public static CliException ToCliException(Exception exception, bool notFoundIsUnknownItem = false)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -85,9 +83,7 @@ internal static class ApiErrors
         }
     }
 
-    /// <summary>
-    /// True when the API answered 404, with problem details or without.
-    /// </summary>
+    // True when the API answered 404, with problem details or without.
     public static bool IsNotFound(Exception exception) => exception switch
     {
         EnclaveApiException api => (api.ProblemDetails?.Status ?? (int)api.Response.StatusCode) == (int)HttpStatusCode.NotFound,

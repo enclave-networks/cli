@@ -6,18 +6,14 @@ namespace Enclave.Cli.Tests.Support;
 // On 25 October 2026 the local times 01:00 to 01:59 happen twice: 00:00 to 00:59 UTC, then 01:00
 // to 01:59 UTC.
 
-/// <summary>
-/// A local time zone with daylight saving, for a test whose result depends on the hour repeated
-/// when the clocks go back.
-/// </summary>
+// A local time zone with daylight saving, for a test whose result depends on the hour repeated
+// when the clocks go back.
 internal static partial class TestData
 {
     private const string DaylightSavingZoneName = "Enclave CLI test UTC+00:00 with daylight saving";
 
-    /// <summary>
-    /// UTC+00:00, with an hour of daylight saving from 01:00 on the last Sunday of March to 02:00 on
-    /// the last Sunday of October.
-    /// </summary>
+    // UTC+00:00, with an hour of daylight saving from 01:00 on the last Sunday of March to 02:00 on
+    // the last Sunday of October.
     public static TimeZoneInfo DaylightSavingZone { get; } = TimeZoneInfo.CreateCustomTimeZone(
         DaylightSavingZoneName,
         TimeSpan.Zero,

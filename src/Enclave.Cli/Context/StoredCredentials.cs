@@ -1,9 +1,7 @@
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// Token, BaseUrl and PartnerApiBaseUrl are null when the file leaves them out or empty, and all
-/// three are null when IsValid is false.
-/// </summary>
+// Token, BaseUrl and PartnerApiBaseUrl are null when the file leaves them out or empty, and all
+// three are null when IsValid is false.
 // A class, not a record: a record's generated ToString lists every property, and the token must
 // never reach output, diagnostics included.
 internal sealed class StoredCredentials
@@ -16,9 +14,7 @@ internal sealed class StoredCredentials
         IsValid = isValid;
     }
 
-    /// <summary>
-    /// Never printed.
-    /// </summary>
+    // Never printed.
     public string? Token { get; }
 
     public string? BaseUrl { get; }

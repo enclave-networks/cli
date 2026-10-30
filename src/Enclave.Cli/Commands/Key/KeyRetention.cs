@@ -5,9 +5,7 @@ namespace Enclave.Cli.Commands.Key;
 
 internal static class KeyRetention
 {
-    /// <summary>
-    /// A duration longer than the API's field can hold exits 2.
-    /// </summary>
+    // A duration longer than the API's field can hold exits 2.
     // A duration is whole minutes, hours or days (TimeInput.TryParseDuration), so the cast loses
     // nothing. The API refuses more than 30 days with its own message (portal
     // EnrolmentKeyCreateValidator, EnrolmentKeyPatchModelValidator); only a value an int cannot hold

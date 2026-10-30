@@ -5,9 +5,7 @@ namespace Enclave.Cli.Commands.Systems;
 
 internal static class GatewayRoutes
 {
-    /// <summary>
-    /// The subnets given replace the routes a user entered; the routes the system found itself stay.
-    /// </summary>
+    // The subnets given replace the routes a user entered; the routes the system found itself stay.
     // As the portal does (portal-spa detailTab/systems.ts, setSystemDetailsKnownRoutes). A route that
     // stays keeps its weight, the API's preference for it over other gateways' routes to the same
     // subnet. A subnet given that the system also found stays one found route, with the label given:

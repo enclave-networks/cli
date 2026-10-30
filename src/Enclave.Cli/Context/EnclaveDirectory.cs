@@ -2,14 +2,10 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// With no home directory no file is read, and a command that saves or deletes one exits 2.
-/// </summary>
+// With no home directory no file is read, and a command that saves or deletes one exits 2.
 internal static class EnclaveDirectory
 {
-    /// <summary>
-    /// Null when <paramref name="profile"/> is empty or not fully qualified.
-    /// </summary>
+    // Null when profile is empty or not fully qualified.
     // An empty or relative path resolves against the current directory, so the CLI would read a
     // credentials.json from wherever it is run and send the token to that file's baseUrl. .NET gives
     // HOME, and USERPROFILE on Windows when SHGetKnownFolderPath fails, as it is set (dotnet/runtime
@@ -17,9 +13,7 @@ internal static class EnclaveDirectory
     public static string? HomeFrom(string profile) =>
         !string.IsNullOrEmpty(profile) && Path.IsPathFullyQualified(profile) ? profile : null;
 
-    /// <summary>
-    /// Null when there is no home directory.
-    /// </summary>
+    // Null when there is no home directory.
     public static string? PathOf(CliHost host, string name)
     {
         ArgumentNullException.ThrowIfNull(host);

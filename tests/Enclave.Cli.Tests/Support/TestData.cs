@@ -3,11 +3,7 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-// StyleCop SA1601 requires a <summary> on every part of this partial class.
-
-/// <summary>
-/// Fixed identities shared by the tests and the fake API responses.
-/// </summary>
+// Fixed identities shared by the tests and the fake API responses.
 internal static partial class TestData
 {
     public const string Token = "test-token-7f3a9c";
@@ -28,10 +24,8 @@ internal static partial class TestData
 
     public static string OtherOrgPath(string suffix = "") => OrgPathOf(OtherOrgId, suffix);
 
-    /// <summary>
-    /// <paramref name="count"/> distinct IDs of a <see cref="CliList.Kinds"/> kind other than log,
-    /// each valid by spec/cli-surface.md "ID checks".
-    /// </summary>
+    // count distinct IDs of a CliList.Kinds kind other than log, each valid by spec/cli-surface.md
+    // "ID checks".
     public static string[] Ids(string kind, int count)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);

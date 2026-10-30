@@ -6,18 +6,14 @@ namespace Enclave.Cli.Tests.Support;
 // Bodies follow Enclave.Sdk.Api.Partner.Models and the deployed schema
 // (https://partner-api.enclave.io/swagger/v1/swagger.json), in the same form as the main API's.
 
-/// <summary>
-/// Partner API response bodies: customers, their admins and their admin invites.
-/// </summary>
+// Partner API response bodies: customers, their admins and their admin invites.
 internal static partial class ApiJson
 {
     private const string TrialEnd = "2026-02-01T00:00:00+00:00";
 
-    /// <summary>
-    /// A CustomerModel, the customer GET, create, update, convert and auto-sync body and the list
-    /// item. Only the list sets oldestEnclaveVersion (Enclave.Sdk.Api
-    /// CustomerModel.OldestEnclaveVersion).
-    /// </summary>
+    // A CustomerModel, the customer GET, create, update, convert and auto-sync body and the list
+    // item. Only the list sets oldestEnclaveVersion (Enclave.Sdk.Api
+    // CustomerModel.OldestEnclaveVersion).
     public static string Customer(string orgId, string name, string? oldestEnclaveVersion = null) => new JsonObject
     {
         ["id"] = Hex(orgId),
@@ -41,9 +37,7 @@ internal static partial class ApiJson
         ["oldestEnclaveVersion"] = oldestEnclaveVersion,
     }.ToJsonString();
 
-    /// <summary>
-    /// A CustomerUsersModel, the GET .../customers/{id}/admins body.
-    /// </summary>
+    // A CustomerUsersModel, the GET .../customers/{id}/admins body.
     public static string CustomerAdmins(params string[] users)
     {
         var array = new JsonArray();
@@ -55,10 +49,8 @@ internal static partial class ApiJson
         return new JsonObject { ["users"] = array }.ToJsonString();
     }
 
-    /// <summary>
-    /// A CustomerUserModel, also the body add-admin and remove-admin return. Role is Owner or Admin
-    /// (UserOrganisationRole).
-    /// </summary>
+    // A CustomerUserModel, also the body add-admin and remove-admin return. Role is Owner or Admin
+    // (UserOrganisationRole).
     public static string CustomerAdmin(string accountId, string email, string role = "Admin") => new JsonObject
     {
         ["id"] = Hex(accountId),
@@ -68,9 +60,7 @@ internal static partial class ApiJson
         ["role"] = role,
     }.ToJsonString();
 
-    /// <summary>
-    /// A CustomerPendingAdminInvitesModel, the GET .../customers/{id}/invites body.
-    /// </summary>
+    // A CustomerPendingAdminInvitesModel, the GET .../customers/{id}/invites body.
     public static string CustomerInvites(params string[] invites)
     {
         var array = new JsonArray();
@@ -82,19 +72,15 @@ internal static partial class ApiJson
         return new JsonObject { ["invites"] = array }.ToJsonString();
     }
 
-    /// <summary>
-    /// A CustomerAdminInviteModel, also the body an invite returns.
-    /// </summary>
+    // A CustomerAdminInviteModel, also the body an invite returns.
     public static string CustomerInvite(string orgId, int number, string email) => new JsonObject
     {
         ["id"] = TestData.CustomerInviteId(orgId, number),
         ["emailAddress"] = email,
     }.ToJsonString();
 
-    /// <summary>
-    /// The body the API answers a cancelled invite with, whose ID is null (portal
-    /// DeleteCustomerPendingAdminInviteHandler; Enclave.Sdk.Api CustomersClient.CancelInviteAsync).
-    /// </summary>
+    // The body the API answers a cancelled invite with, whose ID is null (portal
+    // DeleteCustomerPendingAdminInviteHandler; Enclave.Sdk.Api CustomersClient.CancelInviteAsync).
     public static string CancelledCustomerInvite(string email) => new JsonObject
     {
         ["id"] = null,

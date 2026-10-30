@@ -31,34 +31,24 @@ internal sealed class CliException : Exception
 
     public ErrorCode Code { get; }
 
-    /// <summary>
-    /// Null for an error the CLI found.
-    /// </summary>
+    // Null for an error the CLI found.
     public int? Status { get; }
 
     public string Title { get; }
 
     public string Detail { get; }
 
-    /// <summary>
-    /// Keyed by the option, argument or API field each message is about, as in the API's problem
-    /// details.
-    /// </summary>
+    // Keyed by the option, argument or API field each message is about, as in the API's problem
+    // details.
     public IReadOnlyDictionary<string, IReadOnlyList<string>> Errors { get; }
 
-    /// <summary>
-    /// The items a name matched, or the organisations a token sees for no_org; otherwise null.
-    /// </summary>
+    // The items a name matched, or the organisations a token sees for no_org; otherwise null.
     public JsonArray? Candidates { get; init; }
 
-    /// <summary>
-    /// The IDs sent in the bulk calls that succeeded before this error, or null outside bulk commands.
-    /// </summary>
+    // The IDs sent in the bulk calls that succeeded before this error, or null outside bulk commands.
     public int? Requested { get; init; }
 
-    /// <summary>
-    /// The items those bulk calls changed, or null outside bulk commands.
-    /// </summary>
+    // The items those bulk calls changed, or null outside bulk commands.
     public int? Affected { get; init; }
 
     public CliException WithBulkCounts(int requested, int affected) =>

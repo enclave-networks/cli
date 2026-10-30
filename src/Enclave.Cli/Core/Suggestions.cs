@@ -8,9 +8,7 @@ internal static class Suggestions
     // words that only share a few letters.
     private const int MaxDistance = 3;
 
-    /// <summary>
-    /// Null when no candidate is close enough.
-    /// </summary>
+    // Null when no candidate is close enough.
     public static string? Closest(string typed, IEnumerable<string> candidates)
     {
         ArgumentNullException.ThrowIfNull(typed);

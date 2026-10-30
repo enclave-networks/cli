@@ -9,14 +9,10 @@ namespace Enclave.Cli.Context;
 // that format.
 internal static class CredentialsFile
 {
-    /// <summary>
-    /// Null when there is no home directory.
-    /// </summary>
+    // Null when there is no home directory.
     public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "credentials.json");
 
-    /// <summary>
-    /// Null when there is no file or no home directory.
-    /// </summary>
+    // Null when there is no file or no home directory.
     public static StoredCredentials? Read(CliHost host)
     {
         if (PathFor(host) is not { } path || host.Files.ReadText(path) is not { } text)
@@ -39,9 +35,7 @@ internal static class CredentialsFile
         }
     }
 
-    /// <summary>
-    /// Readable by the current user only. Exits 2 when there is no home directory.
-    /// </summary>
+    // Readable by the current user only. Exits 2 when there is no home directory.
     public static void Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
     {
         ArgumentNullException.ThrowIfNull(host);

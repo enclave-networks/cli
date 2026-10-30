@@ -4,10 +4,6 @@ namespace Enclave.Cli.Tests.Support;
 
 // Values from the partner examples in spec/cli-surface.md "Examples", so a test command reads as
 // the example it follows. IDs are hyphenated, as people type them.
-
-/// <summary>
-/// Fixed identities for the partner customer tests.
-/// </summary>
 internal static partial class TestData
 {
     public const string CustomerName = "Globex Ltd";
@@ -16,15 +12,9 @@ internal static partial class TestData
 
     public const string CustomerAdminEmail = "alex@example.com";
 
-    /// <summary>
-    /// The account ID of the customer admin <see cref="CustomerAdminEmail"/>.
-    /// </summary>
     public const string CustomerAdminAccountId = "3c9a7e15-6d2b-4f80-a1c4-e5b7d9f02a68";
 
-    /// <summary>
-    /// The owner of the customer's organisation, listed with its admins ahead of
-    /// <see cref="CustomerAdminEmail"/>.
-    /// </summary>
+    // The owner of the customer's organisation, listed with its admins ahead of CustomerAdminEmail.
     public const string CustomerOwnerEmail = "owner@globex.example";
 
     public const string CustomerOwnerAccountId = "a4d2f6b8-1e3c-4a57-9b0d-7c6e5f4a3b21";
@@ -37,9 +27,7 @@ internal static partial class TestData
 
     public const string NewCustomerOrgId = "8d2e4f6a-1b3c-4d5e-9f70-a1b2c3d4e5f6";
 
-    /// <summary>
-    /// The number in the ID of the pending invite to <see cref="CustomerInviteEmail"/>.
-    /// </summary>
+    // The number in the ID of the pending invite to CustomerInviteEmail.
     public const int CustomerInviteNumber = 3;
 
     public static readonly Guid PartnerStaffAccountGuid = Guid.Parse(PartnerStaffAccountId, CultureInfo.InvariantCulture);
@@ -51,25 +39,18 @@ internal static partial class TestData
     public static string PartnerPathOf(Guid partnerId, string suffix = "") =>
         suffix.Length == 0 ? $"/partner/{partnerId:N}" : $"/partner/{partnerId:N}/{suffix}";
 
-    /// <summary>
-    /// The path of one of the test partner's customers, by its organisation ID.
-    /// </summary>
     public static string CustomerPath(string customerOrgId, string suffix = "")
     {
         var customer = $"customers/{Guid.Parse(customerOrgId, CultureInfo.InvariantCulture):N}";
         return PartnerPath(suffix.Length == 0 ? customer : $"{customer}/{suffix}");
     }
 
-    /// <summary>
-    /// The path of one of a customer's admins, as add-admin and remove-admin address it.
-    /// </summary>
+    // The path of one of a customer's admins, as add-admin and remove-admin address it.
     public static string CustomerAdminPath(string customerOrgId, string accountId) =>
         CustomerPath(customerOrgId, $"admins/{Guid.Parse(accountId, CultureInfo.InvariantCulture):N}");
 
-    /// <summary>
-    /// The ID of a customer's admin invite: its organisation ID and a number, joined by a hyphen
-    /// (portal OrganisationInviteId.Create, as Enclave.Sdk.Api's CustomersClientTests write it).
-    /// </summary>
+    // The ID of a customer's admin invite: its organisation ID and a number, joined by a hyphen
+    // (portal OrganisationInviteId.Create, as Enclave.Sdk.Api's CustomersClientTests write it).
     public static string CustomerInviteId(string customerOrgId, int number) =>
         string.Create(CultureInfo.InvariantCulture, $"{Guid.Parse(customerOrgId, CultureInfo.InvariantCulture):N}-{number}");
 }

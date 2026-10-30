@@ -28,10 +28,8 @@ internal sealed class CliOutput
 
     public bool IsVerbose { get; }
 
-    /// <summary>
-    /// Under --dry-run it prints nothing.
-    /// </summary>
-    /// <typeparam name="T">The value's type, which decides the properties written.</typeparam>
+    // Under --dry-run it prints nothing. T decides the properties written, whatever the value's
+    // runtime type.
     public Task WriteAsync<T>(T value, CancellationToken cancellationToken = default) =>
         _dropCommandOutput ? Task.CompletedTask : AppendJsonAsync(value, cancellationToken);
 
@@ -54,9 +52,7 @@ internal sealed class CliOutput
     public Task WriteBulkAsync(BulkResult result, CancellationToken cancellationToken = default) =>
         WriteAsync(result, cancellationToken);
 
-    /// <summary>
-    /// Only help prints text; every other output is JSON.
-    /// </summary>
+    // Only help prints text; every other output is JSON.
     public Task WriteTextAsync(string text)
     {
         if (!_dropCommandOutput)
@@ -67,9 +63,7 @@ internal sealed class CliOutput
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Never pass the token.
-    /// </summary>
+    // Never pass the token.
     public void Verbose(string message)
     {
         if (IsVerbose)
@@ -78,9 +72,7 @@ internal sealed class CliOutput
         }
     }
 
-    /// <summary>
-    /// Call once the command has succeeded.
-    /// </summary>
+    // Call once the command has succeeded.
     public async Task FlushAsync()
     {
         await _stdout.WriteAsync(_pending.ToString());

@@ -7,12 +7,8 @@ internal static class Paging
     // The most the API returns per page (portal PaginationDefaults.MaxPageSize).
     public const int PageSize = 200;
 
-    /// <summary>
-    /// <paramref name="readPage"/> takes the page number, then the page size. A failed page read
-    /// throws, so a command prints nothing from a list it could not read whole (spec/cli-surface.md
-    /// "Output").
-    /// </summary>
-    /// <typeparam name="T">The list's item model.</typeparam>
+    // readPage takes the page number, then the page size. A failed page read throws, so a command
+    // prints nothing from a list it could not read whole (spec/cli-surface.md "Output").
     public static async Task<List<T>> ReadAllAsync<T>(Func<int, int, Task<PaginatedResponseModel<T>>> readPage, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(readPage);

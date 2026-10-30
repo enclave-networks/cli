@@ -3,9 +3,7 @@ using System.Text.RegularExpressions;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// A time in the forms of spec/cli-surface.md "Command options".
-/// </summary>
+// A time in the forms of spec/cli-surface.md "Command options".
 // Each form is parsed with the invariant culture and an exact pattern, so a command means the same
 // whatever the machine's locale and calendar; forms a locale would also read, such as "10/09/2030"
 // or "5:30 PM", are refused.
@@ -121,10 +119,8 @@ internal sealed partial class TimeInput
         return false;
     }
 
-    /// <summary>
-    /// A clock time is its next occurrence after now. Exits 2 naming <paramref name="name"/> for a
-    /// time in a daylight saving gap, or a duration that reaches past year 9999.
-    /// </summary>
+    // A clock time is its next occurrence after now. Exits 2 naming name for a time in a daylight
+    // saving gap, or a duration that reaches past year 9999.
     public DateTimeOffset Forwards(TimeProvider time, string name)
     {
         ArgumentNullException.ThrowIfNull(time);
@@ -140,10 +136,8 @@ internal sealed partial class TimeInput
         };
     }
 
-    /// <summary>
-    /// A clock time is its latest occurrence at or before now. Exits 2 naming <paramref name="name"/>
-    /// for a time in a daylight saving gap, or a duration that reaches back before year 1.
-    /// </summary>
+    // A clock time is its latest occurrence at or before now. Exits 2 naming name for a time in a
+    // daylight saving gap, or a duration that reaches back before year 1.
     public DateTimeOffset Backwards(TimeProvider time, string name)
     {
         ArgumentNullException.ThrowIfNull(time);

@@ -5,21 +5,15 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// ~/.enclave/cli.json: { "org": { "id", "name" }, "partner": { "id" } }.
-/// </summary>
+// ~/.enclave/cli.json: { "org": { "id", "name" }, "partner": { "id" } }.
 internal static class SettingsFile
 {
-    /// <summary>
-    /// Null when there is no home directory.
-    /// </summary>
+    // Null when there is no home directory.
     public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "cli.json");
 
-    /// <summary>
-    /// Null when there is no file or no home directory. A file that is not a JSON object exits 2;
-    /// callers read it only when no higher source chose (spec/cli-surface.md "Details"), so a
-    /// malformed file fails only the commands that need it.
-    /// </summary>
+    // Null when there is no file or no home directory. A file that is not a JSON object exits 2;
+    // callers read it only when no higher source chose (spec/cli-surface.md "Details"), so a
+    // malformed file fails only the commands that need it.
     public static JsonObject? Read(CliHost host)
     {
         if (PathFor(host) is not { } path || host.Files.ReadText(path) is not { } text)
@@ -38,10 +32,8 @@ internal static class SettingsFile
         }
     }
 
-    /// <summary>
-    /// The default saved under key ("org" or "partner"), or null when none is saved. One without a
-    /// valid ID exits 2 naming the file and saveWith, the command that saves it again.
-    /// </summary>
+    // The default saved under key ("org" or "partner"), or null when none is saved. One without a
+    // valid ID exits 2 naming the file and saveWith, the command that saves it again.
     // use never saves a default without a valid ID, so only a missing default means none is chosen.
     public static (Guid Id, string? Name, string Path)? ReadDefault(CliHost host, string key, string noun, string saveWith)
     {
@@ -68,10 +60,8 @@ internal static class SettingsFile
     public static void SavePartner(CliHost host, Guid id) =>
         Save(host, "partner", new JsonObject { ["id"] = id.ToString("D") });
 
-    /// <summary>
-    /// Keeps the other defaults the file holds; a file that is not a JSON object is replaced. Exits
-    /// 2 when there is no home directory.
-    /// </summary>
+    // Keeps the other defaults the file holds; a file that is not a JSON object is replaced. Exits
+    // 2 when there is no home directory.
     public static void Save(CliHost host, string key, JsonObject value)
     {
         ArgumentNullException.ThrowIfNull(host);

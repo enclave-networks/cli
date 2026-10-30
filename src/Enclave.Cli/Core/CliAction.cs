@@ -14,9 +14,7 @@ internal sealed class CliAction : AsynchronousCommandLineAction
         _verb = verb;
     }
 
-    /// <summary>
-    /// For a command that is not a verb: the root or a noun.
-    /// </summary>
+    // For a command that is not a verb: the root or a noun.
     public CliAction(Func<CliContext, Task> handler)
     {
         _handler = handler;

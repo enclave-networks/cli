@@ -19,32 +19,22 @@ internal sealed class ApiAccess
         PartnerApiBaseUrl = partnerApiBaseUrl;
     }
 
-    /// <summary>
-    /// Never printed.
-    /// </summary>
+    // Never printed.
     public string Token { get; }
 
-    /// <summary>
-    /// ENCLAVE_TOKEN, the path of credentials.json, or stdin (login --token-stdin).
-    /// </summary>
+    // ENCLAVE_TOKEN, the path of credentials.json, or stdin (login --token-stdin).
     public string TokenSource { get; }
 
-    /// <summary>
-    /// credentials.json's baseUrl, or the default API address.
-    /// </summary>
+    // credentials.json's baseUrl, or the default API address.
     public Uri BaseUrl { get; }
 
-    /// <summary>
-    /// credentials.json's partnerApiBaseUrl, or the host's default partner API address; null leaves
-    /// Enclave.Sdk.Api's default, production.
-    /// </summary>
+    // credentials.json's partnerApiBaseUrl, or the host's default partner API address; null leaves
+    // Enclave.Sdk.Api's default, production.
     public Uri? PartnerApiBaseUrl { get; }
 
-    /// <summary>
-    /// The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on every
-    /// command"), with the base URLs from credentials.json whichever source gave the token. Exits 3
-    /// with token_missing or token_invalid, and 2 when a base URL in the file is not http or https.
-    /// </summary>
+    // The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on every
+    // command"), with the base URLs from credentials.json whichever source gave the token. Exits 3
+    // with token_missing or token_invalid, and 2 when a base URL in the file is not http or https.
     public static ApiAccess Resolve(CliHost host)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -77,11 +67,9 @@ internal sealed class ApiAccess
         throw CliErrors.TokenMissing($"No token: ENCLAVE_TOKEN is not set and {path} holds none. Run `enclave-cli login --token-stdin` with a personal access token, or set ENCLAVE_TOKEN.");
     }
 
-    /// <summary>
-    /// Null when nothing is left once a leading byte order mark and surrounding white space are
-    /// dropped. Exits 3 with token_invalid when the token holds anything but printable ASCII other
-    /// than space; the error names <paramref name="source"/> and holds no part of the token.
-    /// </summary>
+    // Null when nothing is left once a leading byte order mark and surrounding white space are
+    // dropped. Exits 3 with token_invalid when the token holds anything but printable ASCII other
+    // than space; the error names source and holds no part of the token.
     // A token file saved with a UTF-8 byte order mark, as Windows PowerShell 5.1's Out-File
     // -Encoding utf8 writes, gives U+FEFF to a reader that passes the mark on, and to ENCLAVE_TOKEN
     // set with $(cat file); Trim leaves it (char.IsWhiteSpace). A token is printable ASCII with no
@@ -110,10 +98,8 @@ internal sealed class ApiAccess
             : throw new CliException(ErrorCode.TokenInvalid, $"The token from {source} holds a space, a control character or a character outside ASCII, which a personal access token does not hold. Give the token as the portal issued it; personal access tokens are created on the account page of the Enclave portal.");
     }
 
-    /// <summary>
-    /// credentials.json's baseUrl whichever source gives the token, so a file pointing at another
-    /// API address keeps pointing there; the default API address when the file has none.
-    /// </summary>
+    // credentials.json's baseUrl whichever source gives the token, so a file pointing at another
+    // API address keeps pointing there; the default API address when the file has none.
     public static Uri BaseUrlFrom(CliHost host, StoredCredentials? stored)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -121,11 +107,9 @@ internal sealed class ApiAccess
         return stored?.BaseUrl is { } text ? HttpUrl(host, text, "baseUrl") : host.DefaultApiUrl;
     }
 
-    /// <summary>
-    /// credentials.json's partnerApiBaseUrl whichever source gives the token, as baseUrl is
-    /// (spec/cli-surface.md "Partner API"); the host's default when the file has none, which is null
-    /// outside tests.
-    /// </summary>
+    // credentials.json's partnerApiBaseUrl whichever source gives the token, as baseUrl is
+    // (spec/cli-surface.md "Partner API"); the host's default when the file has none, which is null
+    // outside tests.
     // Checked here so the error names the file and the setting. Enclave.Sdk.Api builds the partner
     // HttpClient with every EnclaveClient (EnclaveClient.SetupPartnerHttpClient), so a value that is
     // not a URL would fail every command with a UriFormatException.
@@ -136,9 +120,7 @@ internal sealed class ApiAccess
         return stored?.PartnerApiBaseUrl is { } text ? HttpUrl(host, text, "partnerApiBaseUrl") : host.DefaultPartnerApiUrl;
     }
 
-    /// <summary>
-    /// Makes no call, and never disposes <paramref name="handler"/>.
-    /// </summary>
+    // Makes no call, and never disposes handler.
     public EnclaveClient CreateClient(HttpMessageHandler handler)
     {
         ArgumentNullException.ThrowIfNull(handler);

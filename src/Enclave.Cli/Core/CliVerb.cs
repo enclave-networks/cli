@@ -3,9 +3,7 @@ using Enclave.Cli.Context;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// A command that runs: a noun's verb, or a top-level command such as `login`.
-/// </summary>
+// A command that runs: a noun's verb, or a top-level command such as `login`.
 internal sealed class CliVerb : Command
 {
     private readonly List<Action<CliContext>> _checks = [];
@@ -53,9 +51,7 @@ internal sealed class CliVerb : Command
 
     public Option<bool> VerboseOption { get; }
 
-    /// <summary>
-    /// Help and `commands` list these after the command's own options.
-    /// </summary>
+    // Help and `commands` list these after the command's own options.
     public IReadOnlyList<Option> CommonOptions => _commonOptions;
 
     internal Func<CliContext, Task> Handler => _handler;
@@ -79,10 +75,8 @@ internal sealed class CliVerb : Command
         return argument;
     }
 
-    /// <summary>
-    /// The handler runs after the checks pass. It checks its remaining arguments before asking for the
-    /// organisation or partner, and reports a failure by throwing a <see cref="CliException"/>.
-    /// </summary>
+    // The handler runs after the checks pass. It checks its remaining arguments before asking for
+    // the organisation or partner, and reports a failure by throwing a CliException.
     public void SetHandler(Func<CliContext, Task> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
@@ -146,10 +140,8 @@ internal sealed class CliVerb : Command
         });
     }
 
-    /// <summary>
-    /// Runs before the handler and before the token is read; throws a <see cref="CliException"/> to
-    /// refuse the command.
-    /// </summary>
+    // Runs before the handler and before the token is read; throws a CliException to refuse the
+    // command.
     public void Check(Action<CliContext> check)
     {
         ArgumentNullException.ThrowIfNull(check);

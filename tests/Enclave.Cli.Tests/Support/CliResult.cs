@@ -6,25 +6,17 @@ namespace Enclave.Cli.Tests.Support;
 
 internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
 {
-    /// <summary>
-    /// Fails the test when stdout is not one JSON value.
-    /// </summary>
+    // Fails the test when stdout is not one JSON value.
     public JsonElement StdoutJson => ParseJson(Stdout, "stdout");
 
-    /// <summary>
-    /// The non-blank lines of stdout, with any trailing carriage return removed.
-    /// </summary>
+    // The non-blank lines of stdout, with any trailing carriage return removed.
     public string[] StdoutLines => Lines(Stdout);
 
-    /// <summary>
-    /// Each non-blank line of stderr parsed as JSON. Fails the test when a line is not JSON.
-    /// </summary>
+    // Each non-blank line of stderr parsed as JSON. Fails the test when a line is not JSON.
     public IReadOnlyList<JsonElement> StderrJson => Lines(Stderr).Select(line => ParseJson(line, "each stderr line")).ToArray();
 
-    /// <summary>
-    /// The "error" object of the one error stderr holds. Fails the test unless stderr holds exactly
-    /// one non-blank line and that line is a JSON object with an "error" object.
-    /// </summary>
+    // The "error" object of the one error stderr holds. Fails the test unless stderr holds exactly
+    // one non-blank line and that line is a JSON object with an "error" object.
     public JsonElement Error
     {
         get

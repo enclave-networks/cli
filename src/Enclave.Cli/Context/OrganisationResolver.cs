@@ -14,16 +14,12 @@ internal static class OrganisationResolver
 
     public const string IdVariable = "ENCLAVE_ORG_ID";
 
-    /// <summary>
-    /// The source when the token sees one organisation and nothing else chose it.
-    /// </summary>
+    // The source when the token sees one organisation and nothing else chose it.
     public const string OnlyOrganisation = "only-organisation";
 
-    /// <summary>
-    /// Null when no source chooses one. A lower source is not read once a higher one gives a value,
-    /// so a malformed lower source does not fail the command ("Details"). An empty variable counts
-    /// as unset. A malformed source that is read, or both variables set, exits 2.
-    /// </summary>
+    // Null when no source chooses one. A lower source is not read once a higher one gives a value,
+    // so a malformed lower source does not fail the command ("Details"). An empty variable counts
+    // as unset. A malformed source that is read, or both variables set, exits 2.
     public static OrganisationChoice? Choose(CliContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -64,10 +60,8 @@ internal static class OrganisationResolver
         return Saved(host);
     }
 
-    /// <summary>
-    /// By ID with no call; by name, or with none chosen, after one GetOrganisationsAsync call. With
-    /// none chosen the token's only organisation is used; with several it exits 2 with no_org.
-    /// </summary>
+    // By ID with no call; by name, or with none chosen, after one GetOrganisationsAsync call. With
+    // none chosen the token's only organisation is used; with several it exits 2 with no_org.
     public static async Task<OrganisationInUse> ResolveAsync(CliContext context, EnclaveClient client)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -105,10 +99,8 @@ internal static class OrganisationResolver
         return new OrganisationInUse(only.OrgId, only.OrgName, only.Role, OnlyOrganisation, client.CreateOrganisationClient(only));
     }
 
-    /// <summary>
-    /// Matched whole and ignoring case. No match, or several, exits 2 with the matches as
-    /// candidates.
-    /// </summary>
+    // Matched whole and ignoring case. No match, or several, exits 2 with the matches as
+    // candidates.
     public static AccountOrganisationModel MatchName(string name, IReadOnlyList<AccountOrganisationModel> organisations, string key)
     {
         ArgumentNullException.ThrowIfNull(name);

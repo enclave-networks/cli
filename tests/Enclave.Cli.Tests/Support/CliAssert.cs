@@ -9,10 +9,8 @@ internal static class CliAssert
 
     private static readonly string[] BulkFields = ["requested", "affected"];
 
-    /// <summary>
-    /// Every error code the CLI reports, with its exit code (spec/cli-surface.md "Errors and exit
-    /// codes").
-    /// </summary>
+    // Every error code the CLI reports, with its exit code (spec/cli-surface.md "Errors and exit
+    // codes").
     public static IReadOnlyDictionary<string, int> ExitCodes { get; } = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         ["api_error"] = 1,
@@ -27,22 +25,15 @@ internal static class CliAssert
         ["transient"] = 6,
     };
 
-    /// <summary>
-    /// Asserts the run exited 0.
-    /// </summary>
     public static void Succeeded(CliResult result) =>
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
 
-    /// <summary>
-    /// Asserts the run failed with this error code and its exit code, with nothing on stdout, and
-    /// returns the error object.
-    /// </summary>
+    // Asserts the run failed with this error code and its exit code, with nothing on stdout, and
+    // returns the error object.
     public static JsonElement Failed(CliResult result, string code) => Failed(result, ExitCode(code), code);
 
-    /// <summary>
-    /// Asserts the run failed with this exit code and error code, with nothing on stdout, and
-    /// returns the error object.
-    /// </summary>
+    // Asserts the run failed with this exit code and error code, with nothing on stdout, and
+    // returns the error object.
     public static JsonElement Failed(CliResult result, int exitCode, string code)
     {
         CheckExitCode(exitCode, code);
@@ -58,16 +49,12 @@ internal static class CliAssert
         return error;
     }
 
-    /// <summary>
-    /// Asserts the CLI refused the command with this error code and its exit code, with nothing on
-    /// stdout and no request sent.
-    /// </summary>
+    // Asserts the CLI refused the command with this error code and its exit code, with nothing on
+    // stdout and no request sent.
     public static void Rejected(CliRun run, CliResult result, string code) => Rejected(run, result, ExitCode(code), code);
 
-    /// <summary>
-    /// Asserts the CLI refused the command with this exit code and error code, with nothing on
-    /// stdout and no request sent.
-    /// </summary>
+    // Asserts the CLI refused the command with this exit code and error code, with nothing on
+    // stdout and no request sent.
     public static void Rejected(CliRun run, CliResult result, int exitCode = 2, string code = "invalid_argument")
     {
         CheckExitCode(exitCode, code);
@@ -81,10 +68,8 @@ internal static class CliAssert
         Assert.That(ErrorCode(result.Error), Is.EqualTo(code), result.ToString());
     }
 
-    /// <summary>
-    /// Asserts the run exited 0 and printed exactly { "kind", "items", "total" } with this kind and
-    /// total equal to the number of items, and returns the items.
-    /// </summary>
+    // Asserts the run exited 0 and printed exactly { "kind", "items", "total" } with this kind and
+    // total equal to the number of items, and returns the items.
     // total counts the items printed, the matches when the CLI filters them (spec/cli-surface.md
     // "Filters").
     public static JsonElement List(CliResult result, string kind)
@@ -112,10 +97,8 @@ internal static class CliAssert
         return items;
     }
 
-    /// <summary>
-    /// Asserts the run exited 0 and printed exactly { "requested": <paramref name="requested"/>,
-    /// "affected": <paramref name="affected"/> }.
-    /// </summary>
+    // Asserts the run exited 0 and printed exactly
+    // { "requested": requested, "affected": affected }.
     public static void Bulk(CliResult result, int requested, int affected)
     {
         Succeeded(result);
@@ -130,10 +113,8 @@ internal static class CliAssert
         });
     }
 
-    /// <summary>
-    /// Runs the command, asserts it exits 0 having sent exactly one request with this method and
-    /// path, and returns that request.
-    /// </summary>
+    // Runs the command, asserts it exits 0 having sent exactly one request with this method and
+    // path, and returns that request.
     public static async Task<RecordedRequest> AcceptedAsync(CliRun run, string method, string path, params string[] args)
     {
         var result = await run.RunAsync(args);
@@ -148,10 +129,8 @@ internal static class CliAssert
         return request;
     }
 
-    /// <summary>
-    /// Asserts the rejected command exits 2 with invalid_argument and sends nothing, then that the
-    /// corrected command succeeds with one request with this method and path.
-    /// </summary>
+    // Asserts the rejected command exits 2 with invalid_argument and sends nothing, then that the
+    // corrected command succeeds with one request with this method and path.
     // A parse error, such as an unknown command, also exits 2 with invalid_argument and sends
     // nothing, so the corrected run is what proves the command checked the input.
     public static async Task<RecordedRequest> RejectedThenAcceptedAsync(CliRun run, string[] rejected, string[] corrected, string method, string path)

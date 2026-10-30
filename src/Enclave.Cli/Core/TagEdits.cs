@@ -8,10 +8,8 @@ internal static class TagEdits
     public static bool NeedsCurrentTags(IReadOnlyList<string>? set, IReadOnlyList<string>? add, IReadOnlyList<string>? remove) =>
         set is null && (add is not null || remove is not null);
 
-    /// <summary>
-    /// Null when none of the three flags is given, so the update leaves the tags as they are.
-    /// <paramref name="current"/> is null unless <see cref="NeedsCurrentTags"/> says to read it.
-    /// </summary>
+    // Null when none of the three flags is given, so the update leaves the tags as they are.
+    // current is null unless NeedsCurrentTags says to read it.
     public static IReadOnlyList<string>? Apply(
         IReadOnlyList<string>? set,
         IReadOnlyList<string>? add,

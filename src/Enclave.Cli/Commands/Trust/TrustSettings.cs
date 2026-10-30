@@ -71,9 +71,7 @@ internal static class TrustSettings
     public static bool IsHttpsUri(string text) =>
         Uri.TryCreate(text, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
 
-    /// <summary>
-    /// Exits 2 for a value without "=" or a claim name.
-    /// </summary>
+    // Exits 2 for a value without "=" or a claim name.
     public static void CheckClaims(string option, IReadOnlyList<string>? values)
     {
         if (values is not null && values.Any(value => value.IndexOf('=', StringComparison.Ordinal) < 1))
@@ -108,11 +106,9 @@ internal static class TrustSettings
         };
     }
 
-    /// <summary>
-    /// Replaces the conditions of one kind with the values given. A value that stays keeps its
-    /// label unless it gives one; countries compare ignoring case. Conditions of other kinds stay
-    /// as they are.
-    /// </summary>
+    // Replaces the conditions of one kind with the values given. A value that stays keeps its
+    // label unless it gives one; countries compare ignoring case. Conditions of other kinds stay
+    // as they are.
     public static IReadOnlyList<IReadOnlyDictionary<string, string?>> Replace(
         IReadOnlyList<IReadOnlyDictionary<string, string?>> conditions,
         PublicIpKind kind,

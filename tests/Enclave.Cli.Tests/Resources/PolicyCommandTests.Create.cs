@@ -6,9 +6,6 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-/// <summary>
-/// Tests for policy create.
-/// </summary>
 public partial class PolicyCommandTests
 {
     // Every field of the API's PolicyCreateModel.

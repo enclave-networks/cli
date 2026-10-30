@@ -5,15 +5,8 @@ namespace Enclave.Cli.Commands.Trust;
 
 internal static class TrustLookup
 {
-    /// <summary>
-    /// The IDs in the order the descriptions are given. A description that matches none, or
-    /// several, exits 2 with the candidates. Makes no call when <paramref name="descriptions"/> is
-    /// empty.
-    /// </summary>
-    /// <param name="context">The command's context.</param>
-    /// <param name="org">The organisation the trust requirements are in.</param>
-    /// <param name="descriptions">The descriptions given.</param>
-    /// <param name="key">The option or argument the descriptions came from, for errors.</param>
+    // The IDs in the order the descriptions are given. A description that matches none, or several,
+    // exits 2 with the candidates, naming key. Makes no call when descriptions is empty.
     public static async Task<IReadOnlyList<int>> IdsAsync(CliContext context, OrganisationInUse org, IReadOnlyList<string> descriptions, string key)
     {
         ArgumentNullException.ThrowIfNull(context);

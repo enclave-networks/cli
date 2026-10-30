@@ -10,11 +10,8 @@ internal static class ListValues
     public static bool Clears(IReadOnlyList<string>? values) =>
         values is [var value] && string.IsNullOrWhiteSpace(value);
 
-    /// <summary>
-    /// Exits 2 when the values hold one twice, which the API refuses (spec/cli-surface.md "Command
-    /// options"). Null passes.
-    /// </summary>
-    /// <typeparam name="T">A tag, name or ID.</typeparam>
+    // Exits 2 when the values hold one twice, which the API refuses (spec/cli-surface.md "Command
+    // options"). Null passes.
     // The error does not repeat the value, which can be a token passed by mistake (CliOptions).
     public static void CheckNoRepeats<T>(string option, IReadOnlyList<T>? values, IEqualityComparer<T>? comparer = null)
     {

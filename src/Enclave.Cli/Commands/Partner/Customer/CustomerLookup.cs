@@ -10,10 +10,8 @@ internal static class CustomerLookup
     public static Task<List<CustomerModel>> ReadAllAsync(ICustomersClient customers, CancellationToken cancellationToken) =>
         Paging.ReadAllAsync((page, perPage) => customers.GetCustomersAsync(pageNumber: page, perPage: perPage), cancellationToken);
 
-    /// <summary>
-    /// Matches the name whole, ignoring case. No match, or several, exits 2 with the matches as
-    /// candidates.
-    /// </summary>
+    // Matches the name whole, ignoring case. No match, or several, exits 2 with the matches as
+    // candidates.
     public static async Task<OrganisationGuid> IdAsync(ICustomersClient customers, string name, string key, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(customers);
@@ -30,10 +28,8 @@ internal static class CustomerLookup
             $"\"{name}\" names more than one of the partner's customers. Give the one meant with --org-id.").Id;
     }
 
-    /// <summary>
-    /// Matches an owner or admin by email address, ignoring case. No match, or several, exits 2
-    /// with the matches as candidates; a customer the API does not know exits 5.
-    /// </summary>
+    // Matches an owner or admin by email address, ignoring case. No match, or several, exits 2
+    // with the matches as candidates; a customer the API does not know exits 5.
     public static async Task<AccountGuid> AdminIdAsync(ICustomersClient customers, OrganisationGuid customerId, string email, string key)
     {
         ArgumentNullException.ThrowIfNull(customers);
@@ -52,10 +48,8 @@ internal static class CustomerLookup
             $"More than one of the customer's admins has the email address \"{email}\". Give the one meant with --user-id.").Id;
     }
 
-    /// <summary>
-    /// Matches a pending invite by email address, ignoring case. No match, or several, exits 2 with
-    /// the matches as candidates; a customer the API does not know exits 5.
-    /// </summary>
+    // Matches a pending invite by email address, ignoring case. No match, or several, exits 2 with
+    // the matches as candidates; a customer the API does not know exits 5.
     // The partner API cancels an invite by its ID, and the CLI takes no invite ID from the user
     // (spec/cli-surface.md "Partner API"), so the address names the invite.
     public static async Task<OrganisationInviteId> InviteIdAsync(ICustomersClient customers, OrganisationGuid customerId, string email, string key)

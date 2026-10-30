@@ -5,17 +5,12 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
+// Response bodies in the Enclave API's JSON, for the fake API to serve.
 // Each body carries every property of its Enclave.Sdk.Api.Data model in the form Enclave.Sdk.Api
 // writes (Constants.JsonSerializerOptions), so a model read from a body and written back gives the
 // same JSON, which HarnessTests checks: enums by member name, with Ordered for the gateway priority
 // Prioritised; GUID IDs as 32 hex digits, the only form their converters read; DateTime ending in Z
 // and DateTimeOffset in +00:00.
-//
-// StyleCop SA1601 requires a <summary> on every part of this partial class.
-
-/// <summary>
-/// Response bodies in the Enclave API's JSON, for the fake API to serve.
-/// </summary>
 internal static partial class ApiJson
 {
     private const string Created = "2026-01-01T00:00:00Z";
@@ -28,22 +23,16 @@ internal static partial class ApiJson
 
     private const string LastSeenOffset = "2026-01-02T09:30:00+00:00";
 
-    /// <summary>
-    /// A PaginatedResponseModel with the items as its only page.
-    /// </summary>
+    // A PaginatedResponseModel with the items as its only page.
     public static string Page(params string[] items) => PageAt(0, items.Length, items.Length, items);
 
-    /// <summary>
-    /// A PaginatedResponseModel for the first page of a list of <paramref name="total"/> items, the
-    /// page size being the number of items given.
-    /// </summary>
+    // A PaginatedResponseModel for the first page of a list of total items, the page size being the
+    // number of items given.
     public static string PageOf(int total, params string[] items) => PageAt(0, items.Length, total, items);
 
-    /// <summary>
-    /// Page <paramref name="page"/>, from 0, of <paramref name="total"/> items read
-    /// <paramref name="perPage"/> at a time, with the metadata the API writes (portal
-    /// PaginatedQueryHandler.GetResponseAsync): a page after the last has no items and no nextPage.
-    /// </summary>
+    // Page page, from 0, of total items read perPage at a time, with the metadata the API writes
+    // (portal PaginatedQueryHandler.GetResponseAsync): a page after the last has no items and no
+    // nextPage.
     public static string PageAt(int page, int perPage, int total, params string[] items)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(page);
@@ -91,9 +80,7 @@ internal static partial class ApiJson
         }.ToJsonString();
     }
 
-    /// <summary>
-    /// An RFC 9457 problem details body, the form the Enclave API reports errors in.
-    /// </summary>
+    // An RFC 9457 problem details body, the form the Enclave API reports errors in.
     public static string Problem(int status, string title, string? detail = null) => new JsonObject
     {
         ["type"] = "about:blank",
@@ -102,9 +89,7 @@ internal static partial class ApiJson
         ["detail"] = detail,
     }.ToJsonString();
 
-    /// <summary>
-    /// A QueryAccountOrgsResponseModel, the GET /account/orgs body, of <see cref="Org"/> items.
-    /// </summary>
+    // A QueryAccountOrgsResponseModel, the GET /account/orgs body, of Org items.
     public static string Orgs(params (Guid Id, string Name)[] orgs)
     {
         var array = new JsonArray();
@@ -116,9 +101,7 @@ internal static partial class ApiJson
         return new JsonObject { ["orgs"] = array }.ToJsonString();
     }
 
-    /// <summary>
-    /// An AccountOrganisationModel with role Owner and partnerAccess false.
-    /// </summary>
+    // An AccountOrganisationModel with role Owner and partnerAccess false.
     public static string Org(Guid id, string name) => new JsonObject
     {
         ["orgId"] = id.ToString("N"),
@@ -127,14 +110,10 @@ internal static partial class ApiJson
         ["partnerAccess"] = false,
     }.ToJsonString();
 
-    /// <summary>
-    /// A bulk action result, such as BulkSystemUpdateResult: one integer property.
-    /// </summary>
+    // A bulk action result, such as BulkSystemUpdateResult: one integer property.
     public static string Bulk(string field, int count) => new JsonObject { [field] = count }.ToJsonString();
 
-    /// <summary>
-    /// A SystemModel, which also reads as a SystemSummaryModel list item.
-    /// </summary>
+    // A SystemModel, which also reads as a SystemSummaryModel list item.
     public static string System(string systemId, string description = "web") => new JsonObject
     {
         ["systemId"] = systemId,
@@ -164,9 +143,7 @@ internal static partial class ApiJson
         ["autoExpire"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// An UnapprovedSystemModel, which also reads as an UnapprovedSystemSummaryModel list item.
-    /// </summary>
+    // An UnapprovedSystemModel, which also reads as an UnapprovedSystemSummaryModel list item.
     public static string PendingSystem(string systemId, string description = "web") => new JsonObject
     {
         ["systemId"] = systemId,
@@ -186,9 +163,7 @@ internal static partial class ApiJson
         ["connectedFrom"] = "203.0.113.10",
     }.ToJsonString();
 
-    /// <summary>
-    /// An EnrolmentKeyModel, which also reads as an EnrolmentKeySummaryModel list item.
-    /// </summary>
+    // An EnrolmentKeyModel, which also reads as an EnrolmentKeySummaryModel list item.
     public static string Key(int id, string description = "key", string secret = "SECRET-KEY-VALUE") => new JsonObject
     {
         ["id"] = id,
@@ -210,9 +185,7 @@ internal static partial class ApiJson
         ["autoExpire"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// A PolicyModel, which is also the policy list item.
-    /// </summary>
+    // A PolicyModel, which is also the policy list item.
     public static string Policy(int id, string description = "policy") => new JsonObject
     {
         ["id"] = id,
@@ -239,10 +212,8 @@ internal static partial class ApiJson
         ["activeHours"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// A TagModel, which also reads as a TagSummaryModel list item. The same name always gives the
-    /// same ref.
-    /// </summary>
+    // A TagModel, which also reads as a TagSummaryModel list item. The same name always gives the
+    // same ref.
     public static string Tag(string tag) => new JsonObject
     {
         ["tag"] = tag,
@@ -260,15 +231,11 @@ internal static partial class ApiJson
         ["trustRequirements"] = new JsonArray(),
     }.ToJsonString();
 
-    /// <summary>
-    /// The ref <see cref="Tag"/> gives a tag name, "ref:" and 32 hex digits as the API writes it.
-    /// </summary>
+    // The ref Tag gives a tag name, "ref:" and 32 hex digits as the API writes it.
     public static string TagRef(string tag) =>
         "ref:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(tag)))[..32];
 
-    /// <summary>
-    /// A DnsZoneModel, which also reads as a DnsZoneSummaryModel list item.
-    /// </summary>
+    // A DnsZoneModel, which also reads as a DnsZoneSummaryModel list item.
     public static string Zone(int id, string name) => new JsonObject
     {
         ["id"] = id,
@@ -280,9 +247,7 @@ internal static partial class ApiJson
         ["notes"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// A DnsRecordModel in zone 1 ("enclave"), which also reads as a DnsRecordSummaryModel list item.
-    /// </summary>
+    // A DnsRecordModel in zone 1 ("enclave"), which also reads as a DnsRecordSummaryModel list item.
     public static string Record(int id, string name) => new JsonObject
     {
         ["id"] = id,
@@ -297,10 +262,8 @@ internal static partial class ApiJson
         ["notes"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// A TrustRequirementModel, which also reads as a TrustRequirementSummaryModel list item. The
-    /// body carries the summary model's "summary" as well, which TrustRequirementModel lacks.
-    /// </summary>
+    // A TrustRequirementModel, which also reads as a TrustRequirementSummaryModel list item. The
+    // body carries the summary model's "summary" as well, which TrustRequirementModel lacks.
     public static string Trust(int id, string description = "trust") => new JsonObject
     {
         ["id"] = id,
@@ -319,9 +282,7 @@ internal static partial class ApiJson
         },
     }.ToJsonString();
 
-    /// <summary>
-    /// A LogEntryModel.
-    /// </summary>
+    // A LogEntryModel.
     public static string Log(string message) => new JsonObject
     {
         ["timeStamp"] = Created,
@@ -331,9 +292,7 @@ internal static partial class ApiJson
         ["ipAddress"] = "203.0.113.5",
     }.ToJsonString();
 
-    /// <summary>
-    /// An OrganisationPropertiesModel for the organisation TestData.OrgId.
-    /// </summary>
+    // An OrganisationPropertiesModel for the organisation TestData.OrgId.
     public static string OrgProperties(string name) => new JsonObject
     {
         ["id"] = TestData.OrgId.ToString("N"),
@@ -356,9 +315,7 @@ internal static partial class ApiJson
         ["partner"] = null,
     }.ToJsonString();
 
-    /// <summary>
-    /// An OrganisationUsersModel, the GET /org/{orgId}/users body, of <see cref="User"/> items.
-    /// </summary>
+    // An OrganisationUsersModel, the GET /org/{orgId}/users body, of User items.
     public static string Users(params (Guid Id, string Email)[] users)
     {
         var array = new JsonArray();
@@ -370,9 +327,7 @@ internal static partial class ApiJson
         return new JsonObject { ["users"] = array }.ToJsonString();
     }
 
-    /// <summary>
-    /// An OrganisationUser with role Admin.
-    /// </summary>
+    // An OrganisationUser with role Admin.
     public static string User(Guid id, string email) => new JsonObject
     {
         ["id"] = id.ToString("N"),
@@ -382,9 +337,7 @@ internal static partial class ApiJson
         ["role"] = "Admin",
     }.ToJsonString();
 
-    /// <summary>
-    /// An OrganisationPendingInvitesModel, the GET /org/{orgId}/invites body.
-    /// </summary>
+    // An OrganisationPendingInvitesModel, the GET /org/{orgId}/invites body.
     public static string Invites(params string[] emails)
     {
         var array = new JsonArray();
@@ -396,14 +349,10 @@ internal static partial class ApiJson
         return new JsonObject { ["invites"] = array }.ToJsonString();
     }
 
-    /// <summary>
-    /// An OrganisationInviteModel.
-    /// </summary>
+    // An OrganisationInviteModel.
     public static string Invite(string email) => new JsonObject { ["emailAddress"] = email }.ToJsonString();
 
-    /// <summary>
-    /// A DnsSummaryModel, the GET /org/{orgId}/dns body.
-    /// </summary>
+    // A DnsSummaryModel, the GET /org/{orgId}/dns body.
     public static string DnsSummary() => new JsonObject
     {
         ["zoneCount"] = 1,

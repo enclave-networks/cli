@@ -5,9 +5,7 @@ using Enclave.Configuration.Data;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// Reads --active-hours and --set-active-hours (spec/cli-surface.md "Details").
-/// </summary>
+// Reads --active-hours and --set-active-hours (spec/cli-surface.md "Details").
 internal static partial class PolicyActiveHours
 {
     // Monday first, as the days are written: a range runs forwards from Monday to Sunday.
@@ -22,9 +20,7 @@ internal static partial class PolicyActiveHours
         ("sun", DayOfWeek.Sunday),
     ];
 
-    /// <summary>
-    /// Null when the text is not in the documented form ("Details"). The zone is UTC when left out.
-    /// </summary>
+    // Null when the text is not in the documented form ("Details"). The zone is UTC when left out.
     // The zone is sent as given for the API to check (portal ActiveHoursValidator,
     // TimeZoneIdValidator), since the zones the local machine knows can differ from the API's.
     public static ActiveHours? Parse(string text)
@@ -51,9 +47,7 @@ internal static partial class PolicyActiveHours
         return new ActiveHours(parts.Length == 3 ? parts[2] : "UTC", days, start, end);
     }
 
-    /// <summary>
-    /// Exits 2 for a value not in the documented form, or hours that start and end at the same time.
-    /// </summary>
+    // Exits 2 for a value not in the documented form, or hours that start and end at the same time.
     public static void Check(string option, string? text)
     {
         if (text is null)

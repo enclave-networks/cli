@@ -7,10 +7,6 @@ namespace Enclave.Cli.Tests.Resources;
 
 // Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set), so the keys are
 // PascalCase. The label rules of --set-subnet-filter are tested in Editing/LabelTests.cs.
-
-/// <summary>
-/// Tests for policy update.
-/// </summary>
 public partial class PolicyCommandTests
 {
     // Example 11.

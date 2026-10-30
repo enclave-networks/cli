@@ -34,10 +34,8 @@ internal static class CliOptions
             return null;
         });
 
-    /// <summary>
-    /// For text with no blank form, such as a new name or a tag's colour; a blank value is a parse
-    /// error. <paramref name="takes"/> says what it is, for errors: "a full hostname".
-    /// </summary>
+    // For text with no blank form, such as a new name or a tag's colour; a blank value is a parse
+    // error. takes says what it is, for errors: "a full hostname".
     // Sent, a blank value would reach the API after the token is read, so the same command line would
     // exit 3 without a token and 1 with one. Each command cites the validator that refuses it.
     // Optional text the API takes empty, such as notes, is a Text option, where "" clears it
@@ -98,26 +96,19 @@ internal static class CliOptions
             return null;
         });
 
-    /// <summary>
-    /// "" gives an empty list, or a parse error with <paramref name="needsEntries"/>; an empty ID
-    /// among others ("42,", "42,,43") is a parse error.
-    /// </summary>
-    /// <typeparam name="T">The ID type.</typeparam>
+    // "" gives an empty list, or a parse error with needsEntries; an empty ID among others ("42,",
+    // "42,,43") is a parse error.
     public static Option<IReadOnlyList<T>?> IdList<T>(string name, string description, IdFormat<T> format, string valueName = "ids", bool needsEntries = false) =>
         CommaList(name, description, valueName, IdPiece(name, format), needsEntries ? NeedsEntries(name) : null);
 
-    /// <summary>
-    /// Reads "" and empty entries as <see cref="IdList{T}"/> does.
-    /// </summary>
+    // Reads "" and empty entries as IdList<T> does.
     public static Option<IReadOnlyList<string>?> List(string name, string description, string valueName = "a,b", bool needsEntries = false) =>
         CommaList<string>(name, description, valueName, (piece, _) => (true, piece), needsEntries ? NeedsEntries(name) : null);
 
     public static Option<IReadOnlyList<string>?> TagList(string name, string description, bool needsEntries = false) =>
         IdList(name, description, IdFormats.Tag, "a,b", needsEntries);
 
-    /// <summary>
-    /// A value that holds no tag ("", ",") is a parse error, as a blank <see cref="Filter"/> is.
-    /// </summary>
+    // A value that holds no tag ("", ",") is a parse error, as a blank Filter is.
     public static Option<IReadOnlyList<string>?> TagFilter(string name, string description) =>
         CommaList(name, description, "a,b", IdPiece(name, IdFormats.Tag), HoldsNothing(name));
 
@@ -131,11 +122,8 @@ internal static class CliOptions
             CustomParser = result => result.Tokens.Select(token => token.Value).ToArray(),
         };
 
-    /// <summary>
-    /// A blank value before its label is a parse error. With <paramref name="clears"/>, for a --set-
-    /// flag, a blank value given alone clears the list
-    /// (<see cref="ListValues.Clears(IReadOnlyList{LabelledValue})"/>).
-    /// </summary>
+    // A blank value before its label is a parse error. With clears, for a --set- flag, a blank
+    // value given alone clears the list (ListValues.Clears(IReadOnlyList<LabelledValue>)).
     // A value with nothing before its label names nothing: dropped, it would shorten the list; sent,
     // the API would refuse it after the token is read (portal EnrolmentKeyIpConstraintInputValidator,
     // NotEmpty; spec/cli-surface.md "Details").
@@ -164,10 +152,7 @@ internal static class CliOptions
             },
         };
 
-    /// <summary>
-    /// Each member is given hyphenated: RecentlyConnected is recently-connected.
-    /// </summary>
-    /// <typeparam name="TEnum">The API enum.</typeparam>
+    // Each member is given hyphenated: RecentlyConnected is recently-connected.
     public static ChoiceOption<TEnum?> Enum<TEnum>(string name, string description, params TEnum[] members)
         where TEnum : struct, Enum =>
         Choice(name, description, members.Select(member => (Hyphenated(member.ToString()), member)).ToArray());
@@ -236,9 +221,7 @@ internal static class CliOptions
             return null;
         });
 
-    /// <summary>
-    /// CliContext reads the value into an instant.
-    /// </summary>
+    // CliContext reads the value into an instant.
     public static Option<TimeInput?> Time(string name, string description, bool allowDuration = false) =>
         Single<TimeInput?>(name, description, allowDuration ? "duration|time" : "time", (text, result) =>
         {

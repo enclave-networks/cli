@@ -21,10 +21,8 @@ internal sealed class Timing
 
     public Option<ExpiryAction?> Then { get; }
 
-    /// <summary>
-    /// The descriptions read "{change} for this long" and "disable the {item} (the default), or
-    /// {deleteName} it"; deleteName is the --then value for ExpiryAction.Delete.
-    /// </summary>
+    // The descriptions read "{change} for this long" and "disable the {item} (the default), or
+    // {deleteName} it"; deleteName is the --then value for ExpiryAction.Delete.
     public static Timing AddTo(CliVerb verb, string change, string item, string deleteName = "delete")
     {
         ArgumentNullException.ThrowIfNull(verb);
@@ -56,9 +54,7 @@ internal sealed class Timing
         }
     }
 
-    /// <summary>
-    /// Null when neither --for nor --until is given. A --until time that has passed exits 2.
-    /// </summary>
+    // Null when neither --for nor --until is given. A --until time that has passed exits 2.
     public DateTimeOffset? Expiry(CliContext context) => context.ExpiryFrom(For, Until);
 
     public ExpiryAction Action(CliContext context) => context.Get(Then) ?? ExpiryAction.Disable;

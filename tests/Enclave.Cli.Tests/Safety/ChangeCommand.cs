@@ -4,17 +4,14 @@ namespace Enclave.Cli.Tests.Safety;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
 
-/// <summary>
-/// A command that changes something through the API in the organisation in use.
-/// </summary>
-/// <param name="Name">The command words, with any option that selects a different request.</param>
-/// <param name="Args">The command line.</param>
-/// <param name="Method">The HTTP method of the change.</param>
-/// <param name="PathSuffix">The change's path below /org/{orgId}/, empty for the organisation itself.</param>
-/// <param name="Response">The body the API answers the change with, or null for none.</param>
-/// <param name="ReadPathSuffix">A path below /org/{orgId}/ the command may read first, or null.</param>
-/// <param name="ReadResponse">The body of that read.</param>
-/// <param name="OtherPathSuffix">A second spelling of the change's path, or null.</param>
+// A command that changes something through the API in the organisation in use.
+// Name: The command words, with any option that selects a different request.
+// Method: The HTTP method of the change.
+// PathSuffix: The change's path below /org/{orgId}/, empty for the organisation itself.
+// Response: The body the API answers the change with, or null for none.
+// ReadPathSuffix: A path below /org/{orgId}/ the command may read first, or null.
+// ReadResponse: The body of that read.
+// OtherPathSuffix: A second spelling of the change's path, or null.
 public readonly record struct ChangeCommand(
     string Name,
     string[] Args,
@@ -87,9 +84,7 @@ public readonly record struct ChangeCommand(
     // NUnit names each test case after its arguments' ToString.
     public override string ToString() => Name;
 
-    /// <summary>
-    /// Answers the change, and any read the command makes first, so the command can succeed.
-    /// </summary>
+    // Answers the change, and any read the command makes first, so the command can succeed.
     internal void Arrange(CliRun run)
     {
         foreach (var path in Paths)

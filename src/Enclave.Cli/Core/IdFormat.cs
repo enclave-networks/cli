@@ -10,9 +10,7 @@ internal sealed class IdFormat<T>
         _parse = parse;
     }
 
-    /// <summary>
-    /// For error messages: "letters and digits".
-    /// </summary>
+    // For error messages: "letters and digits".
     public string Describe { get; }
 
     public bool TryParse(string text, out T value)

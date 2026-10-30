@@ -1,9 +1,7 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Without "=" (HasLabel false), an update keeps the label the entry has; an empty label (Label
-/// null) removes it.
-/// </summary>
+// Without "=" (HasLabel false), an update keeps the label the entry has; an empty label (Label
+// null) removes it.
 internal readonly record struct LabelledValue(string Value, bool HasLabel, string? Label)
 {
     // The split is at the first "=", which no range, country code, ACL or subnet contains, so a

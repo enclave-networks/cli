@@ -5,10 +5,8 @@ namespace Enclave.Cli.Commands.Policy;
 
 internal static class PolicyLookup
 {
-    /// <summary>
-    /// The IDs, in the order given. A description that matches no policy, or several, exits 2,
-    /// naming <paramref name="key"/>.
-    /// </summary>
+    // The IDs, in the order given. A description that matches no policy, or several, exits 2,
+    // naming key.
     public static async Task<IReadOnlyList<int>> IdsAsync(CliContext context, OrganisationInUse org, IReadOnlyList<string> descriptions, string key)
     {
         ArgumentNullException.ThrowIfNull(context);

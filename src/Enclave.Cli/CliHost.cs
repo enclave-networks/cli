@@ -4,23 +4,17 @@ using Enclave.Cli.Storage;
 
 namespace Enclave.Cli;
 
-/// <summary>
-/// The process environment the CLI reads, so tests can supply their own.
-/// </summary>
+// The process environment the CLI reads, so tests can supply their own.
 internal sealed class CliHost
 {
-    /// <summary>
-    /// Production's Enclave API address, which the CLI calls when credentials.json names none.
-    /// </summary>
+    // Production's Enclave API address, which the CLI calls when credentials.json names none.
     public const string ApiUrl = "https://api.enclave.io";
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     public required Func<string, string?> GetEnvironmentVariable { get; init; }
 
-    /// <summary>
-    /// Can be empty or relative; EnclaveDirectory.HomeFrom decides whether it names a home directory.
-    /// </summary>
+    // Can be empty or relative; EnclaveDirectory.HomeFrom decides whether it names a home directory.
     // FromProcess passes SpecialFolderOption.DoNotVerify: with the default, .NET returns "" on Linux
     // and macOS when the directory does not exist or cannot be read, as in a container whose HOME
     // does not exist, which would put ~/.enclave in the current directory (dotnet/runtime
@@ -33,27 +27,19 @@ internal sealed class CliHost
 
     public required Uri DefaultApiUrl { get; init; }
 
-    /// <summary>
-    /// Used when credentials.json names none; null leaves Enclave.Sdk.Api's default, production
-    /// (EnclaveClientOptions.PartnerApiBaseUrl).
-    /// </summary>
+    // Used when credentials.json names none; null leaves Enclave.Sdk.Api's default, production
+    // (EnclaveClientOptions.PartnerApiBaseUrl).
     public Uri? DefaultPartnerApiUrl { get; init; }
 
-    /// <summary>
-    /// Every file the CLI reads or writes goes through this store.
-    /// </summary>
+    // Every file the CLI reads or writes goes through this store.
     public required IFileStore Files { get; init; }
 
-    /// <summary>
-    /// The CLI reads the current time and the local time zone (<see cref="TimeProvider.LocalTimeZone"/>)
-    /// only through this, so a test can fix both.
-    /// </summary>
+    // The CLI reads the current time and the local time zone (TimeProvider.LocalTimeZone) only
+    // through this, so a test can fix both.
     public required TimeProvider Time { get; init; }
 
-    /// <summary>
-    /// Creates the handler beneath ApiRequestHandler that sends each request to the network; null
-    /// gives HttpClientHandler. ApiRequestHandler disposes it.
-    /// </summary>
+    // Creates the handler beneath ApiRequestHandler that sends each request to the network; null
+    // gives HttpClientHandler. ApiRequestHandler disposes it.
     // A test seam: a fake API cannot produce a failure such as HttpClient's timeout, and a run whose
     // partner API address is production's needs a network that sends nothing.
     internal Func<HttpMessageHandler>? CreateNetworkHandler { get; init; }
@@ -98,9 +84,7 @@ internal sealed class CliHost
         };
     }
 
-    /// <summary>
-    /// UTF-8, or the encoding a byte order mark at the start names; the mark is not returned.
-    /// </summary>
+    // UTF-8, or the encoding a byte order mark at the start names; the mark is not returned.
     // Console.In passes a byte order mark through on Linux and macOS (dotnet/runtime release/10.0,
     // ConsolePal.Unix.cs GetOrCreateReader, detectEncodingFromByteOrderMarks: false), so stdin is read
     // through this reader on every OS ("CLI contract" in AGENTS.md).

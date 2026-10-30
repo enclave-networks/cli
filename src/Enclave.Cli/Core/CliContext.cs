@@ -5,9 +5,7 @@ using Enclave.Sdk.Api;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Resolves the token, organisation and partner when the handler first asks for each.
-/// </summary>
+// Resolves the token, organisation and partner when the handler first asks for each.
 internal sealed class CliContext : IDisposable
 {
     private ApiAccess? _access;
@@ -32,14 +30,10 @@ internal sealed class CliContext : IDisposable
 
     public CliOutput Output { get; }
 
-    /// <summary>
-    /// The command being run, or null for the root and the nouns.
-    /// </summary>
+    // The command being run, or null for the root and the nouns.
     public CliVerb? Verb { get; }
 
-    /// <summary>
-    /// Null without --dry-run.
-    /// </summary>
+    // Null without --dry-run.
     public DryRun? DryRun { get; }
 
     public CancellationToken CancellationToken { get; }
@@ -58,14 +52,10 @@ internal sealed class CliContext : IDisposable
         _ => false,
     };
 
-    /// <summary>
-    /// Never pass the token.
-    /// </summary>
+    // Never pass the token.
     public void Verbose(string message) => Output.Verbose(message);
 
-    /// <summary>
-    /// Exits 3 with token_missing when there is no token.
-    /// </summary>
+    // Exits 3 with token_missing when there is no token.
     public ApiAccess Access
     {
         get
@@ -80,16 +70,12 @@ internal sealed class CliContext : IDisposable
         }
     }
 
-    /// <summary>
-    /// For calls outside an organisation. Exits 3 with token_missing when there is no token; makes no
-    /// call.
-    /// </summary>
+    // For calls outside an organisation. Exits 3 with token_missing when there is no token; makes no
+    // call.
     public EnclaveClient GetClient() => _client ??= CreateClient(Access);
 
-    /// <summary>
-    /// For login, which checks a token of its own; every other command uses <see cref="GetClient"/>.
-    /// Makes no call.
-    /// </summary>
+    // For login, which checks a token of its own; every other command uses GetClient. Makes no
+    // call.
     public EnclaveClient CreateClient(ApiAccess access)
     {
         ArgumentNullException.ThrowIfNull(access);
@@ -97,11 +83,9 @@ internal sealed class CliContext : IDisposable
         return access.CreateClient(_handler ??= new ApiRequestHandler(Output, DryRun, Host.CreateNetworkHandler?.Invoke()));
     }
 
-    /// <summary>
-    /// Call it after checking the command's own arguments, which come before the token
-    /// (spec/cli-surface.md "Errors and exit codes"). Makes one lookup call unless the organisation is
-    /// given by ID.
-    /// </summary>
+    // Call it after checking the command's own arguments, which come before the token
+    // (spec/cli-surface.md "Errors and exit codes"). Makes one lookup call unless the organisation is
+    // given by ID.
     public async Task<OrganisationInUse> GetOrganisationAsync()
     {
         var organisation = await OrganisationResolver.ResolveAsync(this, GetClient());
@@ -114,10 +98,7 @@ internal sealed class CliContext : IDisposable
         return organisation;
     }
 
-    /// <summary>
-    /// Call it after checking the command's own arguments, as <see cref="GetOrganisationAsync"/>.
-    /// Makes no call.
-    /// </summary>
+    // Call it after checking the command's own arguments, as GetOrganisationAsync. Makes no call.
     public Task<PartnerInUse> GetPartnerAsync()
     {
         var client = GetClient();
@@ -134,10 +115,8 @@ internal sealed class CliContext : IDisposable
         return Task.FromResult(partner);
     }
 
-    /// <summary>
-    /// As <see cref="TimeInput.Forwards"/>, and exits 2 for a time that has passed
-    /// (spec/cli-surface.md "Details").
-    /// </summary>
+    // As TimeInput.Forwards, and exits 2 for a time that has passed (spec/cli-surface.md
+    // "Details").
     public DateTimeOffset FutureInstant(TimeInput input, Option option)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -150,9 +129,7 @@ internal sealed class CliContext : IDisposable
             : throw CliErrors.InvalidArgument(option.Name, $"The time given to {option.Name} has passed.");
     }
 
-    /// <summary>
-    /// Exits 2 naming <paramref name="option"/> when the result passes the end of year 9999.
-    /// </summary>
+    // Exits 2 naming option when the result passes the end of year 9999.
     public DateTimeOffset FutureInstant(TimeSpan duration, Option option)
     {
         ArgumentNullException.ThrowIfNull(option);
@@ -160,10 +137,8 @@ internal sealed class CliContext : IDisposable
         return TimeInput.After(Host.Time.GetUtcNow(), duration, option.Name);
     }
 
-    /// <summary>
-    /// Null when neither option is given. Declare the two options exclusive, and --then as requiring
-    /// one of them.
-    /// </summary>
+    // Null when neither option is given. Declare the two options exclusive, and --then as requiring
+    // one of them.
     public DateTimeOffset? ExpiryFrom(Option<TimeSpan?> forOption, Option<TimeInput?> untilOption)
     {
         ArgumentNullException.ThrowIfNull(forOption);
@@ -185,10 +160,8 @@ internal sealed class CliContext : IDisposable
         return input.Backwards(Host.Time, option.Name);
     }
 
-    /// <summary>
-    /// Exits 2 naming <paramref name="option"/> when the result is before year 1. Call it before
-    /// GetOrganisationAsync, as a check of the arguments (spec/cli-surface.md "Errors and exit codes").
-    /// </summary>
+    // Exits 2 naming option when the result is before year 1. Call it before GetOrganisationAsync,
+    // as a check of the arguments (spec/cli-surface.md "Errors and exit codes").
     public DateTimeOffset PastInstant(TimeSpan duration, Option option)
     {
         ArgumentNullException.ThrowIfNull(option);

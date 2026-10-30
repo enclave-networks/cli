@@ -7,9 +7,6 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-/// <summary>
-/// Tests for the trust commands: list, show and delete.
-/// </summary>
 public partial class TrustCommandTests
 {
     private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");

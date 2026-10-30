@@ -949,9 +949,7 @@ public class PartnerCommandTests
         _ => arg,
     };
 
-    /// <summary>
-    /// One partner customer command. LookupPath is the admins or invites read made before its call.
-    /// </summary>
+    // One partner customer command. LookupPath is the admins or invites read made before its call.
     internal sealed record CustomerCommand(string Verb, bool TakesCustomer, bool Changes, IReadOnlyList<string> Options, string Method, string Path, string? LookupPath = null)
     {
         public string[] ByName() => TakesCustomer ? Build(TestData.CustomerName) : Build();
@@ -960,9 +958,7 @@ public class PartnerCommandTests
 
         public string[] WithoutCustomer() => Build();
 
-        /// <summary>
-        /// The calls the command makes, as "METHOD path".
-        /// </summary>
+        // The calls the command makes, as "METHOD path".
         public string[] Calls(bool byName)
         {
             var calls = new List<string>();

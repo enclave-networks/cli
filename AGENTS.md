@@ -73,7 +73,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - `enclave-cli commands [<command words>...]` describes every command, option, allowed value and error code as JSON, and MUST stay complete.
 
 ## Code
-- .NET 10, nullable enabled, file-scoped namespaces, `_camelCase` private fields. Rules: `.editorconfig` (matches enclave.sdk.api).
+- .NET 10, nullable enabled, file-scoped namespaces, `_camelCase` private fields. Rules: `.editorconfig` (enclave.sdk.api's C# rules, with SA1601 and SA1602 off).
 - `global.json` requires SDK 10.0.102 or later, the first with runtime 10.0.2. Runtimes 10.0.0 and 10.0.1 have dotnet/runtime#121578, which can skip a caller's catch block when an exception is thrown from a `finally`, and a self-contained build ships the SDK's runtime.
 - Analyzers: `AnalysisMode=AllEnabledByDefault` plus StyleCop; `TreatWarningsAsErrors=true`. Fix the cause. Suppress only with a comment at the suppression giving the reason.
 - Package versions live only in `Directory.Packages.props`. Restore uses nuget.org only (`NuGet.config`). NEVER add a private feed: forks and CI build without credentials.
@@ -98,7 +98,7 @@ Code comments also:
 - Give a reason once, where the behaviour lives. Code that repeats the behaviour shares it (a helper), and does not repeat the comment.
 - A trade-off states what was given up and why that is acceptable.
 - Correct a wrong comment in place.
-- XML docs only where a caller needs something the signature cannot show (for example, returns null when the file is missing): a short `<summary>`. No `<remarks>` essays.
+- Comments are `//` prose. NEVER write XML doc comments (`///`). What a caller needs that the signature cannot show (for example, null when the file is missing) opens the comment above the member, before the reason. Trade-off: the compiler does not check names in a comment, and IDE hover text does not show it; accepted because nothing outside this repository uses these assemblies.
 
 ## CI (`.github/workflows/ci.yml`)
 - Pull request: the `test` job runs the tests (without the Pending category) once, on Linux. The `build` jobs publish and smoke test each RID on a runner of that OS and CPU, then upload archives (kept 2 days); they run no tests. No release.

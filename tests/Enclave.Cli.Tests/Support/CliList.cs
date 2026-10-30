@@ -4,9 +4,7 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Lists as list commands print them, for a test to give a command as stdin after "-".
-/// </summary>
+// Lists as list commands print them, for a test to give a command as stdin after "-".
 internal static class CliList
 {
     public static IReadOnlyList<string> Kinds { get; } =
@@ -32,9 +30,7 @@ internal static class CliList
     // OrganisationScopedClient.CancelInviteAync), and a partner customer's invite is looked up by
     // email (spec/cli-surface.md "Partner API").
 
-    /// <summary>
-    /// The property holding each item's ID. Throws for log, whose entries have no ID.
-    /// </summary>
+    // The property holding each item's ID. Throws for log, whose entries have no ID.
     public static string IdField(string kind) => kind switch
     {
         "system" or "pending-system" => "systemId",
@@ -47,9 +43,6 @@ internal static class CliList
         _ => throw UnknownKind(kind),
     };
 
-    /// <summary>
-    /// A list of this kind holding the item bodies.
-    /// </summary>
     public static string Of(string kind, params string[] items)
     {
         if (!Kinds.Contains(kind))
@@ -71,9 +64,7 @@ internal static class CliList
         }.ToJsonString();
     }
 
-    /// <summary>
-    /// A list of this kind with one ApiJson body per ID, in order. Throws for log.
-    /// </summary>
+    // A list of this kind with one ApiJson body per ID, in order. Throws for log.
     public static string WithIds(string kind, params string[] ids) =>
         Of(kind, ids.Select(id => Item(kind, id)).ToArray());
 

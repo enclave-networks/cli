@@ -7,11 +7,8 @@ namespace Enclave.Cli.Core;
 // spec/cli-surface.md "Several IDs"
 internal static class Items
 {
-    /// <summary>
-    /// For a command whose arguments are names and whose IDs go after --id; declare the two
-    /// exclusive. Exits 2 when nothing is given.
-    /// </summary>
-    /// <typeparam name="TId">The ID type.</typeparam>
+    // For a command whose arguments are names and whose IDs go after --id; declare the two
+    // exclusive. Exits 2 when nothing is given.
     public static async Task<ItemSelection<TId>> ReadAsync<TId>(
         CliContext context,
         Argument<IReadOnlyList<string>> names,
@@ -48,9 +45,7 @@ internal static class Items
         return new ItemSelection<TId>([], given);
     }
 
-    /// <summary>
-    /// For a command whose arguments are IDs: systems, and tags. Exits 2 when nothing is given.
-    /// </summary>
+    // For a command whose arguments are IDs: systems, and tags. Exits 2 when nothing is given.
     // Duplicates are compared in the form the format reads, so a system ID given in two cases is
     // one ID (IdFormats.System).
     public static async Task<IReadOnlyList<string>> ReadIdsAsync(
@@ -90,11 +85,7 @@ internal static class Items
         return ids.Distinct(StringComparer.Ordinal).ToArray();
     }
 
-    /// <summary>
-    /// Exits 2 when stdin is a terminal, is not a list of <paramref name="kind"/>, or holds an ID not
-    /// in <paramref name="format"/>.
-    /// </summary>
-    /// <typeparam name="TId">The ID type.</typeparam>
+    // Exits 2 when stdin is a terminal, is not a list of kind, or holds an ID not in format.
     public static async Task<IReadOnlyList<TId>> FromStdinAsync<TId>(CliContext context, ListKind kind, IdFormat<TId> format)
     {
         ArgumentNullException.ThrowIfNull(context);

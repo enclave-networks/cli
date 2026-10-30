@@ -3,10 +3,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Reads what --dry-run prints, { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
-/// (spec/cli-surface.md "Dry run"), failing the test when its shape is wrong.
-/// </summary>
+// Reads what --dry-run prints,
+// { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
+// (spec/cli-surface.md "Dry run"), failing the test when its shape is wrong.
 internal static class DryRunOutput
 {
     private const string RequestFields = "body,method,url";
@@ -15,9 +14,7 @@ internal static class DryRunOutput
 
     private static readonly string[] OrgFields = ["id", "name"];
 
-    /// <summary>
-    /// Checks the output's shape and returns its "org" object and the items of "requests".
-    /// </summary>
+    // Checks the output's shape and returns its "org" object and the items of "requests".
     // Each request object holds method, url and body only, so no header can appear in it.
     public static (JsonElement Org, JsonElement[] Requests) Read(CliResult result)
     {
@@ -51,9 +48,7 @@ internal static class DryRunOutput
         return (org, items);
     }
 
-    /// <summary>
-    /// As <see cref="Read"/>, for output holding exactly one request.
-    /// </summary>
+    // As Read, for output holding exactly one request.
     public static (JsonElement Org, JsonElement Request) ReadOne(CliResult result)
     {
         var (org, requests) = Read(result);
@@ -62,10 +57,8 @@ internal static class DryRunOutput
         return (org, requests[0]);
     }
 
-    /// <summary>
-    /// The one request of a dry run in the test organisation, checked to have this method and a URL
-    /// ending in this path.
-    /// </summary>
+    // The one request of a dry run in the test organisation, checked to have this method and a URL
+    // ending in this path.
     // CliRun names the organisation by ID, so no lookup gives its name, which is null.
     public static JsonElement RequestInTestOrg(CliResult result, string method, string path)
     {
