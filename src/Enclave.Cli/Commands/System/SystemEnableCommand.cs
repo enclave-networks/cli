@@ -5,7 +5,7 @@ namespace Enclave.Cli.Commands.Systems;
 
 /// <summary>
 /// `system enable`: enables systems in bulk, or with --for or --until enables one system until
-/// then, and afterwards disables or revokes it (proposed-cli-surface.md "Command options").
+/// then, and afterwards disables or revokes it (spec/cli-surface.md "Command options").
 /// </summary>
 internal static class SystemEnableCommand
 {

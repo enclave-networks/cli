@@ -65,7 +65,7 @@ internal sealed class CliAction : AsynchronousCommandLineAction
 
             // Under --dry-run the command's own output would come from the answers the CLI gave its
             // changes (DryRun.Answer), which the API never sent, so the report is the only output
-            // (proposed-cli-surface.md "Dry run").
+            // (spec/cli-surface.md "Dry run").
             if (dryRun is not null)
             {
                 await output.WriteDryRunAsync(dryRun.Report(), cancellationToken);

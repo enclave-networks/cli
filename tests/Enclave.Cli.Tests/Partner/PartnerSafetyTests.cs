@@ -4,7 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Every ID is checked before any call, and one bad ID exits 2 naming it (proposed-cli-surface.md
+// Every ID is checked before any call, and one bad ID exits 2 naming it (spec/cli-surface.md
 // "ID checks"). Organisation IDs (a partner's customers included), account IDs and partner IDs are
 // GUIDs. Enclave.Sdk.Api puts customer and account IDs into the partner API's paths as their
 // typed IDs write them (CustomersClient.CustomerRoute), so a value that is not a GUID never reaches
@@ -81,7 +81,7 @@ public class PartnerSafetyTests
     // A dry run prints the change as Enclave.Sdk.Api builds it, for the partner, and sends none of
     // it. The reads the change depends on are sent, as without --dry-run: the customer lookup for a
     // customer given by name, and the admins or invites lookup for an admin or invite given by email
-    // address (proposed-cli-surface.md "Dry run"). Each command's change is one call.
+    // address (spec/cli-surface.md "Dry run"). Each command's change is one call.
     [TestCaseSource(nameof(ChangesWithDryRun))]
     public async Task A_dry_run_of_a_partner_customer_command_prints_its_change_for_the_partner_and_sends_only_the_reads_it_depends_on(string[] args, string[] reads, string change)
     {
@@ -144,7 +144,7 @@ public class PartnerSafetyTests
         }
     }
 
-    // No command prints the token, under --verbose and --dry-run either (proposed-cli-surface.md
+    // No command prints the token, under --verbose and --dry-run either (spec/cli-surface.md
     // "Login, logout and status"): a printed token lands in CI logs and agent transcripts, and
     // personal access tokens do not expire (portal Enclave.Accounts TokensApiController.cs:105).
     // Each token test also requires the command to succeed, so a command that printed nothing

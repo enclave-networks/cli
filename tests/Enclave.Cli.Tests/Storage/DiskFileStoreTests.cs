@@ -79,7 +79,7 @@ public class DiskFileStoreTests
     }
 
     // ~/.enclave holds credentials.json, so the directory is readable by the user only, 0700 on Linux
-    // and macOS (proposed-cli-surface.md "Login, logout and status"), whichever file's write creates
+    // and macOS (spec/cli-surface.md "Login, logout and status"), whichever file's write creates
     // it: `org use` before `login` writes cli.json, which holds no secret and is written with
     // privateToUser false, and a later login writes the token into the same directory. Windows has
     // no mode bits; a directory under the user profile inherits the profile's access list.
@@ -98,7 +98,7 @@ public class DiskFileStoreTests
     }
 
     // ~/.enclave is shared with other Enclave tools, so the CLI sets the mode only of a directory it
-    // creates (proposed-cli-surface.md "Login, logout and status": login and org use create it as
+    // creates (spec/cli-surface.md "Login, logout and status": login and org use create it as
     // 0700). The directory here is 0755, a mode another tool or a person could have given it, and it
     // must stay 0755.
     [Test]

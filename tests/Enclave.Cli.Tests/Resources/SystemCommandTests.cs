@@ -20,7 +20,7 @@ public class SystemCommandTests
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
-    // A list reads every page before it prints (proposed-cli-surface.md "Output"); five systems two
+    // A list reads every page before it prints (spec/cli-surface.md "Output"); five systems two
     // to a page take three reads. Without filter flags the CLI sends no search, key or DNS filter,
     // and leaves disabled systems out, since --include-disabled exists to add them.
     [Test]
@@ -46,7 +46,7 @@ public class SystemCommandTests
     }
 
     // --filter works as the portal's search box does: the text is sent as typed, so it takes the
-    // API's search syntax as well as plain words (proposed-cli-surface.md "Filters"). The first case
+    // API's search syntax as well as plain words (spec/cli-surface.md "Filters"). The first case
     // is example 39.
     [TestCase("version:<2024.8.0")]
     [TestCase("web tags:|prod,staging version:>2024.8.0")]
@@ -62,7 +62,7 @@ public class SystemCommandTests
     }
 
     // Each flag is one of the API's search keys for systems (portal SystemSearchKeyService), added to
-    // the search in the text the table in proposed-cli-surface.md "Filters" gives it, and the flags
+    // the search in the text the table in spec/cli-surface.md "Filters" gives it, and the flags
     // combine with each other and with the --filter text. --os sends the API's own values, which it
     // matches exactly (it reads Mac as the stored Darwin). Several tags make one comma list, which the
     // API reads as items having every tag when the list has no modifier (portal
@@ -111,7 +111,7 @@ public class SystemCommandTests
     }
 
     // --key looks the key up by its description with one list call, then sends its ID as --key-id
-    // does, and writes nothing into the search (proposed-cli-surface.md "Filters" and "Names and
+    // does, and writes nothing into the search (spec/cli-surface.md "Filters" and "Names and
     // IDs"). Name lookups ask for disabled items too ("Filters"), so the systems of a key that has
     // since been disabled can be found.
     [Test]
@@ -135,7 +135,7 @@ public class SystemCommandTests
         });
     }
 
-    // A key ID is an integer (proposed-cli-surface.md "ID checks"); --key-id never takes a
+    // A key ID is an integer (spec/cli-surface.md "ID checks"); --key-id never takes a
     // description.
     [Test]
     public async Task System_list_key_id_that_is_not_an_integer_exits_2_without_a_request()
@@ -151,7 +151,7 @@ public class SystemCommandTests
             SystemsPath);
     }
 
-    // system list has no --dns-name (proposed-cli-surface.md "Left out"). The API binds its dns
+    // system list has no --dns-name (spec/cli-surface.md "Left out"). The API binds its dns
     // parameter (portal Enclave.Api/Modules/SystemManagement/Systems/Models/SystemsRequestModel.cs:43-45)
     // and its list handler never reads it (Systems/Handlers/PaginatedSystemsHandler.cs), so a filter
     // sent there would list every system as if it matched. The option is unknown to the command, so
@@ -186,7 +186,7 @@ public class SystemCommandTests
     }
 
     // --sort takes the API's SystemQuerySortMode members (portal Enclave.Configuration.Data), written
-    // lower-case and hyphenated and matched ignoring case (proposed-cli-surface.md "Options on every
+    // lower-case and hyphenated and matched ignoring case (spec/cli-surface.md "Options on every
     // command"). The API reads the member name. Example 38 is the recently-connected case.
     [TestCase("recently-enrolled", "RecentlyEnrolled")]
     [TestCase("recently-connected", "RecentlyConnected")]
@@ -207,7 +207,7 @@ public class SystemCommandTests
         Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
     }
 
-    // Each option takes the values proposed-cli-surface.md "Command options" lists for it. "1" is
+    // Each option takes the values spec/cli-surface.md "Command options" lists for it. "1" is
     // SystemQuerySortMode's underlying value for RecentlyConnected, so a CLI that takes numeric enum
     // values accepts it. --state disabled belongs to key list and policy list ("Filters"); a system's
     // state is connected or disconnected.
@@ -234,7 +234,7 @@ public class SystemCommandTests
 
     // --not-seen-for has no API search key, so the CLI keeps the systems whose lastSeen is longer ago
     // than the duration, from every page it reads, and total counts the matches
-    // (proposed-cli-surface.md "Filters"). Every system here enrolled long ago, so a CLI that reads
+    // (spec/cli-surface.md "Filters"). Every system here enrolled long ago, so a CLI that reads
     // enrolledAt for a system that has been seen lists RECENT too. ONLINE is connected, which
     // --not-seen-for never lists whatever the CLI reads, so RECENT is the system that tells the two
     // readings apart. The matches are on all three pages, so a CLI that filters one page misses
@@ -263,7 +263,7 @@ public class SystemCommandTests
         });
     }
 
-    // A system never seen counts from when it enrolled (proposed-cli-surface.md "Filters"), so one
+    // A system never seen counts from when it enrolled (spec/cli-surface.md "Filters"), so one
     // that has just enrolled and not yet connected is not listed for removal, and one that enrolled
     // long ago and never connected is.
     [Test]
@@ -281,7 +281,7 @@ public class SystemCommandTests
     }
 
     // A connected system is being seen now, whatever its lastSeen says, so --not-seen-for never lists
-    // one (proposed-cli-surface.md "Filters"). lastSeen is the time the discovery service last wrote
+    // one (spec/cli-surface.md "Filters"). lastSeen is the time the discovery service last wrote
     // the system's session (portal Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:63
     // reads systemSession.LastUpdate, which services
     // Enclave.Discover/Discovery/PeerSessionReporter.cs:129 sets when it writes the session), and a
@@ -367,7 +367,7 @@ public class SystemCommandTests
     }
 
     // --not-seen-for lists disconnected systems only, so --state connected contradicts it and exits
-    // 2 (proposed-cli-surface.md "Filters"), with the other argument checks, before the token is
+    // 2 (spec/cli-surface.md "Filters"), with the other argument checks, before the token is
     // read and before any call ("Details"). The run without a token gives the same error, so a CLI
     // that read the token first exits 3. --not-seen-for alone, run next, is accepted, which shows the
     // rejection comes from the pair.
@@ -389,7 +389,7 @@ public class SystemCommandTests
 
     // --state disconnected asks for the systems --not-seen-for asks for, so the two are taken
     // together, and the search holds the term state:disconnected once, ahead of the --filter text
-    // (proposed-cli-surface.md "Filters").
+    // (spec/cli-surface.md "Filters").
     [Test]
     public async Task System_list_state_disconnected_with_not_seen_for_sends_state_disconnected_once_ahead_of_the_filter_text()
     {
@@ -448,7 +448,7 @@ public class SystemCommandTests
         Assert.That(string.Join(",", revokes[0].BodyIds("systemIds")), Is.EqualTo("STALE1,STALE2"));
     }
 
-    // The output is the model the API returned (proposed-cli-surface.md "Output"), so its description
+    // The output is the model the API returned (spec/cli-surface.md "Output"), so its description
     // is one the command could not have made up.
     [Test]
     public async Task System_show_gets_the_system_and_prints_the_model_the_api_returned()
@@ -469,7 +469,7 @@ public class SystemCommandTests
         });
     }
 
-    // Single-ID commands exit 5 for an unknown ID (proposed-cli-surface.md "Several IDs").
+    // Single-ID commands exit 5 for an unknown ID (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task System_show_of_an_unknown_system_exits_5_with_not_found()
     {
@@ -482,7 +482,7 @@ public class SystemCommandTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo($"{SystemsPath}/ZZZZZ"));
     }
 
-    // An update sends only the fields given (proposed-cli-surface.md "Create and update").
+    // An update sends only the fields given (spec/cli-surface.md "Create and update").
     // Enclave.Sdk.Api keys a patch body by SystemPatchModel's property names (PatchClient.Set).
     // The output is the model the API returned, whose description differs from the one sent.
     [Test]
@@ -508,7 +508,7 @@ public class SystemCommandTests
         });
     }
 
-    // An update with no change flag exits 2 (proposed-cli-surface.md "Details"): there is nothing to
+    // An update with no change flag exits 2 (spec/cli-surface.md "Details"): there is nothing to
     // send.
     [Test]
     public async Task System_update_without_a_change_flag_exits_2_without_a_request()
@@ -524,7 +524,7 @@ public class SystemCommandTests
             $"{SystemsPath}/ABCDE");
     }
 
-    // --set-tags replaces the whole list and needs no read (proposed-cli-surface.md "Create and
+    // --set-tags replaces the whole list and needs no read (spec/cli-surface.md "Create and
     // update", "Calls per command").
     [Test]
     public async Task System_update_set_tags_sends_the_tags_as_the_whole_tag_list()
@@ -541,7 +541,7 @@ public class SystemCommandTests
         });
     }
 
-    // --add-tags reads the system, then patches its whole tag list (proposed-cli-surface.md "Create
+    // --add-tags reads the system, then patches its whole tag list (spec/cli-surface.md "Create
     // and update"), so the tags it has stay. The order of the tags does not matter to the API, so
     // they are compared sorted. Example 10.
     [Test]
@@ -566,7 +566,7 @@ public class SystemCommandTests
     }
 
     // --remove-tags reads the system and patches its whole tag list without the tags named
-    // (proposed-cli-surface.md "Create and update"). Example 42.
+    // (spec/cli-surface.md "Create and update"). Example 42.
     [Test]
     public async Task System_update_remove_tags_reads_the_system_and_sends_its_tags_without_the_removed_tag()
     {
@@ -589,7 +589,7 @@ public class SystemCommandTests
     }
 
     // --enable-gateway-for makes the system a gateway for each subnet given, and its label is sent as
-    // the route's name (proposed-cli-surface.md "Command options"). New routes go with userEntered
+    // the route's name (spec/cli-surface.md "Command options"). New routes go with userEntered
     // true and weight 0, as the portal sends them (portal-spa
     // redux/reducers/app/detailTab/systems.ts:44-83). The flag reads the system first to keep what
     // stays ("Calls per command"). The second label holds a comma, which is why the flag is repeated
@@ -628,7 +628,7 @@ public class SystemCommandTests
     }
 
     // The subnets given replace the routes a user entered, and the subnets the system found itself
-    // (userEntered false) stay, as in the portal (proposed-cli-surface.md "Command options"; portal-spa
+    // (userEntered false) stay, as in the portal (spec/cli-surface.md "Command options"; portal-spa
     // redux/reducers/app/detailTab/systems.ts:44-83). The old office route goes and the found route
     // stays as it was. The order of the routes does not matter to the API, so they are found by
     // subnet. Example 25.
@@ -664,7 +664,7 @@ public class SystemCommandTests
     }
 
     // A subnet given that the system found itself stays the route the system found: userEntered
-    // false, with the weight it has, and the label given as its name (proposed-cli-surface.md
+    // false, with the weight it has, and the label given as its name (spec/cli-surface.md
     // "Command options"). Sent as a user-entered route as well, the subnet would be in the list
     // twice, which the API refuses (portal SystemPatchModelValidator.cs:37); sent as a user-entered
     // route alone, the system would no longer have it as found.
@@ -693,7 +693,7 @@ public class SystemCommandTests
         });
     }
 
-    // A route that stays keeps its weight (proposed-cli-surface.md "Command options"), the preference
+    // A route that stays keeps its weight (spec/cli-surface.md "Command options"), the preference
     // the API gives it over other gateways' routes to the same subnet
     // (SystemGatewayRouteModel.Weight), and its label ("A flag that replaces a list keeps the label
     // of every entry that stays"). The subnet added beside it is new, with weight 0.
@@ -723,7 +723,7 @@ public class SystemCommandTests
         });
     }
 
-    // A new entry given without a label has none (proposed-cli-surface.md "Command options"): the
+    // A new entry given without a label has none (spec/cli-surface.md "Command options"): the
     // route is sent with no name, or a null one.
     [Test]
     public async Task System_update_enable_gateway_for_a_subnet_without_a_label_sends_a_route_without_a_name()
@@ -747,7 +747,7 @@ public class SystemCommandTests
     }
 
     // --disable-gateway stops the system acting as a gateway: its route list becomes empty. It has no
-    // labels to keep, so it makes no read (proposed-cli-surface.md "Calls per command"). Example 43.
+    // labels to keep, so it makes no read (spec/cli-surface.md "Calls per command"). Example 43.
     [Test]
     public async Task System_update_disable_gateway_sends_an_empty_gateway_route_list()
     {
@@ -771,7 +771,7 @@ public class SystemCommandTests
     // --enable-gateway-for twice, with a label or without, exits 2 before any call, the read of the
     // system included. The error names the option and not the subnet: the option checks no format,
     // so a value given to it can be a token passed by mistake, and no CLI error repeats a value
-    // (proposed-cli-surface.md "Errors and exit codes"). The corrected command gives the subnet
+    // (spec/cli-surface.md "Errors and exit codes"). The corrected command gives the subnet
     // once, and reads the system then patches it.
     [TestCase("10.0.0.0/16", "10.0.0.0/16=Office")]
     [TestCase("10.0.0.0/16=Office", "10.0.0.0/16=Office")]
@@ -798,7 +798,7 @@ public class SystemCommandTests
         Assert.That(SortedSubnets(JsonAssert.Property(patches[0].BodyJson, "GatewayRoutes")), Is.EqualTo("10.0.0.0/16,10.1.0.0/16"));
     }
 
-    // The two gateway flags contradict each other and exit 2 (proposed-cli-surface.md "Command
+    // The two gateway flags contradict each other and exit 2 (spec/cli-surface.md "Command
     // options", "Details").
     [Test]
     public async Task System_update_enable_gateway_for_with_disable_gateway_exits_2_without_a_request()
@@ -816,7 +816,7 @@ public class SystemCommandTests
     }
 
     // A command that takes several items sends them in one bulk call and prints requested and
-    // affected (proposed-cli-surface.md "Several IDs"). Routes and result fields are those of
+    // affected (spec/cli-surface.md "Several IDs"). Routes and result fields are those of
     // Enclave.Sdk.Api SystemsClient (BulkEnableAsync, BulkDisableAsync, RevokeSystemsAsync).
     // The API counts two of the three systems, and the output carries its count. The disable case is
     // examples 44 and 45, where the shell expands the file's IDs into arguments.
@@ -844,7 +844,7 @@ public class SystemCommandTests
     }
 
     // --for takes one system and calls its enable-until route, since the API's timed enable has no
-    // bulk form, and prints the system the API returns (proposed-cli-surface.md "Several IDs").
+    // bulk form, and prints the system the API returns (spec/cli-surface.md "Several IDs").
     // --then revoke is the API's Delete action ("Options on every command"), and the expiry is sent
     // as a UTC instant ("Details"). The clock is fixed, so the expiry is exactly 24 hours after it.
     // Example 7.
@@ -874,7 +874,7 @@ public class SystemCommandTests
     }
 
     // A duration is minutes, hours or days, and afterwards the system is disabled unless --then
-    // revoke is given (proposed-cli-surface.md "Command options"). Values are matched ignoring case
+    // revoke is given (spec/cli-surface.md "Command options"). Values are matched ignoring case
     // ("Options on every command"). The clock is fixed, so the expiry is exactly that long after it.
     [TestCase("--for 30m", 30, "Disable")]
     [TestCase("--for 8h --then disable", 8 * 60, "Disable")]
@@ -898,7 +898,7 @@ public class SystemCommandTests
     }
 
     // --until takes an RFC 3339 time with its zone, and the expiry is that instant, sent in UTC
-    // (proposed-cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
+    // (spec/cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
     // in the future.
     [TestCase("2036-10-09T17:30:00Z")]
     [TestCase("2036-10-09T13:30:00-04:00")]
@@ -920,7 +920,7 @@ public class SystemCommandTests
         });
     }
 
-    // A time without a zone is read in the machine's time zone (proposed-cli-surface.md "Command
+    // A time without a zone is read in the machine's time zone (spec/cli-surface.md "Command
     // options"), which the CLI takes from CliHost.Time: here the test's UTC+05:30 zone, where 17:30
     // is 12:00 UTC, so a CLI that read the time as UTC sends 17:30 UTC. Example 12, in a later year
     // than the fixed clock so that the time is in the future.
@@ -943,7 +943,7 @@ public class SystemCommandTests
         });
     }
 
-    // A clock time means its next occurrence in the machine's time zone (proposed-cli-surface.md
+    // A clock time means its next occurrence in the machine's time zone (spec/cli-surface.md
     // "Command options"), which the CLI takes from CliHost.Time. The fixed clock reads 01:30 on the
     // 15th in the test's UTC+05:30 zone, so 18:00 is later that day, 12:30 UTC. A CLI that read the
     // clock time in UTC sends 18:00 UTC on the 15th.
@@ -960,7 +960,7 @@ public class SystemCommandTests
         Assert.That(JsonRead.ExpiryDateTime(request.BodyJson), Is.EqualTo(new DateTimeOffset(2030, 3, 15, 12, 30, 0, TimeSpan.Zero)));
     }
 
-    // A clock time means its next occurrence (proposed-cli-surface.md "Command options"). In the hour
+    // A clock time means its next occurrence (spec/cli-surface.md "Command options"). In the hour
     // repeated when the clocks go back, a clock time happens twice, and the next occurrence is the
     // earliest of the two after now. The clock reads the first 01:15 of 25 October 2026 in
     // TestData.DaylightSavingZone (00:15 UTC), so 01:30 comes 15 minutes later, at 00:30 UTC. A CLI
@@ -979,7 +979,7 @@ public class SystemCommandTests
     }
 
     // --then takes disable or revoke on a system; delete is the value for keys and policies
-    // (proposed-cli-surface.md "Command options"). --for and --until each take a duration or a time.
+    // (spec/cli-surface.md "Command options"). --for and --until each take a duration or a time.
     // Options that contradict each other exit 2: --for with --until, or --then without either; and
     // --until in the past exits 2 ("Details"). An expiry past the end of year 9999 is no time the
     // CLI can send (DateTimeOffset.MaxValue), and 5000000d, about 13,700 years, reaches past it from
@@ -1009,7 +1009,7 @@ public class SystemCommandTests
             $"{SystemsPath}/K7P2Q/enable-until");
     }
 
-    // A timed enable is a single-ID command, which exits 5 for an unknown ID (proposed-cli-surface.md
+    // A timed enable is a single-ID command, which exits 5 for an unknown ID (spec/cli-surface.md
     // "Several IDs").
     [Test]
     public async Task System_enable_for_a_duration_of_an_unknown_system_exits_5_with_not_found()

@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Editing;
 
 // Subnet filters, gateway subnets, IP ranges, countries and ACL rules take an optional label after
-// "=", which the API stores with each entry (proposed-cli-surface.md "Command options"). The CLI
+// "=", which the API stores with each entry (spec/cli-surface.md "Command options"). The CLI
 // splits at the first "=", so a label can hold "=", and the flags are repeated, never comma lists,
 // so a label can hold a comma. A flag that replaces a list keeps the label of every entry that
 // stays, which needs the item read first ("Calls per command"); a label given replaces it, an empty
@@ -29,7 +29,7 @@ public class LabelTests
 
     private static readonly string PolicyPath = TestData.OrgPath("policies/64");
 
-    // Example 75 in proposed-cli-surface.md. Two entries, each with the label after its "="; the
+    // Example 75 in spec/cli-surface.md. Two entries, each with the label after its "="; the
     // comma stays in the label because each entry is its own flag.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -41,7 +41,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.1.0.0/16=Warehouse, ground floor"));
     }
 
-    // Example 79 in proposed-cli-surface.md. The label of 10.0.0.0/16 is "VLAN=20 (finance)", and
+    // Example 79 in spec/cli-surface.md. The label of 10.0.0.0/16 is "VLAN=20 (finance)", and
     // 10.2.0.0/16, given without a label, keeps the one it has.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -53,7 +53,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=VLAN=20 (finance)|10.2.0.0/16=New lab"));
     }
 
-    // Example 77 in proposed-cli-surface.md. The label of 10.0.0.0/16 was set before this update,
+    // Example 77 in spec/cli-surface.md. The label of 10.0.0.0/16 was set before this update,
     // as in the portal, and survives it.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -65,7 +65,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.2.0.0/16=New lab"));
     }
 
-    // Example 78 in proposed-cli-surface.md. Both ranges stay; one is relabelled, and the other's
+    // Example 78 in spec/cli-surface.md. Both ranges stay; one is relabelled, and the other's
     // empty label is sent as null ("Details").
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -77,7 +77,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Head office|10.2.0.0/16"));
     }
 
-    // A new entry without a label has none (proposed-cli-surface.md "Command options"), and the entry
+    // A new entry without a label has none (spec/cli-surface.md "Command options"), and the entry
     // that stays keeps its label beside it.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -89,7 +89,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.3.0.0/16"));
     }
 
-    // Example 80 in proposed-cli-surface.md, sent. --set-subnet-filter replaces the list, so
+    // Example 80 in spec/cli-surface.md, sent. --set-subnet-filter replaces the list, so
     // 10.2.0.0/16, left out, goes, and the range that stays keeps its label.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
@@ -100,7 +100,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.3.0.0/16"));
     }
 
-    // Example 80 in proposed-cli-surface.md. --dry-run prints the requests and sends none of them,
+    // Example 80 in spec/cli-surface.md. --dry-run prints the requests and sends none of them,
     // and the reads the change depends on run ("Dry run"): the lookup and the read that keeps
     // the labels, so the printed body holds the kept label.
     [Test]

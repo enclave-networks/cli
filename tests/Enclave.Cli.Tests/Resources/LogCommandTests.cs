@@ -5,7 +5,7 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// log prints the organisation's activity log, newest first (proposed-cli-surface.md "Command
+// log prints the organisation's activity log, newest first (spec/cli-surface.md "Command
 // options"). The logs API takes only a page and a page size (portal
 // Enclave.Api/Modules/ActivityLogs/Logs/Models/LogsRequestModel.cs), so the CLI applies every filter
 // to the entries it reads, and reads only the pages it needs ("Calls per command"). Where a test
@@ -27,7 +27,7 @@ public class LogCommandTests
     private static readonly string LogsPath = TestData.OrgPath("logs");
 
     // log prints the newest 100 entries, newest first, and asks for pages of the smaller of the limit
-    // and 200 (proposed-cli-surface.md "Details"). The newest 100 fill the first page of 100, so the
+    // and 200 (spec/cli-surface.md "Details"). The newest 100 fill the first page of 100, so the
     // second is never read. Example 68.
     [Test]
     public async Task Log_prints_the_newest_100_entries_newest_first_from_one_page_of_100()
@@ -158,7 +158,7 @@ public class LogCommandTests
     }
 
     // --limit changes the number, and the page size is the smaller of the limit and 200, the most the
-    // API returns per page (proposed-cli-surface.md "Details"; portal PaginationDefaults.cs:11). The
+    // API returns per page (spec/cli-surface.md "Details"; portal PaginationDefaults.cs:11). The
     // 1,000 newest fill pages 0 to 4 of 200, so page 5 is never read; 20 fill page 0 of 20. Example
     // 69 is the first case.
     [TestCase(1000, 200, 1100, "0,1,2,3,4")]
@@ -205,7 +205,7 @@ public class LogCommandTests
         });
     }
 
-    // With --since and --limit, reading stops at whichever comes first (proposed-cli-surface.md
+    // With --since and --limit, reading stops at whichever comes first (spec/cli-surface.md
     // "Details"). Here the limit does: three entries fill the first page of three.
     [Test]
     public async Task Log_since_and_limit_stop_at_the_limit_when_it_comes_first()
@@ -244,7 +244,7 @@ public class LogCommandTests
         });
     }
 
-    // --until leaves out the entries newer than it before --limit counts (proposed-cli-surface.md
+    // --until leaves out the entries newer than it before --limit counts (spec/cli-surface.md
     // "Details"), so the two entries printed are the first two older than --until. Entries are an
     // hour apart and --until falls between the fourth and the fifth.
     [Test]
@@ -295,7 +295,7 @@ public class LogCommandTests
         });
     }
 
-    // --user matches the whole userName, ignoring case (proposed-cli-surface.md "Details"): an
+    // --user matches the whole userName, ignoring case (spec/cli-surface.md "Details"): an
     // address that holds the one given, or is held in it, is another user's.
     [Test]
     public async Task Log_user_matches_the_whole_user_name_ignoring_case()
@@ -346,7 +346,7 @@ public class LogCommandTests
         });
     }
 
-    // --filter matches part of the message, ignoring case (proposed-cli-surface.md "Details"), so the
+    // --filter matches part of the message, ignoring case (spec/cli-surface.md "Details"), so the
     // message that names the system in lower case matches too. Page 2 begins with an entry older than
     // 30 days, so page 3 is never read. Example 72.
     [Test]
@@ -376,7 +376,7 @@ public class LogCommandTests
         });
     }
 
-    // Times without a zone are read in the machine's time zone (proposed-cli-surface.md "Command
+    // Times without a zone are read in the machine's time zone (spec/cli-surface.md "Command
     // options"), which the CLI takes from CliHost.Time; here the test's UTC+05:30 zone, so a CLI that
     // read the times as UTC would look five and a half hours later, where none of these entries are.
     // --until leaves out the newer entries, and page 2 holds the first entry older than
@@ -409,7 +409,7 @@ public class LogCommandTests
     }
 
     // A clock time given to --since names its latest occurrence at or before now
-    // (proposed-cli-surface.md "Command options"). In the hour repeated when the clocks go back, a
+    // (spec/cli-surface.md "Command options"). In the hour repeated when the clocks go back, a
     // clock time happens twice, and the latest of the two at or before now is the one meant. The
     // clock reads the first 01:45 of 25 October 2026 in TestData.DaylightSavingZone (00:45 UTC); 01:30
     // has happened once that night, at 00:30 UTC, so --since starts 15 minutes back and stops at the
@@ -463,7 +463,7 @@ public class LogCommandTests
     }
 
     // With a filter and no --since, --limit counts the matching entries, and the CLI reads back until
-    // it has that many (proposed-cli-surface.md "Command options"), in pages of 200 ("Details"). The
+    // it has that many (spec/cli-surface.md "Command options"), in pages of 200 ("Details"). The
     // third error is on page 2, so page 3 is never read.
     [Test]
     public async Task Log_with_a_filter_and_a_limit_reads_back_until_it_has_that_many_matching_entries()
@@ -486,7 +486,7 @@ public class LogCommandTests
     }
 
     // When fewer entries match than the limit, the CLI reads back to the start of the log and prints
-    // the matches it found (proposed-cli-surface.md "Command options"): here two of 250, with the
+    // the matches it found (spec/cli-surface.md "Command options"): here two of 250, with the
     // default limit of 100, on pages of 200 ("Details").
     [Test]
     public async Task Log_with_a_filter_reads_to_the_start_of_the_log_when_fewer_entries_match_than_the_limit()
@@ -510,7 +510,7 @@ public class LogCommandTests
     // --user, --level, --filter and --until leave entries out, so nothing bounds how many entries the
     // CLI reads before --limit of them match, and with any of them it asks for pages of 200, the most
     // the API returns per page (portal PaginationDefaults.cs:11), whatever the limit
-    // (proposed-cli-surface.md "Details"). None of these 450 entries is kept, so the CLI reads to the
+    // (spec/cli-surface.md "Details"). None of these 450 entries is kept, so the CLI reads to the
     // start of the log: three calls in pages of 200, where pages of the limit would take 450. Every
     // entry is from the last 450 minutes, so --until 1d leaves out all of them.
     [TestCase("--level", "error")]
@@ -553,7 +553,7 @@ public class LogCommandTests
     }
 
     // --level takes information, warning and error; --since and --until take a duration or a time;
-    // --limit takes a number (proposed-cli-surface.md "Command options").
+    // --limit takes a number (spec/cli-surface.md "Command options").
     [TestCase("--level verbose")]
     [TestCase("--level warning,debug")]
     [TestCase("--since yesterday")]

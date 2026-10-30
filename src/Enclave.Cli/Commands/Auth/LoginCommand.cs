@@ -4,7 +4,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Auth;
 
 /// <summary>
-/// `login`: checks a personal access token and saves it (proposed-cli-surface.md "Login, logout and
+/// `login`: checks a personal access token and saves it (spec/cli-surface.md "Login, logout and
 /// status").
 /// </summary>
 internal static class LoginCommand
@@ -25,7 +25,7 @@ internal static class LoginCommand
 
             // credentials.json's baseUrl is kept, so a file pointing at another API address points
             // there after login too, and the token is checked at that address. Its partnerApiBaseUrl
-            // is kept as well, since staging means setting both (proposed-cli-surface.md "Partner
+            // is kept as well, since staging means setting both (spec/cli-surface.md "Partner
             // API"), and is checked as every other command checks it.
             var stored = CredentialsFile.Read(host);
             var access = new ApiAccess(

@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Auth;
 
 // status prints { "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner":
-// { "id", "source" } } (proposed-cli-surface.md "Login, logout and status"). A source is the option
+// { "id", "source" } } (spec/cli-surface.md "Login, logout and status"). A source is the option
 // or variable that made the choice, the path of the file it came from, or only-organisation when
 // the token sees one organisation.
 public class StatusTests

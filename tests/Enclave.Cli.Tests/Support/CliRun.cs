@@ -14,7 +14,7 @@ namespace Enclave.Cli.Tests.Support;
 /// directory path, and the only environment variables, stdin and API URLs the CLI sees.
 /// </summary>
 // The partner API is a separate service on its own host, with every route under
-// /partner/{partnerId}/, and the main API has no route there (proposed-cli-surface.md "Partner
+// /partner/{partnerId}/, and the main API has no route there (spec/cli-surface.md "Partner
 // API"). Each stub goes to the fake that serves its path, and each fake answers the other API's
 // routes with 421 Misdirected Request, which the CLI reports as api_error, so a call sent to the
 // wrong address fails the command whatever answer a test expects.
@@ -114,7 +114,7 @@ internal sealed class CliRun : IDisposable
     /// The only environment the CLI sees. A missing key or a null value is an unset variable.
     /// </summary>
     // ENCLAVE_ORG_ID names the organisation by ID, so the CLI builds the organisation client from it
-    // and makes no lookup call (proposed-cli-surface.md "Context"); a test's requests are then the
+    // and makes no lookup call (spec/cli-surface.md "Context"); a test's requests are then the
     // command's own. ENCLAVE_ORG takes a name, never an ID.
     public IDictionary<string, string?> Environment { get; } = new Dictionary<string, string?>(StringComparer.Ordinal)
     {

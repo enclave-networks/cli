@@ -4,7 +4,7 @@ using Enclave.Configuration.Data.Modules.EnrolmentKeys.Enums;
 namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
-/// `key list`: the enrolment keys, with their secrets (proposed-cli-surface.md "Command options",
+/// `key list`: the enrolment keys, with their secrets (spec/cli-surface.md "Command options",
 /// "Filters", "Output").
 /// </summary>
 internal static class KeyListCommand

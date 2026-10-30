@@ -7,7 +7,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Creates the CLI's options. Each option reads its own value: the option, never the value,
-/// decides how a value is read (proposed-cli-surface.md "Commands"). A value an option cannot read
+/// decides how a value is read (spec/cli-surface.md "Commands"). A value an option cannot read
 /// is a parse error, so it exits 2 with invalid_argument before any call and before the token is
 /// checked.
 /// </summary>
@@ -35,7 +35,7 @@ internal static class CliOptions
     /// </summary>
     // A blank filter filters by nothing. Read as the filter left out, it would list every item, and
     // a blank value usually comes from an unset shell variable, so `system list --filter "$NAME" |
-    // enclave-cli system revoke -` would revoke every system (proposed-cli-surface.md "Details").
+    // enclave-cli system revoke -` would revoke every system (spec/cli-surface.md "Details").
     public static Option<string?> Filter(string name, string description, string valueName = "text") =>
         Single<string?>(name, description, valueName, (text, result) =>
         {
@@ -58,7 +58,7 @@ internal static class CliOptions
     // value the API refuses would reach it after the token is read, so the same command line would
     // exit 3 without a token and 1 with one. Each command cites the validator that refuses it.
     // Optional text the API takes empty, such as notes, is a Text option, where "" clears it
-    // (proposed-cli-surface.md "Details").
+    // (spec/cli-surface.md "Details").
     public static Option<string?> NonBlank(string name, string description, string takes, string valueName = "text") =>
         Single<string?>(name, description, valueName, (text, result) =>
         {
@@ -187,7 +187,7 @@ internal static class CliOptions
     // nothing, wherever it comes among the values. Dropped, it would shorten the list, and passed
     // on, it would reach the API after the token is read, which refuses it (portal
     // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Validators/EnrolmentKeyIpConstraintInputValidator.cs:12,
-    // NotEmpty, for an enrolment key's range) (proposed-cli-surface.md "Details").
+    // NotEmpty, for an enrolment key's range) (spec/cli-surface.md "Details").
     public static Option<IReadOnlyList<LabelledValue>?> Labelled(string name, string description, string valueName, bool clears = false) =>
         new(name)
         {
@@ -456,7 +456,7 @@ internal static class CliOptions
         $"{name} filters the list, and the value given names nothing. Give at least one value, or leave {name} out.";
 
     // An empty list means something only where it clears a list, as a --set- flag's does
-    // (proposed-cli-surface.md "Details"). A create sends an empty list for a list flag left out,
+    // (spec/cli-surface.md "Details"). A create sends an empty list for a list flag left out,
     // and --add-tags or --remove-tags with no tag changes nothing, so on those flags the empty list
     // sets and changes nothing. Taken, it would act as the flag left out, which an empty value is
     // never read as, since it usually comes from an unset shell variable ("Details").
@@ -465,7 +465,7 @@ internal static class CliOptions
 
     // Spaces around a piece are dropped so "web, db" reads as two values. A value that is "" or only
     // white space, given once or with the option repeated, holds no pieces, so --set-tags "" gives
-    // the empty list that clears a list (proposed-cli-surface.md "Details"). Any other empty piece
+    // the empty list that clears a list (spec/cli-surface.md "Details"). Any other empty piece
     // ("web,", "web,,db", ",", or "" given beside another value of the option) is a parse error:
     // dropped, it would shorten the list without a word, and an empty entry usually comes from an
     // unset shell variable, as in `--trust "uk only,$EXTRA"` ("Details"). An option whose empty list

@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
 /// Commands that take several items: the bulk call, the { requested, affected } output, calls of at
-/// most 200 IDs, and the commands that take one item (proposed-cli-surface.md "Several IDs").
+/// most 200 IDs, and the commands that take one item (spec/cli-surface.md "Several IDs").
 /// </summary>
 public class SeveralIdsTests
 {
@@ -113,7 +113,7 @@ public class SeveralIdsTests
 
     // A failed call stops the command, so nothing more is sent after a failure. The counts of the
     // calls that succeeded tell the caller what changed, and since items already in that state are
-    // not counted, running the command again is safe (proposed-cli-surface.md "Several IDs").
+    // not counted, running the command again is safe (spec/cli-surface.md "Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_stops_at_a_failed_call_and_its_error_carries_the_counts_of_the_calls_that_succeeded(BulkCommand command)
     {
@@ -180,7 +180,7 @@ public class SeveralIdsTests
         });
     }
 
-    // Example 44 in proposed-cli-surface.md.
+    // Example 44 in spec/cli-surface.md.
     [Test]
     public async Task System_disable_disables_three_systems_given_as_arguments_in_one_call()
     {
@@ -200,7 +200,7 @@ public class SeveralIdsTests
         });
     }
 
-    // Example 45 in proposed-cli-surface.md: the shell splits $(cat quarantine.txt) at its line
+    // Example 45 in spec/cli-surface.md: the shell splits $(cat quarantine.txt) at its line
     // breaks, so each line arrives as an argument, and a long file is sent in calls of 200.
     [Test]
     public async Task System_disable_takes_the_lines_of_a_file_as_system_id_arguments()
@@ -219,7 +219,7 @@ public class SeveralIdsTests
             Is.EqualTo(BulkCommand.Batches(ids)));
     }
 
-    // Example 35 in proposed-cli-surface.md. --id gives IDs, so no lookup precedes the call.
+    // Example 35 in spec/cli-surface.md. --id gives IDs, so no lookup precedes the call.
     [Test]
     public async Task Policy_disable_takes_several_ids_after_id_separated_by_commas()
     {
@@ -240,7 +240,7 @@ public class SeveralIdsTests
     }
 
     // Names are looked up with one list call, and each must match one item, ignoring case
-    // (proposed-cli-surface.md "Names and IDs"). The bulk call then carries the IDs the names found.
+    // (spec/cli-surface.md "Names and IDs"). The bulk call then carries the IDs the names found.
     [Test]
     public async Task Policy_disable_looks_up_several_names_with_one_list_call_and_disables_them_in_one_call()
     {
@@ -265,7 +265,7 @@ public class SeveralIdsTests
     // One name that matches no policy, or several, stops the whole command: deleting the others
     // would leave the caller to work out which went. The error carries the candidates, the
     // policies the name matched, so the caller can pick one by ID without another call
-    // (proposed-cli-surface.md "Names and IDs", "Errors and exit codes"). "old vpn" matches two
+    // (spec/cli-surface.md "Names and IDs", "Errors and exit codes"). "old vpn" matches two
     // policies that differ only in case; "no such policy" matches none.
     [TestCase("no such policy", "")]
     [TestCase("old vpn", "17,18")]
@@ -289,7 +289,7 @@ public class SeveralIdsTests
     }
 
     // Duplicate IDs are removed whether given as arguments, with --id or through "-", and the rest
-    // keep the order given (proposed-cli-surface.md "Several IDs"). Each item is acted on once and
+    // keep the order given (spec/cli-surface.md "Several IDs"). Each item is acted on once and
     // counted once in requested.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_removes_duplicate_ids_given_as_arguments_and_keeps_the_order_given(BulkCommand command)
@@ -305,7 +305,7 @@ public class SeveralIdsTests
     }
 
     // The API's timed enable has no bulk form (PUT .../{id}/enable-until), so --for and --until take
-    // one item and print its updated model (proposed-cli-surface.md "Several IDs"). The second run
+    // one item and print its updated model (spec/cli-surface.md "Several IDs"). The second run
     // shows the command takes the option, so the refusal comes from the number of items.
     [TestCaseSource(nameof(TimedEnableCases))]
     public async Task Timed_enable_exits_2_for_several_items_and_prints_the_updated_model_for_one(
@@ -365,7 +365,7 @@ public class SeveralIdsTests
     }
 
     // A bulk call reports unknown IDs through its counts. A command on one item has no count to
-    // report it with, so an unknown ID is an error with its own exit code (proposed-cli-surface.md
+    // report it with, so an unknown ID is an error with its own exit code (spec/cli-surface.md
     // "Several IDs").
     [TestCaseSource(nameof(SingleItemCases))]
     public async Task Single_item_command_exits_5_for_an_unknown_id(string[] args, string method, string path)
@@ -419,7 +419,7 @@ public class SeveralIdsTests
         _ => throw new ArgumentOutOfRangeException(nameof(count), count, "No counts for this number of IDs."),
     };
 
-    // The bulk counts sit in the error object beside "code" (proposed-cli-surface.md "Several
+    // The bulk counts sit in the error object beside "code" (spec/cli-surface.md "Several
     // IDs"). A count that is missing or not a number reads as null, which no expected count equals.
     private static int? Count(JsonElement error, string name) =>
         error.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)

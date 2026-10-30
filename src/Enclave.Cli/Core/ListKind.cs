@@ -6,7 +6,7 @@ namespace Enclave.Cli.Core;
 /// </summary>
 internal sealed record ListKind(string Name, string? IdField)
 {
-    // proposed-cli-surface.md "Output" names the kinds. The ID fields are the properties of the
+    // spec/cli-surface.md "Output" names the kinds. The ID fields are the properties of the
     // Enclave.Sdk.Api models that identify an item to the API: SystemSummaryModel.SystemId, the
     // integer Id of keys, policies, zones, records and trust requirements, TagSummaryModel.Tag,
     // AccountOrganisationModel.OrgId, OrganisationUser.Id, and OrganisationInviteModel.EmailAddress,

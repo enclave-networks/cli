@@ -72,7 +72,7 @@ internal static class ParseProblems
     }
 
     // A value given to an unknown option could be a token passed by mistake, so no message repeats
-    // any part of a value, or anything joined to an option's name (proposed-cli-surface.md "Errors
+    // any part of a value, or anything joined to an option's name (spec/cli-surface.md "Errors
     // and exit codes"). An unknown option is named only when what is printed has the form the
     // CLI's own options have: "--" and lower-case words joined by hyphens, or "-" and one letter or
     // digit. Every option of the CLI is written that way, apart from help's -?, /h and /?

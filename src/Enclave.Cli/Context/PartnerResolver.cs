@@ -4,7 +4,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Context;
 
 /// <summary>
-/// Chooses the partner a partner command acts for (proposed-cli-surface.md "Context"). Partners
+/// Chooses the partner a partner command acts for (spec/cli-surface.md "Context"). Partners
 /// are given by ID only: looking them up needs the ReadPartnerList scope, which personal access
 /// tokens cannot carry ("Partner API").
 /// </summary>

@@ -5,7 +5,7 @@ using Enclave.Configuration.Data.Identifiers;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// `policy update`: patches only the settings given (proposed-cli-surface.md "Command options",
+/// `policy update`: patches only the settings given (spec/cli-surface.md "Command options",
 /// "Create and update").
 /// </summary>
 internal static class PolicyUpdateCommand

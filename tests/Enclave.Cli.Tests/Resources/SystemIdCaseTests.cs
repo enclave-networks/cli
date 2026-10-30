@@ -12,7 +12,7 @@ namespace Enclave.Cli.Tests.Resources;
 // UnapprovedSystems/Handlers/BulkUnapprovedSystemDeleteHandler.cs:82), and compares a policy
 // gateway's system ID exactly (Policies/Validators/PolicyGatewayValidator.cs:49). The CLI
 // upper-cases a system ID when it reads it, so every request and every duplicate check sees the
-// form the API stores (proposed-cli-surface.md "Names and IDs").
+// form the API stores (spec/cli-surface.md "Names and IDs").
 public class SystemIdCaseTests
 {
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);

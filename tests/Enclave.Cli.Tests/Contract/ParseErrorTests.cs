@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Contract;
 
 // System.CommandLine's default parse-error action writes plain text and help and exits 1
-// (ParseErrorAction, version 2.0.12). The CLI replaces it (proposed-cli-surface.md "Errors and exit
+// (ParseErrorAction, version 2.0.12). The CLI replaces it (spec/cli-surface.md "Errors and exit
 // codes"): a parse error is one JSON error on stderr with code invalid_argument, nothing on stdout,
 // exit 2, and any suggestion in "detail". A command line with several problems gives one error
 // object, whose detail names the first problem and whose errors lists them all. CliAssert.Rejected
@@ -46,7 +46,7 @@ public class ParseErrorTests
     // form's place, which proves the rejection came from the form and not from a command that does
     // not run at all. The forms are the sub-nouns `dns zone`, `dns record` and `org user`, whose
     // commands are hyphenated verbs, the `pending` noun, whose commands take `system --pending`,
-    // and `log list`, which is `log` ("Commands", "Changes to AGENTS.md").
+    // and `log list`, which is `log` ("Commands").
     public static IEnumerable<TestCaseData> ReplacedCommands()
     {
         yield return CommandCases.RejectedThenCorrected("dns zone list", "dns list-zones", "GET", TestData.OrgPath("dns/zones"), ApiJson.Page(ApiJson.Zone(4, "internal")));
@@ -60,7 +60,7 @@ public class ParseErrorTests
     // there is no -o or --output ("Output"); lists read every page, so there is no --all, and only
     // log has --limit; --filter replaced --search; the token never goes on the command line
     // ("Options on every command"); no command asks for confirmation, so there is no --yes; every
-    // field has a flag, so there is no --from-file or --template ("Changes to AGENTS.md"). An option
+    // field has a flag, so there is no --from-file or --template (AGENTS.md "CLI contract"). An option
     // a command does not take, such as --dry-run on a read or --partner-id on an organisation
     // command, is unknown to it ("Details").
     public static IEnumerable<TestCaseData> OptionsTheCliDoesNotHave()

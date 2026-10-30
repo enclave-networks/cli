@@ -1,7 +1,7 @@
 namespace Enclave.Cli.Core;
 
 /// <summary>
-/// Sends the bulk calls of a command that takes several items (proposed-cli-surface.md "Several IDs").
+/// Sends the bulk calls of a command that takes several items (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class Bulk
 {

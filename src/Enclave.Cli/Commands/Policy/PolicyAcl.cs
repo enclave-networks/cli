@@ -7,7 +7,7 @@ using Enclave.Sdk.Network.NetworkPolicy;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// One ACL rule: a protocol and, for TCP and UDP, a port or range (proposed-cli-surface.md "Command
+/// One ACL rule: a protocol and, for TCP and UDP, a port or range (spec/cli-surface.md "Command
 /// options", --acl).
 /// </summary>
 /// <param name="Protocol">The protocol.</param>

@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Auth;
 
 // logout deletes credentials.json and prints { "path", "deleted" }, deleted being false when there
-// was no file (proposed-cli-surface.md "Login, logout and status").
+// was no file (spec/cli-surface.md "Login, logout and status").
 public class LogoutTests
 {
     private static readonly string[] LogoutFields = ["path", "deleted"];

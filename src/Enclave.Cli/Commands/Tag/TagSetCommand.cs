@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Tag;
 
 /// <summary>
 /// `tag set`: updates a tag, and creates it when it does not exist, which makes it permanent
-/// (proposed-cli-surface.md "Command options").
+/// (spec/cli-surface.md "Command options").
 /// </summary>
 internal static class TagSetCommand
 {

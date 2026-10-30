@@ -44,7 +44,7 @@ internal sealed class ApiAccess
     public Uri? PartnerApiBaseUrl { get; }
 
     /// <summary>
-    /// The token from ENCLAVE_TOKEN, then credentials.json (proposed-cli-surface.md "Options on
+    /// The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on
     /// every command"), each cleaned by <see cref="TokenFrom"/>, and the base URLs from
     /// credentials.json whichever source gave the token. Exits 3 with token_missing when neither
     /// holds a token, 3 with token_invalid when the token used holds a character no token holds, and
@@ -137,7 +137,7 @@ internal sealed class ApiAccess
 
     /// <summary>
     /// credentials.json's partnerApiBaseUrl, kept whichever source gives the token as baseUrl is
-    /// (proposed-cli-surface.md "Partner API"); the host's default partner API address when the file
+    /// (spec/cli-surface.md "Partner API"); the host's default partner API address when the file
     /// has none, which is null outside tests.
     /// </summary>
     // Enclave.Sdk.Api builds the partner API's HttpClient with the EnclaveClient, from

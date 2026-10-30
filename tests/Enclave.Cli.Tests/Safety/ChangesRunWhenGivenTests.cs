@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
 /// A command that changes something runs when given: there is no confirmation option and no
-/// prompt, and stdin is read only after "-" (proposed-cli-surface.md "Changes run when given";
+/// prompt, and stdin is read only after "-" (spec/cli-surface.md "Changes run when given";
 /// AGENTS.md "CLI contract").
 /// </summary>
 public class ChangesRunWhenGivenTests
@@ -61,7 +61,7 @@ public class ChangesRunWhenGivenTests
     // does not watch would hang on a question. stdin is a terminal, and any read of it fails the run
     // (CliRun.StdinIsTerminal), so a CLI that asked fails the test. stdout holds the command's
     // JSON object alone: the bulk counts for a command that takes several items, and otherwise the
-    // model the API answered the change with (proposed-cli-surface.md "Several IDs": single-ID
+    // model the API answered the change with (spec/cli-surface.md "Several IDs": single-ID
     // commands print the model, and org invite prints the invite the API returns). The model is
     // checked by the field that identifies it, so an output that leaves the model out, such as {},
     // fails.
@@ -94,7 +94,7 @@ public class ChangesRunWhenGivenTests
             result.ToString());
     }
 
-    // IDs come from stdin only after "-" (proposed-cli-surface.md "Several IDs"). stdin holds a list
+    // IDs come from stdin only after "-" (spec/cli-surface.md "Several IDs"). stdin holds a list
     // of other items of the command's own kind, so a CLI that read it would add them to the call.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Command_given_ids_as_arguments_leaves_a_list_on_stdin_unread(BulkCommand command)

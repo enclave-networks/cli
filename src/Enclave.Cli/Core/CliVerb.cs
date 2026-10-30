@@ -118,7 +118,7 @@ internal sealed class CliVerb : Command
 
     /// <summary>
     /// At most one of these options or arguments may be given; two contradict each other and exit 2
-    /// (proposed-cli-surface.md "Details": --for with --until, a name with its ID option).
+    /// (spec/cli-surface.md "Details": --for with --until, a name with its ID option).
     /// </summary>
     public void Exclusive(params Symbol[] symbols)
     {
@@ -154,7 +154,7 @@ internal sealed class CliVerb : Command
 
     /// <summary>
     /// At least one of these must be given: an update with no change flag exits 2
-    /// (proposed-cli-surface.md "Details").
+    /// (spec/cli-surface.md "Details").
     /// </summary>
     public void AtLeastOne(params Symbol[] symbols)
     {

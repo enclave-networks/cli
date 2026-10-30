@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Dns;
 
 /// <summary>
 /// Finds DNS zones by name, hostnames by their full name, and the zone a full hostname is in
-/// (proposed-cli-surface.md "Names and IDs" and "Details").
+/// (spec/cli-surface.md "Names and IDs" and "Details").
 /// </summary>
 internal static class DnsLookup
 {
@@ -61,7 +61,7 @@ internal static class DnsLookup
     /// </summary>
     // The full name, fqdn, is what identifies a hostname: db.internal and db.lab are both the record
     // "db" (portal DnsRecordModel). The list is read without a search, since the API reads search
-    // text in its own search syntax (proposed-cli-surface.md "Filters"), and the full name is matched
+    // text in its own search syntax (spec/cli-surface.md "Filters"), and the full name is matched
     // here, whole and ignoring case, as every name lookup matches.
     public static Task<IReadOnlyList<DnsRecordSummaryModel>> FindHostnamesAsync(CliContext context, OrganisationInUse org, IReadOnlyList<string> hostnames, string key)
     {

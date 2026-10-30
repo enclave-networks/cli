@@ -1,6 +1,6 @@
-# Proposed CLI surface
+# CLI surface
 
-`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api`. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share. Where it changes the CLI contract in AGENTS.md, the change is listed under "Changes to AGENTS.md".
+`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api`. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share.
 
 ## Shape and naming
 
@@ -451,7 +451,6 @@ Known, and left as they are. The CLI passes the API's answers on as they come.
 - `key enable --for` reads a one-key list from `-`; `system enable --for` refuses `-`.
 - What Ctrl+C prints and exits with is not specified.
 - `not_implemented` stays in the error codes, though every command has a handler, so none gives it.
-- This document keeps its "proposed" title and wording, and its "Build order" section.
 - CI runs the tests on Linux only.
 - Release binaries are not signed or notarised.
 
@@ -470,34 +469,6 @@ These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API it
 9. `GatewayPriorityType.Prioritised` is sent and read as `Ordered`, the API's name for it. `Enclave.Sdk.Api.Data` names it `Prioritised` (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the sdk repository's enum (`Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `GatewayPriorityTypeJsonConverter` does the mapping, and the CLI adds it to the options it prints models with.
 10. `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync` return the model the API answers with (portal `OrganisationController.cs`), so `org remove-user`, `org invite` and `org cancel-invite` print it. A successful response with no model throws `InvalidOperationException`.
 11. The sort modes the API added in portal PR #648: `LastConnected`, `State` and `Version` for the systems list, and `DescriptionOrHostname` for the waiting systems list.
-
-## Changes to AGENTS.md
-
-If this proposal is accepted, AGENTS.md changes to match:
-
-- Command shape: `<noun> <verb>`, hyphenated verbs for a noun's parts, singular nouns, plural accepted as a hidden alias. The noun list becomes `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
-- `--from-file` and `--template` are removed: every field has a flag.
-- Temporary changes: `--for <duration>` or `--until <time>` (RFC 3339, or local time without a zone), then `--then`.
-- `-o` is removed: output is always JSON.
-- `--all` and `--limit` are removed from lists, which read every page; `log` keeps `--limit`.
-- The list envelope gains `kind` and loses `truncated`. `-` reads a list printed by the CLI.
-- Token sources: `ENCLAVE_TOKEN`, then `credentials.json`. `--token` is removed.
-- Organisation and partner precedence, including `ENCLAVE_ORG`, `ENCLAVE_ORG_ID` and `ENCLAVE_PARTNER_ID`.
-- IDs only after `--id` or an `--<item>-id` option; `--<item>` options take names.
-- `--yes` and its exit code are removed: changes run when given, and `--dry-run` previews them.
-- Exit 6 for transient failures, and the fixed `code` set.
-- The bulk output shape, empty stdin, bulk calls of 200 IDs, and the ID checks.
-- A create sends every setting, with the values the CLI documents.
-- Ranges, ACLs and gateway subnets take an optional `=label`, and an update keeps the labels of entries that stay.
-- `commands [<noun> [<verb>]]` replaces `commands --json`.
-
-## Build order
-
-1. `login`, `status`, `org list`, `org use`: the token, context, output, error and exit-code handling every later command uses.
-2. `list` and `show` for every top-level noun.
-3. Changes, with `--dry-run`: `system`, `key`, `policy`, `tag`.
-4. `dns`, `trust`, `org update`, `org list-users`, `org remove-user`, the invite commands, and the commands that wait on `Enclave.Sdk.Api` changes.
-5. `partner customer`.
 
 ## Examples
 

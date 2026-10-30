@@ -7,7 +7,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Auth;
 
 // The CLI keeps credentials.json and cli.json in ~/.enclave, under the user's home directory
-// (proposed-cli-surface.md "Login, logout and status"). A user profile path that is empty or not
+// (spec/cli-surface.md "Login, logout and status"). A user profile path that is empty or not
 // fully qualified names no home directory: resolved against the current directory, it would have
 // the CLI read a credentials.json from wherever it is run and send the token to that file's
 // baseUrl. With no home directory the CLI reads no saved file, ENCLAVE_TOKEN and the organisation

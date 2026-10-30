@@ -5,7 +5,7 @@ namespace Enclave.Cli.Commands.Org;
 
 /// <summary>
 /// The `org` noun: the organisations the token sees, the default organisation, and the
-/// organisation's own settings, users and invites (proposed-cli-surface.md "Commands").
+/// organisation's own settings, users and invites (spec/cli-surface.md "Commands").
 /// </summary>
 internal static class OrgCommand
 {
@@ -30,7 +30,7 @@ internal static class OrgCommand
     /// Refuses an email address that is empty or only white space with the other argument checks,
     /// before the token and any call.
     /// </summary>
-    // An empty or blank address names no one (proposed-cli-surface.md "Details"). Passed on, invite
+    // An empty or blank address names no one (spec/cli-surface.md "Details"). Passed on, invite
     // and cancel-invite send it, and the API refuses it (portal
     // CreateOrganisationInviteModelValidator.cs:16 and DeleteOrganisationInviteModelValidator.cs:16,
     // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
@@ -87,7 +87,7 @@ internal static class OrgCommand
             var org = await context.GetOrganisationAsync();
 
             // An update sends only the fields given: a Name the caller did not give would rename the
-            // organisation (proposed-cli-surface.md "Create and update").
+            // organisation (spec/cli-surface.md "Create and update").
             var patch = org.Client.Update();
 
             if (context.Get(name) is { } newName)
@@ -151,7 +151,7 @@ internal static class OrgCommand
 
     // A failed invite or cancel-invite is reported, with or without problem details: Enclave.Sdk.Api
     // checks the status of these responses before it reads the body
-    // (OrganisationScopedClient.ReadModelAsync; proposed-cli-surface.md "`Enclave.Sdk.Api`
+    // (OrganisationScopedClient.ReadModelAsync; spec/cli-surface.md "`Enclave.Sdk.Api`
     // changes", item 6), and CliAction maps its exception like any other.
     private static CliVerb Invite()
     {

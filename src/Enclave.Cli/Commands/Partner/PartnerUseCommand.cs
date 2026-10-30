@@ -5,7 +5,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Partner;
 
 /// <summary>
-/// `partner use --id`: saves the default partner in ~/.enclave/cli.json (proposed-cli-surface.md
+/// `partner use --id`: saves the default partner in ~/.enclave/cli.json (spec/cli-surface.md
 /// "Login, logout and status").
 /// </summary>
 internal static class PartnerUseCommand
@@ -21,7 +21,7 @@ internal static class PartnerUseCommand
         EnclaveDirectory.RequireHome(verb);
 
         // The ID is saved as given, with no call: listing partners needs the ReadPartnerList scope,
-        // which personal access tokens cannot carry (proposed-cli-surface.md "Partner API"). So no
+        // which personal access tokens cannot carry (spec/cli-surface.md "Partner API"). So no
         // token is needed either.
         verb.SetHandler(async context =>
         {

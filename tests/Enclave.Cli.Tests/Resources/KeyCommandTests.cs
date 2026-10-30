@@ -13,7 +13,7 @@ public class KeyCommandTests
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
-    // A list reads every page before it prints (proposed-cli-surface.md "Output"), and enrolment key
+    // A list reads every page before it prints (spec/cli-surface.md "Output"), and enrolment key
     // output includes each key's secret, key ("Output"). Disabled keys are left out unless
     // --include-disabled or --state disabled asks for them ("Filters"), so a plain list sends no
     // include_disabled.
@@ -36,7 +36,7 @@ public class KeyCommandTests
     }
 
     // --filter sends its text as typed, so it takes the API's search syntax as well as plain words
-    // (proposed-cli-surface.md "Filters"); uses and enrolled are search keys of portal
+    // (spec/cli-surface.md "Filters"); uses and enrolled are search keys of portal
     // EnrolmentKeySearchKeyService. The filter leaves disabled keys out, as a plain list does.
     [TestCase("build")]
     [TestCase("uses:<5 enrolled:>10")]
@@ -54,7 +54,7 @@ public class KeyCommandTests
         });
     }
 
-    // Each flag is added to the search in the text the table in proposed-cli-surface.md "Filters"
+    // Each flag is added to the search in the text the table in spec/cli-surface.md "Filters"
     // gives it, which is the API's search value where that differs from the CLI's: the API's
     // approval key reads "gated" as Manual and matches nothing for "manual", and its state key reads
     // "nouses" (portal EnrolmentKeySearchKeyService.BuildFilterAsync). Only --state disabled and
@@ -100,7 +100,7 @@ public class KeyCommandTests
     }
 
     // On key list, --state disabled lists disabled keys without --include-disabled
-    // (proposed-cli-surface.md "Filters"). The API leaves disabled keys out unless include_disabled
+    // (spec/cli-surface.md "Filters"). The API leaves disabled keys out unless include_disabled
     // is true, whatever the search (portal EnrolmentKeyRepository.cs, BuildFilterAsync), so the CLI
     // sends both.
     [Test]
@@ -132,7 +132,7 @@ public class KeyCommandTests
     }
 
     // --sort takes EnrolmentKeySortOrder's members (portal Enclave.Configuration.Data), lower-case and
-    // hyphenated and matched ignoring case (proposed-cli-surface.md "Options on every command").
+    // hyphenated and matched ignoring case (spec/cli-surface.md "Options on every command").
     [TestCase("description", "Description")]
     [TestCase("last-used", "LastUsed")]
     [TestCase("approval-mode", "ApprovalMode")]
@@ -148,7 +148,7 @@ public class KeyCommandTests
         Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
     }
 
-    // Each option takes the values proposed-cli-surface.md "Command options" lists for it. gated and
+    // Each option takes the values spec/cli-surface.md "Command options" lists for it. gated and
     // auto are the API's search values, which the CLI writes for the user; recently-enrolled is a
     // system sort with no member in EnrolmentKeySortOrder.
     [TestCase("--approval gated")]
@@ -193,7 +193,7 @@ public class KeyCommandTests
     }
 
     // A key given as an argument is its description, looked up with one list call that asks for
-    // disabled keys too, and the key found is then read by its ID (proposed-cli-surface.md "Names and
+    // disabled keys too, and the key found is then read by its ID (spec/cli-surface.md "Names and
     // IDs", "Filters", "Calls per command"). The output is that read, with the key's secret
     // ("Output"). Example 46, first command.
     [Test]
@@ -217,7 +217,7 @@ public class KeyCommandTests
         });
     }
 
-    // --id gives the ID and makes no lookup (proposed-cli-surface.md "Names and IDs"). Example 46,
+    // --id gives the ID and makes no lookup (spec/cli-surface.md "Names and IDs"). Example 46,
     // second command.
     [Test]
     public async Task Key_show_id_reads_the_key_without_a_lookup_and_prints_it_with_its_secret()
@@ -238,7 +238,7 @@ public class KeyCommandTests
         });
     }
 
-    // A name matches exactly, ignoring case (proposed-cli-surface.md "Names and IDs").
+    // A name matches exactly, ignoring case (spec/cli-surface.md "Names and IDs").
     [Test]
     public async Task Key_show_matches_the_description_ignoring_case()
     {
@@ -253,7 +253,7 @@ public class KeyCommandTests
     }
 
     // An argument is a description whatever it looks like: "12" names the key described "12", never
-    // key 12, since the option decides how a value is read (proposed-cli-surface.md "Names and IDs").
+    // key 12, since the option decides how a value is read (spec/cli-surface.md "Names and IDs").
     [Test]
     public async Task Key_show_reads_a_number_given_as_the_argument_as_a_description()
     {
@@ -273,7 +273,7 @@ public class KeyCommandTests
         });
     }
 
-    // A name must match exactly one item; no match exits 2 (proposed-cli-surface.md "Names and IDs",
+    // A name must match exactly one item; no match exits 2 (spec/cli-surface.md "Names and IDs",
     // "Errors and exit codes"), and no key is read. One description starts with the name given, which
     // is not a match.
     [Test]
@@ -291,7 +291,7 @@ public class KeyCommandTests
     }
 
     // A name that matches several items exits 2, and the error carries the items that matched as
-    // candidates (proposed-cli-surface.md "Errors and exit codes"). The two descriptions differ only
+    // candidates (spec/cli-surface.md "Errors and exit codes"). The two descriptions differ only
     // in case, and names match ignoring case.
     [Test]
     public async Task Key_show_with_a_description_two_keys_match_exits_2_with_both_as_candidates()
@@ -312,7 +312,7 @@ public class KeyCommandTests
         });
     }
 
-    // A name argument with --id contradicts it and exits 2 (proposed-cli-surface.md "Details"). Each
+    // A name argument with --id contradicts it and exits 2 (spec/cli-surface.md "Details"). Each
     // corrected command gives the ID alone.
     [TestCase("show", "GET", "enrolment-keys/12")]
     [TestCase("update", "PATCH", "enrolment-keys/12")]
@@ -334,7 +334,7 @@ public class KeyCommandTests
             path);
     }
 
-    // Single-ID commands exit 5 for an unknown ID (proposed-cli-surface.md "Several IDs").
+    // Single-ID commands exit 5 for an unknown ID (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task Key_show_of_an_unknown_id_exits_5_with_not_found()
     {
@@ -349,7 +349,7 @@ public class KeyCommandTests
 
     // A create sends every setting that changes behaviour, with the documented value when its flag is
     // left out, so a change to the API's defaults does not change what the command does
-    // (proposed-cli-surface.md "Create and update"). A general-purpose key requires approval and has
+    // (spec/cli-surface.md "Create and update"). A general-purpose key requires approval and has
     // unlimited uses, -1 ("Command options"; portal EnrolmentKeyCreateModel.UsesRemaining), and a
     // create sends an empty list for a list flag left out ("Details"). The API accepts a retention
     // time on ephemeral keys only (portal EnrolmentKeyCreateValidator.cs:24), and a key without --for
@@ -388,7 +388,7 @@ public class KeyCommandTests
         });
     }
 
-    // The new key's secret is the output's key field (proposed-cli-surface.md "Output"), which
+    // The new key's secret is the output's key field (spec/cli-surface.md "Output"), which
     // example 8 reads with jq -r .key.
     [Test]
     public async Task Key_create_prints_the_created_key_with_its_secret_in_the_key_field()
@@ -407,7 +407,7 @@ public class KeyCommandTests
     }
 
     // --auto-approve and --uses change a general-purpose key's approval and uses
-    // (proposed-cli-surface.md "Command options").
+    // (spec/cli-surface.md "Command options").
     [TestCase("--auto-approve", "Automatic", -1)]
     [TestCase("--uses 5", "Manual", 5)]
     [TestCase("--auto-approve --uses 5", "Automatic", 5)]
@@ -429,7 +429,7 @@ public class KeyCommandTests
     }
 
     // An ephemeral key always approves automatically, has unlimited uses, and keeps a disconnected
-    // system for 30 minutes unless --keep-disconnected is given (proposed-cli-surface.md "Command
+    // system for 30 minutes unless --keep-disconnected is given (spec/cli-surface.md "Command
     // options", the portal's values: portal-spa createKeyDetailsSaga.ts:21-29).
     [Test]
     public async Task Key_create_ephemeral_sends_automatic_approval_unlimited_uses_and_30_minutes_retention()
@@ -501,7 +501,7 @@ public class KeyCommandTests
     }
 
     // Each --allow-ip is one IP constraint, its label sent as the constraint's description
-    // (proposed-cli-surface.md "Command options"). The second label holds a comma, which is why the
+    // (spec/cli-surface.md "Command options"). The second label holds a comma, which is why the
     // flag is repeated and never a comma list.
     [Test]
     public async Task Key_create_allow_ip_sends_each_range_as_an_ip_constraint_with_its_label_as_the_description()
@@ -541,7 +541,7 @@ public class KeyCommandTests
     }
 
     // --for makes the key temporary: afterwards it is disabled, or deleted with --then delete
-    // (proposed-cli-surface.md "Command options"). The clock is fixed, so the expiry is exactly 14
+    // (spec/cli-surface.md "Command options"). The clock is fixed, so the expiry is exactly 14
     // days after it.
     [TestCase("--for 14d", "Disable")]
     [TestCase("--for 14d --then disable", "Disable")]
@@ -564,7 +564,7 @@ public class KeyCommandTests
     }
 
     // --until takes an RFC 3339 time with its zone, and the expiry is that instant, sent in UTC
-    // (proposed-cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
+    // (spec/cli-surface.md "Command options", "Details"). The clock is fixed, so the time stays
     // in the future.
     [Test]
     public async Task Key_create_until_a_time_with_a_zone_sends_that_instant_in_utc()
@@ -598,7 +598,7 @@ public class KeyCommandTests
 
     // An ephemeral key always approves automatically and has unlimited uses, so --ephemeral with
     // --auto-approve or --uses exits 2; the API accepts a retention time on ephemeral keys only, so
-    // --keep-disconnected without --ephemeral exits 2 (proposed-cli-surface.md "Command options";
+    // --keep-disconnected without --ephemeral exits 2 (spec/cli-surface.md "Command options";
     // portal EnrolmentKeyCreateValidator.cs:24). --then revoke is the systems' value, and --uses takes
     // a number. --for with --until, --then without either, and --until in the past exit 2
     // ("Details"). An expiry past the end of year 9999 is no time the CLI can send
@@ -631,7 +631,7 @@ public class KeyCommandTests
             KeysPath);
     }
 
-    // key create takes the description as its argument (proposed-cli-surface.md "Commands").
+    // key create takes the description as its argument (spec/cli-surface.md "Commands").
     [Test]
     public async Task Key_create_without_a_description_exits_2_without_a_request()
     {
@@ -648,7 +648,7 @@ public class KeyCommandTests
 
     // Example 32, second command. --require-approval sets ApprovalMode to Manual; Enclave.Sdk.Api
     // keys a patch body by EnrolmentKeyPatchModel's property names (PatchClient.Set), and an
-    // update sends only the fields given (proposed-cli-surface.md "Create and update"). --id makes no
+    // update sends only the fields given (spec/cli-surface.md "Create and update"). --id makes no
     // lookup.
     [Test]
     public async Task Key_update_id_require_approval_sends_manual_approval_as_the_only_patch_field()
@@ -666,7 +666,7 @@ public class KeyCommandTests
     }
 
     // Example 32, first command: the lookup list call, which asks for disabled keys too
-    // (proposed-cli-surface.md "Filters"), then the patch of the key it found.
+    // (spec/cli-surface.md "Filters"), then the patch of the key it found.
     [Test]
     public async Task Key_update_by_description_require_approval_patches_the_key_the_lookup_found()
     {
@@ -704,7 +704,7 @@ public class KeyCommandTests
     }
 
     // --auto-approve with --require-approval contradict each other and exit 2
-    // (proposed-cli-surface.md "Details").
+    // (spec/cli-surface.md "Details").
     [Test]
     public async Task Key_update_auto_approve_with_require_approval_exits_2_without_a_request()
     {
@@ -719,7 +719,7 @@ public class KeyCommandTests
             $"{KeysPath}/12");
     }
 
-    // An update with no change flag exits 2 (proposed-cli-surface.md "Details"): there is nothing to
+    // An update with no change flag exits 2 (spec/cli-surface.md "Details"): there is nothing to
     // send.
     [Test]
     public async Task Key_update_without_a_change_flag_exits_2_without_a_request()
@@ -736,7 +736,7 @@ public class KeyCommandTests
     }
 
     // Example 48: five more uses, from the office network only. --set-allow-ip reads the key first, to
-    // keep the labels of ranges that stay (proposed-cli-surface.md "Calls per command"); a key given
+    // keep the labels of ranges that stay (spec/cli-surface.md "Calls per command"); a key given
     // by --id needs no lookup ("Names and IDs").
     [TestCase(true)]
     [TestCase(false)]
@@ -766,7 +766,7 @@ public class KeyCommandTests
     }
 
     // Example 76: each --set-allow-ip is one range, its label sent as the range's description
-    // (proposed-cli-surface.md "Command options").
+    // (spec/cli-surface.md "Command options").
     [TestCase(true)]
     [TestCase(false)]
     public async Task Key_update_set_allow_ip_sends_each_range_with_its_label_as_the_description(bool byDescription)
@@ -792,7 +792,7 @@ public class KeyCommandTests
         });
     }
 
-    // The output is the model the API returned, with the key's secret (proposed-cli-surface.md
+    // The output is the model the API returned, with the key's secret (spec/cli-surface.md
     // "Output"), so its description differs from the one sent.
     [Test]
     public async Task Key_update_description_and_notes_send_only_those_fields_and_print_the_updated_key()
@@ -815,7 +815,7 @@ public class KeyCommandTests
         });
     }
 
-    // --set-tags replaces the whole list and needs no read (proposed-cli-surface.md "Create and
+    // --set-tags replaces the whole list and needs no read (spec/cli-surface.md "Create and
     // update", "Calls per command").
     [Test]
     public async Task Key_update_set_tags_sends_the_tags_as_the_whole_tag_list()
@@ -833,7 +833,7 @@ public class KeyCommandTests
     }
 
     // --add-tags and --remove-tags read the key, then patch its whole tag list
-    // (proposed-cli-surface.md "Create and update"), so the tags it keeps stay. The order of the tags
+    // (spec/cli-surface.md "Create and update"), so the tags it keeps stay. The order of the tags
     // does not matter to the API, so they are compared sorted.
     [TestCase("--add-tags", "ci", "build,ci,legacy,linux")]
     [TestCase("--remove-tags", "legacy", "build,linux")]
@@ -883,7 +883,7 @@ public class KeyCommandTests
     }
 
     // On a general-purpose key, --keep-disconnected is passed to the API, which refuses it
-    // (proposed-cli-surface.md "Details"; portal
+    // (spec/cli-surface.md "Details"; portal
     // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Handlers/EnrolmentKeyModifyHandler.cs:113-118
     // answers 422 retention-ephemeral-only), so the API's answer, and not a check of the CLI's own,
     // decides: the patch is sent with the retention, and the refusal is reported as the API's error,
@@ -911,7 +911,7 @@ public class KeyCommandTests
     }
 
     // A command that takes several items sends them in one bulk call and prints requested and
-    // affected (proposed-cli-surface.md "Several IDs"); --id takes several IDs, comma separated.
+    // affected (spec/cli-surface.md "Several IDs"); --id takes several IDs, comma separated.
     // The calls are Enclave.Sdk.Api EnrolmentKeysClient's BulkEnableAsync, BulkDisableAsync
     // and BulkDeleteAsync; delete is the API's bulk route (portal EnrolmentKeysController.cs:295). The
     // API counts two of the three keys, and the output carries its count. Key IDs are JSON numbers.
@@ -939,7 +939,7 @@ public class KeyCommandTests
     }
 
     // Example 9, second command: the old key is disabled by its description, found with one list
-    // call that asks for disabled keys too (proposed-cli-surface.md "Filters"). The new key's
+    // call that asks for disabled keys too (spec/cli-surface.md "Filters"). The new key's
     // description starts with the same words and is listed first.
     [Test]
     public async Task Key_disable_by_description_sends_the_id_the_lookup_found_in_the_bulk_call()
@@ -962,7 +962,7 @@ public class KeyCommandTests
     }
 
     // Example 49, second command. --for takes one key and calls its enable-until route, since the
-    // API's timed enable has no bulk form, and prints the key the API returns (proposed-cli-surface.md
+    // API's timed enable has no bulk form, and prints the key the API returns (spec/cli-surface.md
     // "Several IDs"). --then delete is the API's Delete action, and the expiry is sent as a UTC
     // instant ("Details"). The clock is fixed, so the expiry is exactly 14 days after it.
     [Test]
@@ -991,7 +991,7 @@ public class KeyCommandTests
     }
 
     // Example 49, first command. Name lookups ask for disabled items too, since enable takes a
-    // disabled item by name (proposed-cli-surface.md "Filters"). The API lists disabled keys only when
+    // disabled item by name (spec/cli-surface.md "Filters"). The API lists disabled keys only when
     // include_disabled is true (portal EnrolmentKeyRepository.cs, BuildFilterAsync), so here only a
     // lookup that asks for them receives the key.
     [Test]
@@ -1012,7 +1012,7 @@ public class KeyCommandTests
         Assert.That(JsonAssert.Property(enables[0].BodyJson, "expiryAction").GetString(), Is.EqualTo("Delete"));
     }
 
-    // --then takes disable or delete on a key; revoke is the systems' value (proposed-cli-surface.md
+    // --then takes disable or delete on a key; revoke is the systems' value (spec/cli-surface.md
     // "Command options"). --for with --until, --then without either, and --until in the past exit 2
     // ("Details"). An expiry past the end of year 9999 is no time the CLI can send
     // (DateTimeOffset.MaxValue), and 5000000d, about 13,700 years, reaches past it from the fixed

@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Editing;
 
 // A create sends a value for every setting that changes behaviour, so a change to the API's own
 // defaults does not change what a command does, and --dry-run shows every value sent
-// (proposed-cli-surface.md "Create and update"). A list flag left out is sent as an empty list
+// (spec/cli-surface.md "Create and update"). A list flag left out is sent as an empty list
 // ("Details"). The values each noun documents for its other settings are tested with that noun.
 public class CreateDefaultsTests
 {

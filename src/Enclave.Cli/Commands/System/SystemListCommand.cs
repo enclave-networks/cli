@@ -9,7 +9,7 @@ namespace Enclave.Cli.Commands.Systems;
 
 /// <summary>
 /// `system list`: the enrolled systems, or with --pending the systems waiting for approval
-/// (proposed-cli-surface.md "Command options", "Filters").
+/// (spec/cli-surface.md "Command options", "Filters").
 /// </summary>
 internal static class SystemListCommand
 {
@@ -149,7 +149,7 @@ internal static class SystemListCommand
 
             // The list handler never reads the dns parameter (portal
             // Systems/Handlers/PaginatedSystemsHandler.cs), so the CLI sends none
-            // (proposed-cli-surface.md "Left out").
+            // (spec/cli-surface.md "Left out").
             var systems = await Paging.ReadAllAsync(
                 (page, perPage) => org.Client.EnrolledSystems.GetSystemsAsync(
                     enrolmentKey,

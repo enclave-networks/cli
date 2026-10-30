@@ -2,7 +2,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Checks a list option whose list the API refuses when it holds a value twice, so the command
-/// exits 2 before any call (proposed-cli-surface.md "Command options"), and tells the value that
+/// exits 2 before any call (spec/cli-surface.md "Command options"), and tells the value that
 /// clears a repeated --set- flag's list from the values that replace it. The policy, DNS, key, tag
 /// and trust commands use it.
 /// </summary>
@@ -14,7 +14,7 @@ internal static class ListValues
     /// place (<see cref="CliOptions.Labelled"/>).
     /// </summary>
     // A --set- list flag given "" clears its list, and only white space reads as "" does
-    // (proposed-cli-surface.md "Details"). A value with "=" has a label, so it is an entry.
+    // (spec/cli-surface.md "Details"). A value with "=" has a label, so it is an entry.
     public static bool Clears(IReadOnlyList<LabelledValue>? values) =>
         values is [{ HasLabel: false } value] && string.IsNullOrWhiteSpace(value.Value);
 

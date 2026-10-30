@@ -9,7 +9,7 @@ namespace Enclave.Cli.Tests.Safety;
 /// <summary>
 /// --dry-run prints { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
 /// with the requests Enclave.Sdk.Api builds for the change, sends none of them and exits 0
-/// (proposed-cli-surface.md "Dry run").
+/// (spec/cli-surface.md "Dry run").
 /// </summary>
 public class DryRunTests
 {
@@ -18,7 +18,7 @@ public class DryRunTests
     // The reads a change depends on run under --dry-run, such as the zone a hostname belongs to;
     // only the change is withheld. The change itself is answered by the fake API, so a CLI that
     // sent it would show it in the requests. The organisation is given by ID (ENCLAVE_ORG_ID), so
-    // no lookup is made and its name is null (proposed-cli-surface.md "Dry run").
+    // no lookup is made and its name is null (spec/cli-surface.md "Dry run").
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Dry_run_prints_the_request_a_change_would_send_and_sends_no_change(ChangeCommand command)
     {
@@ -82,7 +82,7 @@ public class DryRunTests
         });
     }
 
-    // An empty list makes no call (proposed-cli-surface.md "Several IDs"), so its dry run shows no
+    // An empty list makes no call (spec/cli-surface.md "Several IDs"), so its dry run shows no
     // request.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dry_run_given_an_empty_list_on_stdin_shows_no_request(BulkCommand command)
@@ -101,7 +101,7 @@ public class DryRunTests
         });
     }
 
-    // Example 4 in proposed-cli-surface.md: a reviewer sees which systems an approval would admit
+    // Example 4 in spec/cli-surface.md: a reviewer sees which systems an approval would admit
     // before it is sent.
     [Test]
     public async Task Dry_run_of_system_approve_prints_the_ids_of_the_list_on_stdin()
@@ -123,7 +123,7 @@ public class DryRunTests
         });
     }
 
-    // Example 54 in proposed-cli-surface.md. The dry run and the delete run in one sandbox, so the
+    // Example 54 in spec/cli-surface.md. The dry run and the delete run in one sandbox, so the
     // request the dry run prints is compared with the request the delete then sends. A name costs
     // one lookup in each run, the dry run included, and --id none ("Calls per command", "Dry run").
     [TestCase(false)]
@@ -164,7 +164,7 @@ public class DryRunTests
         });
     }
 
-    // A named organisation is looked up, one call (proposed-cli-surface.md "Calls per command"), so
+    // A named organisation is looked up, one call (spec/cli-surface.md "Calls per command"), so
     // the CLI has both its ID and its name to print. ENCLAVE_ORG_ID names the other organisation
     // when the name comes from --org, so the output shows the named one was used.
     [TestCase(false)]
@@ -195,7 +195,7 @@ public class DryRunTests
     }
 
     // An organisation given by ID needs no lookup, so the dry run makes none and has no name to
-    // print (proposed-cli-surface.md "Dry run").
+    // print (spec/cli-surface.md "Dry run").
     [Test]
     public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id_and_prints_a_null_name()
     {
@@ -244,7 +244,7 @@ public class DryRunTests
         });
     }
 
-    // An update sends only the fields given (proposed-cli-surface.md "Create and update"), and the
+    // An update sends only the fields given (spec/cli-surface.md "Create and update"), and the
     // printed body is the one Enclave.Sdk.Api would send, so it holds the description alone.
     // PatchClient keys the body by the model's property name (Enclave.Sdk.Api,
     // PatchClient.cs, Set), which JsonAssert.Property matches ignoring case.
@@ -270,7 +270,7 @@ public class DryRunTests
     }
 
     // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api), which the dry run
-    // shows as "body": null (proposed-cli-surface.md "Dry run").
+    // shows as "body": null (spec/cli-surface.md "Dry run").
     [Test]
     public async Task Dry_run_of_a_request_without_a_body_prints_a_null_body()
     {
@@ -291,7 +291,7 @@ public class DryRunTests
     }
 
     // tag set reads the tag to choose between the API's update and create calls, and that read
-    // runs under --dry-run too (proposed-cli-surface.md "Dry run"), so the dry run shows the call
+    // runs under --dry-run too (spec/cli-surface.md "Dry run"), so the dry run shows the call
     // the command would make: an update when the tag exists, a create when it does not.
     [TestCase(true, "PATCH", "tags/web")]
     [TestCase(false, "POST", "tags")]
@@ -327,7 +327,7 @@ public class DryRunTests
 
     // A flag that replaces a list keeps the label of every entry that stays. A label given with the
     // flag replaces it, an empty one removes it, and a new entry without a label has none
-    // (proposed-cli-surface.md "Command options"). The CLI reads the key to find the labels, a read
+    // (spec/cli-surface.md "Command options"). The CLI reads the key to find the labels, a read
     // the dry run makes too ("Dry run"), and the dry run shows the list it would send.
     // 172.16.0.0/12 is left out, so it goes. A label can hold a comma, since the flag is repeated.
     // An empty label is sent as null ("Details"), and Text reads a null or missing label as (none)
@@ -371,7 +371,7 @@ public class DryRunTests
         });
     }
 
-    // --then revoke is the API's Delete on a system (proposed-cli-surface.md "Options on every
+    // --then revoke is the API's Delete on a system (spec/cli-surface.md "Options on every
     // command"), --for counts from when the command runs, and the CLI sends the expiry as a UTC
     // instant ("Details").
     [Test]
@@ -400,7 +400,7 @@ public class DryRunTests
     }
 
     // --dry-run exists only on commands that change something through the API, so on a read it is
-    // an unknown option and exits 2 (proposed-cli-surface.md "Details"). The second run shows the
+    // an unknown option and exits 2 (spec/cli-surface.md "Details"). The second run shows the
     // command itself works.
     [TestCaseSource(nameof(ReadOnlyCases))]
     public async Task Dry_run_is_an_unknown_option_on_a_command_that_only_reads(string[] args, string path, string response)
@@ -421,7 +421,7 @@ public class DryRunTests
     }
 
     // login, logout, org use and partner use change only local files and do not take --dry-run
-    // (proposed-cli-surface.md "Dry run"), so it is an unknown option: exit 2, with the file left
+    // (spec/cli-surface.md "Dry run"), so it is an unknown option: exit 2, with the file left
     // as it was. The second run, without it, shows the command changes the file.
     [TestCaseSource(typeof(LocalCommand), nameof(LocalCommand.All))]
     public async Task Dry_run_is_an_unknown_option_on_a_command_that_changes_only_local_files(LocalCommand command)

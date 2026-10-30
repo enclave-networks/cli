@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
 /// Lists in the form enclave-cli list commands print them, { "kind", "items", "total" }, for a test
-/// to give a command as stdin after "-" (proposed-cli-surface.md "Output" and "Several IDs").
+/// to give a command as stdin after "-" (spec/cli-surface.md "Output" and "Several IDs").
 /// </summary>
 internal static class CliList
 {
@@ -34,7 +34,7 @@ internal static class CliList
     // Each kind's ID is the property its model identifies an item by, and the value a command given
     // that list sends: systems by systemId, tags by name, invites by email address (the main API
     // cancels an invite by email, OrganisationClient.CancelInviteAync, and a partner customer's
-    // invite is looked up by its email address, proposed-cli-surface.md "Partner API"), and
+    // invite is looked up by its email address, spec/cli-surface.md "Partner API"), and
     // organisations, users, customers and customer admins by their GUID
     // (AccountOrganisationModel.OrgId, OrganisationUser.Id, and Enclave.Sdk.Api's
     // CustomerModel.Id and CustomerUserModel.Id). Log entries have no ID (LogEntryModel).

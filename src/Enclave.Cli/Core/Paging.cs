@@ -16,7 +16,7 @@ internal static class Paging
     /// <summary>
     /// Reads pages 0, 1, 2 and on, <see cref="PageSize"/> items each, until a response's
     /// metadata.nextPage is null, and returns every item in order. A failed page read throws, so a
-    /// command prints nothing from a list it could not read whole (proposed-cli-surface.md "Output").
+    /// command prints nothing from a list it could not read whole (spec/cli-surface.md "Output").
     /// </summary>
     /// <typeparam name="T">The list's item model.</typeparam>
     /// <param name="readPage">Reads one page: the page number and page size go to the list

@@ -8,7 +8,7 @@ using Enclave.Sdk.Api;
 namespace Enclave.Cli.Context;
 
 /// <summary>
-/// Chooses the organisation a command acts in (proposed-cli-surface.md "Context").
+/// Chooses the organisation a command acts in (spec/cli-surface.md "Context").
 /// </summary>
 internal static class OrganisationResolver
 {
@@ -170,7 +170,7 @@ internal static class OrganisationResolver
     // An empty or blank name names no organisation. Passed on, it would cost the lookup a name makes
     // and then match nothing, and that lookup needs the token, so the same command line would exit 3
     // without a token and 2 with one. Refused with the other argument checks, it exits 2 before the
-    // token and any call whatever the token (proposed-cli-surface.md "Errors and exit codes").
+    // token and any call whatever the token (spec/cli-surface.md "Errors and exit codes").
     private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value)
     {
         ArgumentNullException.ThrowIfNull(verb);

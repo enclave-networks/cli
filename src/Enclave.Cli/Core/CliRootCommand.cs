@@ -41,7 +41,7 @@ internal sealed class CliRootCommand : RootCommand
         // other arguments.
         Options.OfType<VersionOption>().Single().Action = new VersionAction();
 
-        // enclave-cli with no arguments prints the help (proposed-cli-surface.md "Errors and exit
+        // enclave-cli with no arguments prints the help (spec/cli-surface.md "Errors and exit
         // codes"); anything it cannot parse is reported by the action before this runs.
         Action = new CliAction(async context => await context.Output.WriteTextAsync(HelpWriter.Write(context.ParseResult.CommandResult)));
     }

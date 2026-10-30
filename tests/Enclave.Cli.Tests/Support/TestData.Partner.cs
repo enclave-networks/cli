@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Enclave.Cli.Tests.Support;
 
 // The customer, account and email values are the ones the partner examples of
-// proposed-cli-surface.md use ("Examples" 34, 65, 66, 85 and 86), so a test command reads as the
+// spec/cli-surface.md use ("Examples" 34, 65, 66, 85 and 86), so a test command reads as the
 // example it follows. IDs are in the hyphenated form people type.
 
 /// <summary>

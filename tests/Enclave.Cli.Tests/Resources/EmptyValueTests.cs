@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Resources;
 // A value given "" or only white space is set only where an empty value means something: clearing
 // an optional field, setting or list. Where it means nothing, the command exits 2 invalid_argument
 // with the other argument checks, before the token is read and before any call, and the value is
-// never read as the flag left out (proposed-cli-surface.md "Details"). An empty value usually comes
+// never read as the flag left out (spec/cli-surface.md "Details"). An empty value usually comes
 // from an unset shell variable.
 //
 // Each case that exits 2 runs twice. The run with a token answers every read the command could go

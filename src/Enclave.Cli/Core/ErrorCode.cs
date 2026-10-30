@@ -5,7 +5,7 @@ namespace Enclave.Cli.Core;
 /// </summary>
 internal sealed record ErrorCode(string Code, int ExitCode, string Title)
 {
-    // proposed-cli-surface.md "Errors and exit codes" fixes the set and each code's exit code;
+    // spec/cli-surface.md "Errors and exit codes" fixes the set and each code's exit code;
     // `commands` lists them, and agents act on the code, so a new code is a breaking change.
     public static ErrorCode ApiError { get; } = new("api_error", 1, "API error");
 

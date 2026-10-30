@@ -5,7 +5,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// trust create <description> (proposed-cli-surface.md "Command options"). The body is the API's
+// trust create <description> (spec/cli-surface.md "Command options"). The body is the API's
 // TrustRequirementCreateModel: description, type, notes, and settings holding a configuration and
 // a list of conditions, every value a string (portal TrustRequirementSettingsModel, and portal-spa
 // redux/sagas/business/trust-requirements/createTrustRequirement.ts sends the same four fields).

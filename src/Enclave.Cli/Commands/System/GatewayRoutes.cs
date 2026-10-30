@@ -19,7 +19,7 @@ internal static class GatewayRoutes
     // redux/reducers/app/detailTab/systems.ts:44-83). New routes have userEntered true and weight 0.
     // A route that stays keeps its weight, the preference the API gives it over other gateways'
     // routes to the same subnet (SystemGatewayRouteModel.Weight), and its label unless one is given
-    // (proposed-cli-surface.md "Command options").
+    // (spec/cli-surface.md "Command options").
     //
     // A subnet given that the system also found stays one found route, with the label given: sending
     // it as a user-entered route as well would repeat the subnet, which the portal refuses as a

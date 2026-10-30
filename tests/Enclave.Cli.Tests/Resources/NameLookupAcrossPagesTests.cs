@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Resources;
 
 // A name is looked up in the whole list, read page by page until the API reports no next page
-// (proposed-cli-surface.md "Names and IDs", "Calls per command"), so a match on a later page is
+// (spec/cli-surface.md "Names and IDs", "Calls per command"), so a match on a later page is
 // found, and matches on two pages are two candidates. Each case is one of the five name lookups: a
 // key, policy or trust requirement by its description, a zone by its name, and a hostname by its
 // full name, each through its show command, which reads the item found by its ID. The fake API

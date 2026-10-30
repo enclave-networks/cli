@@ -8,6 +8,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - Public repository, MIT licence.
 - `src/Enclave.Cli/`: the CLI. Assembly `enclave-cli`, namespace `Enclave.Cli`.
 - `tests/Enclave.Cli.Tests/`: NUnit tests.
+- `spec/cli-surface.md`: the specification of every command, flag, default and example.
 - `.github/workflows/ci.yml`: build, test, package, release.
 - Commands that control the local agent or machine belong to `enclave`, the Enclave agent (repository enclave-networks/fabric). NEVER add them here.
 - `Enclave.Sdk.Api` is the Management API client package, built from repository enclave-networks/enclave.sdk.api. Repository enclave-networks/sdk is the agent's networking SDK and plays no part here.
@@ -48,9 +49,9 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - An endpoint or field `Enclave.Sdk.Api` lacks: stop and report it. It is added to enclave-networks/enclave.sdk.api first, with tests there, then the `Enclave.Sdk.Api` version is bumped here. NEVER work around a gap locally.
 - The API and `Enclave.Sdk.Api.Data` (built from the portal repository) do not change. Use only routes and fields the API has; a model `Enclave.Sdk.Api.Data` lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
 - The API is the security boundary: it decides what a token may read and change. NEVER add authorisation checks to the CLI, such as checking that an organisation or customer belongs to the caller, and NEVER describe a call the CLI makes (a lookup, a read for an exit code) as a security control. A gap in the API's own checks is reported to the API team.
-- One command makes one `Enclave.Sdk.Api` call, with the exceptions listed in `proposed-cli-surface.md` "Calls per command": paging, name lookups, reads that keep tags, labels and conditions, and bulk calls of 200 IDs.
+- One command makes one `Enclave.Sdk.Api` call, with the exceptions listed in `spec/cli-surface.md` "Calls per command": paging, name lookups, reads that keep tags, labels and conditions, and bulk calls of 200 IDs.
 - Command shape: `enclave-cli <noun> <verb> [args] [options]`. A noun's own parts take hyphenated verbs (`dns create-hostname`, `org remove-user`). Nouns are singular, with a hidden plural alias: `org`, `partner`, `partner customer`, `system`, `key`, `policy`, `tag`, `dns`, `trust`, `log`.
-- `proposed-cli-surface.md` is the reference for every command, flag, default and example. A command or flag it does not list is not added without changing it first.
+- `spec/cli-surface.md` is the reference for every command, flag, default and example. A command or flag it does not list is not added without changing it first.
 - Out of scope: enrolling a system (the agent does that), account password/2FA/accepting invites (browser flows), payment, and the partner's own properties, users and invites (personal access tokens cannot carry those scopes).
 
 ## CLI contract (agent-facing; any change to it is a breaking change)
@@ -61,7 +62,7 @@ Directives for AI agents working in this repository. MUST and NEVER are binding.
 - Exit codes: 0 success; 1 `api_error`, `not_implemented`; 2 `invalid_argument`, `no_org`, `no_partner`; 3 `token_missing`, `token_invalid`; 4 `forbidden` (HTTP 403); 5 `not_found` (HTTP 404, single-item commands); 6 `transient` (network failure, timeout, HTTP 429 or 5xx).
 - NEVER prompt, and NEVER wait on interactive input. Changes run when given; there is no confirmation option.
 - Every command that changes something supports `--dry-run`: print the request it would send, send nothing, exit 0.
-- Every field is set with a flag; there is no file or JSON input. A create sends every setting that changes behaviour, with the value `proposed-cli-surface.md` gives when a flag is left out.
+- Every field is set with a flag; there is no file or JSON input. A create sends every setting that changes behaviour, with the value `spec/cli-surface.md` gives when a flag is left out.
 - A value given as `""` or only white space is set only where an empty value means something: clearing an optional field, setting or list. Where it means nothing (a name, email address, ID, filter or required setting), the command exits 2 `invalid_argument` before the token is read and before any call. NEVER treat it as a flag left out: an empty value usually comes from an unset shell variable, and dropping the flag widens the command (`--tag "$RETIRED" | system revoke -` would revoke every system).
 - An ID is never a positional argument. `--id` gives the command's own item; other items have `--<item>` for a name and `--<item>-id` for an ID. The option decides how a value is parsed; NEVER inspect a value to guess its type.
 - `-` in place of the arguments reads a list printed by an `enclave-cli` list command; its `kind` must match the command. A command that takes several items takes any number, sends them in bulk calls of 200, and prints `{ "requested": n, "affected": m }`.

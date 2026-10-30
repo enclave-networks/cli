@@ -6,12 +6,12 @@ namespace Enclave.Cli.Tests.Safety;
 /// <summary>
 /// The option a value is given with decides how it is read: --id and the --&lt;item&gt;-id options take
 /// IDs, arguments and the --&lt;item&gt; options take names, and the CLI never inspects a value to guess
-/// its type (proposed-cli-surface.md "Shape and naming").
+/// its type (spec/cli-surface.md "Shape and naming").
 /// </summary>
 public class OptionDecidesParsingTests
 {
     // 12 is the ID of one key and the description of another, so the systems request shows which
-    // reading the CLI took. --key-id uses the API's enrolment_key parameter (proposed-cli-surface.md
+    // reading the CLI took. --key-id uses the API's enrolment_key parameter (spec/cli-surface.md
     // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api).
     [Test]
     public async Task Key_id_option_reads_its_value_as_a_key_id_and_makes_no_lookup()
@@ -104,7 +104,7 @@ public class OptionDecidesParsingTests
 
     // --org takes a name. The value is the ID of an organisation the token sees, and no organisation
     // has it as its name, so it matches nothing: the CLI exits 2 invalid_argument after the lookup,
-    // with no candidates, and changes nothing (proposed-cli-surface.md "Errors and exit codes").
+    // with no candidates, and changes nothing (spec/cli-surface.md "Errors and exit codes").
     // Either organisation's change is answered, so a CLI that read the value as an ID, or fell back
     // to ENCLAVE_ORG_ID, would show a request.
     [Test]
@@ -176,7 +176,7 @@ public class OptionDecidesParsingTests
     }
 
     // A name and its ID option given together contradict each other, and nothing in the values says
-    // which was meant, so the command exits 2 and sends nothing (proposed-cli-surface.md "Details").
+    // which was meant, so the command exits 2 and sends nothing (spec/cli-surface.md "Details").
     // The second run gives the ID alone and shows the command works.
     [TestCaseSource(nameof(NameWithIdCases))]
     public async Task Name_given_with_its_id_option_exits_2_and_sends_nothing(string[] rejectedArgs, string[] acceptedArgs, string method, string path, string response)

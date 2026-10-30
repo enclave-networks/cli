@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Trust;
 
 /// <summary>
 /// `trust create &lt;description&gt;`: a sign-in requirement with --authority, or a public IP
-/// requirement with --allow-* and --block-* (proposed-cli-surface.md "Command options").
+/// requirement with --allow-* and --block-* (spec/cli-surface.md "Command options").
 /// </summary>
 internal static class TrustCreateCommand
 {

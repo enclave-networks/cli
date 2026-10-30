@@ -7,7 +7,7 @@ namespace Enclave.Cli.Core;
 /// A time as a command line gives it, read into an instant against the clock and local time zone
 /// in <see cref="CliHost.Time"/>.
 /// </summary>
-// The forms are those of proposed-cli-surface.md "Command options": a duration (30m, 8h, 14d), an
+// The forms are those of spec/cli-surface.md "Command options": a duration (30m, 8h, 14d), an
 // RFC 3339 time with its zone, a date and time without a zone, or a clock time (18:00), the last
 // two read in the machine's time zone. Each is parsed with the invariant culture and an exact
 // pattern, so a command means the same on every machine whatever its locale and calendar; forms a

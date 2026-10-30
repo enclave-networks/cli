@@ -4,7 +4,7 @@ using Enclave.Configuration.Data.Modules.Policies.Enums;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// `policy list`: every policy, reading every page (proposed-cli-surface.md "Command options",
+/// `policy list`: every policy, reading every page (spec/cli-surface.md "Command options",
 /// "Filters").
 /// </summary>
 internal static class PolicyListCommand

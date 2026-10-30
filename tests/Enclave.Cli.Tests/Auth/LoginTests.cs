@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Auth;
 
 // login checks a personal access token with one GetOrganisationsAsync call, saves it in
 // credentials.json, prints the organisations the token can see, and never prompts
-// (proposed-cli-surface.md "Login, logout and status").
+// (spec/cli-surface.md "Login, logout and status").
 public class LoginTests
 {
     private const string StdinToken = "stdin-token-51c2e8";
@@ -157,7 +157,7 @@ public class LoginTests
     }
 
     // credentials.json can hold partnerApiBaseUrl beside baseUrl, and staging means setting both
-    // there (proposed-cli-surface.md "Partner API"), so login keeps it as it keeps baseUrl: a login
+    // there (spec/cli-surface.md "Partner API"), so login keeps it as it keeps baseUrl: a login
     // that rewrote the file without it would send the next partner command to production. The
     // address is staging's, which no test calls.
     [Test]

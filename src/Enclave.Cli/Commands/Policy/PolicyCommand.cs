@@ -3,7 +3,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// The `policy` noun (proposed-cli-surface.md "Commands"). A policy is given by its description, or
+/// The `policy` noun (spec/cli-surface.md "Commands"). A policy is given by its description, or
 /// by --id.
 /// </summary>
 internal static class PolicyCommand

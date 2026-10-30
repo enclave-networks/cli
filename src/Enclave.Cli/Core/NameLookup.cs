@@ -6,7 +6,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Finds items by name: a key, policy or trust requirement by its description, a zone by its name,
-/// and so on (proposed-cli-surface.md "Names and IDs").
+/// and so on (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class NameLookup
 {

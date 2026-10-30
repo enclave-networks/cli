@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
 /// Gives an item by its description or by --id, and reads the candidates a name lookup error
-/// carries (proposed-cli-surface.md "Names and IDs").
+/// carries (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class NameLookup
 {

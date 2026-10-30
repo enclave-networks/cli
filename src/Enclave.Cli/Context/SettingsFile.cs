@@ -19,7 +19,7 @@ internal static class SettingsFile
     /// <summary>
     /// The settings object, or null when there is no file or no home directory. A file that is not
     /// a JSON object exits 2; it is read only when no higher source chose the organisation or
-    /// partner (proposed-cli-surface.md "Details"), so a malformed file fails only the commands that
+    /// partner (spec/cli-surface.md "Details"), so a malformed file fails only the commands that
     /// need it.
     /// </summary>
     public static JsonObject? Read(CliHost host)

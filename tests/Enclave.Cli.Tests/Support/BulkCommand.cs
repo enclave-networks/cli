@@ -32,7 +32,7 @@ public readonly record struct BulkCommand(
     //
     // approve and decline act on systems waiting for approval, so they read the output of
     // system list --pending and refuse that of system list; the other system verbs take the reverse
-    // (proposed-cli-surface.md "Several IDs"). Every other kind here has IDs the command would also
+    // (spec/cli-surface.md "Several IDs"). Every other kind here has IDs the command would also
     // accept: system IDs share one format, the integer IDs are all integers, and a key ID is a valid
     // tag name. Only the kind check can then refuse the list.
     //
@@ -64,7 +64,7 @@ public readonly record struct BulkCommand(
 
     // Systems take IDs as arguments, since they have no names, and tags are given by name only. The
     // arguments of key, policy, hostname and trust requirement commands are names, so their IDs go
-    // after --id (proposed-cli-surface.md "Shape and naming").
+    // after --id (spec/cli-surface.md "Shape and naming").
 
     /// <summary>
     /// Whether the command takes its IDs as --id a,b,c.
@@ -132,7 +132,7 @@ public readonly record struct BulkCommand(
     /// The IDs of each call joined with commas, and the calls joined with "|", for IDs sent in calls
     /// of 200 in the order given: the form <see cref="IdsSent"/> reads the requests in.
     /// </summary>
-    // The API takes at most 200 IDs per bulk call (proposed-cli-surface.md "Several IDs"; portal
+    // The API takes at most 200 IDs per bulk call (spec/cli-surface.md "Several IDs"; portal
     // Enclave.Utilities/HardLimits.cs:22, MaxBulkIds).
     internal static string Batches(string[] ids) =>
         string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));

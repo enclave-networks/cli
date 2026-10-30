@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Auth;
 
 // The token is cleaned the same way from every source, --token-stdin, ENCLAVE_TOKEN and
 // credentials.json: a leading byte order mark is dropped and surrounding white space trimmed
-// (proposed-cli-surface.md "Options on every command"). A token file saved with a byte order mark,
+// (spec/cli-surface.md "Options on every command"). A token file saved with a byte order mark,
 // read into a variable with $(cat file), or a secret pasted with a newline then works. A cleaned
 // token that holds a character outside printable ASCII, or a space, is no personal access token,
 // so the CLI exits 3 token_invalid before any call: retrying cannot help, and an error reported

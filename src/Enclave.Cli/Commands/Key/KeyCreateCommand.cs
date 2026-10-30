@@ -8,7 +8,7 @@ namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
 /// `key create`: creates an enrolment key, sending every setting, and prints it with its secret
-/// (proposed-cli-surface.md "Command options", "Create and update").
+/// (spec/cli-surface.md "Command options", "Create and update").
 /// </summary>
 internal static class KeyCreateCommand
 {

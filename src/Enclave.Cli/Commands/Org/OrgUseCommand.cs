@@ -5,7 +5,7 @@ using Enclave.Configuration.Data.Identifiers;
 namespace Enclave.Cli.Commands.Org;
 
 /// <summary>
-/// `org use`: saves the default organisation in ~/.enclave/cli.json (proposed-cli-surface.md
+/// `org use`: saves the default organisation in ~/.enclave/cli.json (spec/cli-surface.md
 /// "Login, logout and status").
 /// </summary>
 internal static class OrgUseCommand

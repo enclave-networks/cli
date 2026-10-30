@@ -9,7 +9,7 @@ namespace Enclave.Cli.Commands.Describe;
 
 /// <summary>
 /// `commands [&lt;command words&gt;...]`: every command, its arguments and options, the values each
-/// option allows, and the error codes with their exit codes, as JSON (proposed-cli-surface.md
+/// option allows, and the error codes with their exit codes, as JSON (spec/cli-surface.md
 /// "Details"). It is generated from the command tree, so it describes every command the CLI has.
 /// With --search-keys and the words of a list, the list's entry also carries the search keys the
 /// API gives for its --filter.
@@ -66,7 +66,7 @@ internal static class CommandsCommand
 
             // The arguments are checked in full before the organisation is asked for, which reads
             // the token: checks run in the order arguments, token, organisation, call
-            // (proposed-cli-surface.md "Errors and exit codes").
+            // (spec/cli-surface.md "Errors and exit codes").
             var readSearchKeys = context.Get(searchKeys)
                 ? SearchKeysReader(string.Join(' ', path), context.Get(pending), searchKeys, pending)
                 : null;
@@ -114,7 +114,7 @@ internal static class CommandsCommand
             : throw CliErrors.InvalidArgument(CliVerb.KeyOf(pendingOption), $"{pendingOption.Name} with {searchKeys.Name} takes {SystemList}, for the systems waiting for approval. `{command}` has no {pendingOption.Name}.");
     }
 
-    // `partner customer` is a noun inside a noun (proposed-cli-surface.md "Shape and naming"), so
+    // `partner customer` is a noun inside a noun (spec/cli-surface.md "Shape and naming"), so
     // `commands partner` reaches the customer verbs only by walking down to the commands that run.
     private static IEnumerable<(string Name, Command Command)> Leaves(Command command, List<string> path)
     {

@@ -8,7 +8,7 @@ namespace Enclave.Cli.Commands.Key;
 /// <summary>
 /// `key enable`, `key disable` and `key delete`: keys given by description, by --id, or as a key
 /// list on stdin, sent in bulk calls of 200, printing { requested, affected }
-/// (proposed-cli-surface.md "Several IDs").
+/// (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class KeyBulkCommands
 {

@@ -97,7 +97,7 @@ case "$actual" in
     ;;
 esac
 
-# `commands` makes no call (proposed-cli-surface.md "Calls per command") and prints one JSON
+# `commands` makes no call (spec/cli-surface.md "Calls per command") and prints one JSON
 # document. The stock alpine:3.22 and almalinux:8 images have no JSON parser on the PATH, neither
 # jq nor python (checked in October 2026), so the check is on the form the CLI writes,
 # System.Text.Json's indented output (src/Enclave.Cli/Core/CliJson.cs, Output). The first byte is
@@ -120,7 +120,7 @@ grep -q '"code": "token_missing",' "$work/commands.json" || fail "enclave-cli co
 echo "enclave-cli commands: exit 0, a JSON document on stdout"
 
 # With no token the CLI exits 3 before it makes any call: it checks the arguments, then the token,
-# then the organisation, and only then calls the API (proposed-cli-surface.md "Errors and exit
+# then the organisation, and only then calls the API (spec/cli-surface.md "Errors and exit
 # codes"). It writes nothing on stdout and one compact JSON error on stderr
 # (src/Enclave.Cli/Core/CliOutput.cs, WriteErrorAsync), which names the credentials file it looked
 # for, so the error also shows the CLI looked in the home directory set above.

@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Contract;
 
 // `commands`, given nothing or a command's words, is how an agent learns the CLI without reading
-// help text: every command, option, allowed value and error code, as JSON (proposed-cli-surface.md
+// help text: every command, option, allowed value and error code, as JSON (spec/cli-surface.md
 // "Commands", "Details"; AGENTS.md requires it to stay complete). The document is
 // {"commands": [...], "errors": [...]} ("Details"). Each command entry holds "command" (its full
 // name, such as "dns list-zones"), "description", "arguments" (each with "name", in order) and
@@ -17,7 +17,7 @@ namespace Enclave.Cli.Tests.Contract;
 // lookups here are exact.
 public class CommandsTests
 {
-    // Every command in proposed-cli-surface.md "Commands", with its arguments named as the tree
+    // Every command in spec/cli-surface.md "Commands", with its arguments named as the tree
     // names them. `org use <name> | --id <orgId>` and `org remove-user <email> | --id <accountId>`
     // take the name or email address as the argument and the ID through --id. The arguments test
     // leaves out `commands` itself.
@@ -138,9 +138,9 @@ public class CommandsTests
         "log",
     ];
 
-    // Options the specification removed or never had: output formats, confirmation, file and
-    // template input, the token as an argument, --all and --search on lists, and the old name of
-    // --then ("Changes to AGENTS.md").
+    // Options the CLI does not have: output formats, confirmation, file and template input and the
+    // token as an argument (AGENTS.md "CLI contract"), and --all, --search and --expiry-action, which
+    // no row of "Command options" lists.
     private static readonly string[] OptionsNoCommandHas =
     [
         "-o", "--output", "--yes", "--from-file", "--template", "--token", "--all", "--search", "--expiry-action",

@@ -7,7 +7,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The trust commands (proposed-cli-surface.md "Commands", "Command options", "Filters", "Names and
+// The trust commands (spec/cli-surface.md "Commands", "Command options", "Filters", "Names and
 // IDs", "Details"). This part holds list, show and delete; TrustCommandTests.Create.cs and
 // TrustCommandTests.Update.cs hold create and update. A trust requirement is given by its
 // description, which costs one lookup call, or by --id, which costs none ("Calls per command").

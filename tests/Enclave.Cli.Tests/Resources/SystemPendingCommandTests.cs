@@ -4,7 +4,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Resources;
 
 // Systems waiting for approval are reached with --pending on system list, show and update, and
-// approved or declined with system approve and decline (proposed-cli-surface.md "Commands"). The
+// approved or declined with system approve and decline (spec/cli-surface.md "Commands"). The
 // API keeps them apart from enrolled systems, under unapproved-systems.
 public class SystemPendingCommandTests
 {
@@ -20,7 +20,7 @@ public class SystemPendingCommandTests
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
     // The list's kind is pending-system, so that approve and decline can check a list given to them
-    // (proposed-cli-surface.md "Output"). Three systems two to a page take two reads.
+    // (spec/cli-surface.md "Output"). Three systems two to a page take two reads.
     [Test]
     public async Task System_list_pending_reads_every_page_of_the_waiting_systems_and_prints_a_pending_system_list()
     {
@@ -56,7 +56,7 @@ public class SystemPendingCommandTests
     }
 
     // --key looks the key up by its description with one list call, then sends its ID as --key-id
-    // does (proposed-cli-surface.md "Filters" and "Names and IDs"). Name lookups ask for disabled
+    // does (spec/cli-surface.md "Filters" and "Names and IDs"). Name lookups ask for disabled
     // items too ("Filters").
     [Test]
     public async Task System_list_pending_key_looks_the_key_up_by_description_and_sends_its_id_as_the_enrolment_key_parameter()
@@ -79,7 +79,7 @@ public class SystemPendingCommandTests
     }
 
     // --filter sends its text as typed, and --tag adds the API's tags key to the search
-    // (proposed-cli-surface.md "Filters"). The waiting systems are searched with the enrolled
+    // (spec/cli-surface.md "Filters"). The waiting systems are searched with the enrolled
     // systems' search keys (portal UnapprovedSystems/Handlers/PaginatedUnapprovedSystemsHandler.cs
     // passes the search to the system repository).
     [TestCase("--filter laptop", "laptop")]
@@ -98,7 +98,7 @@ public class SystemPendingCommandTests
 
     // --sort takes UnapprovedSystemQuerySortMode's members (portal
     // UnapprovedSystems/Models/UnapprovedSystemQuerySortMode.cs), lower-case and hyphenated
-    // (proposed-cli-surface.md "Options on every command").
+    // (spec/cli-surface.md "Options on every command").
     [TestCase("recently-enrolled", "RecentlyEnrolled")]
     [TestCase("description", "Description")]
     [TestCase("enrolment-key-used", "EnrolmentKeyUsed")]
@@ -113,7 +113,7 @@ public class SystemPendingCommandTests
         Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
     }
 
-    // With --pending, --sort takes the waiting systems' sort values (proposed-cli-surface.md
+    // With --pending, --sort takes the waiting systems' sort values (spec/cli-surface.md
     // "Details"), and UnapprovedSystemQuerySortMode has none of these members.
     [TestCase("recently-connected")]
     [TestCase("last-connected")]
@@ -132,7 +132,7 @@ public class SystemPendingCommandTests
             PendingPath);
     }
 
-    // --pending with an option only enrolled systems have exits 2 (proposed-cli-surface.md
+    // --pending with an option only enrolled systems have exits 2 (spec/cli-surface.md
     // "Details"). The corrected command leaves the option out.
     [TestCase("--include-disabled")]
     [TestCase("--state connected")]
@@ -155,7 +155,7 @@ public class SystemPendingCommandTests
             PendingPath);
     }
 
-    // --waiting-for without --pending exits 2 (proposed-cli-surface.md "Details"); enrolled systems
+    // --waiting-for without --pending exits 2 (spec/cli-surface.md "Details"); enrolled systems
     // are not waiting.
     [Test]
     public async Task System_list_waiting_for_without_pending_exits_2_without_a_request()
@@ -174,7 +174,7 @@ public class SystemPendingCommandTests
 
     // --waiting-for has no API search key, so the CLI keeps the systems whose enrolledAt is longer ago
     // than the duration, from every page it reads, and total counts the matches
-    // (proposed-cli-surface.md "Filters"). The matches are on all three pages, so a CLI that filters
+    // (spec/cli-surface.md "Filters"). The matches are on all three pages, so a CLI that filters
     // one page misses some. The clock is fixed at Now, so 7d reaches back to
     // 2030-03-07T20:00:00Z exactly: EDGE01, enrolled at that instant, has waited 7 days, which is at
     // least the duration (the option's description), and NEW01, enrolled one second later, has not.
@@ -291,7 +291,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // An update sends only the fields given (proposed-cli-surface.md "Create and update").
+    // An update sends only the fields given (spec/cli-surface.md "Create and update").
     // Enclave.Sdk.Api keys the patch body by UnapprovedSystemPatchModel's property names
     // (PatchClient.Set). The output is the model the API returned.
     [Test]
@@ -325,7 +325,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // An update with no change flag exits 2 (proposed-cli-surface.md "Details"): there is nothing to
+    // An update with no change flag exits 2 (spec/cli-surface.md "Details"): there is nothing to
     // send.
     [Test]
     public async Task System_update_pending_without_a_change_flag_exits_2_without_a_request()
@@ -368,7 +368,7 @@ public class SystemPendingCommandTests
     }
 
     // --add-tags reads the waiting system, then patches its whole tag list, so the tags it has stay
-    // (proposed-cli-surface.md "Create and update"). The read and the patch both go to the waiting
+    // (spec/cli-surface.md "Create and update"). The read and the patch both go to the waiting
     // system. The order of the tags does not matter to the API, so they are compared sorted.
     [Test]
     public async Task System_update_pending_add_tags_reads_the_waiting_system_and_sends_its_tags_with_the_new_tag()
@@ -391,7 +391,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --pending with the gateway flags exits 2 (proposed-cli-surface.md "Details"): a waiting system
+    // --pending with the gateway flags exits 2 (spec/cli-surface.md "Details"): a waiting system
     // has no gateway routes to set (UnapprovedSystemPatchModel).
     [TestCase("--enable-gateway-for 10.0.0.0/16")]
     [TestCase("--disable-gateway")]
@@ -410,7 +410,7 @@ public class SystemPendingCommandTests
             $"{PendingPath}/XYZ12");
     }
 
-    // approve and decline act on waiting systems only (proposed-cli-surface.md "Commands"), in one
+    // approve and decline act on waiting systems only (spec/cli-surface.md "Commands"), in one
     // bulk call for any number of systems ("Several IDs"). Routes and result fields are those of
     // Enclave.Sdk.Api UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
     // approve succeeds when some systems were not approved (portal UnapprovedSystemsController.cs:

@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Partner;
 // The partner is chosen by --partner-id, then ENCLAVE_PARTNER_ID, then the default `partner use
 // --id` saves in ~/.enclave/cli.json. The organisation is chosen separately: partner commands use
 // the partner, and every other command that acts within an organisation uses the organisation
-// (proposed-cli-surface.md "Context"). A partner customer command calls the partner API under
+// (spec/cli-surface.md "Context"). A partner customer command calls the partner API under
 // /partner/{partnerId}/ (Enclave.Sdk.Api, PartnerClient), so the tests observe the choice
 // through the partner in the path of the request the command sends, which source's value the ID
 // check sees, and what cli.json holds.

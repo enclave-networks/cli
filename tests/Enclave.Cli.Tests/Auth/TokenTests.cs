@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Auth;
 
 // Where the token comes from, when it is checked, and that no command of this area prints it
-// (proposed-cli-surface.md "Options on every command", "Errors and exit codes" and "Login, logout
+// (spec/cli-surface.md "Options on every command", "Errors and exit codes" and "Login, logout
 // and status").
 public class TokenTests
 {

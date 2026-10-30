@@ -5,7 +5,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Auth;
 
 /// <summary>
-/// `logout`: deletes the saved token file (proposed-cli-surface.md "Login, logout and status").
+/// `logout`: deletes the saved token file (spec/cli-surface.md "Login, logout and status").
 /// </summary>
 internal static class LogoutCommand
 {

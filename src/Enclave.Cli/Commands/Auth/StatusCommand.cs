@@ -6,7 +6,7 @@ namespace Enclave.Cli.Commands.Auth;
 
 /// <summary>
 /// `status`: the token source, the organisation and partner a command would use, and the token's
-/// role (proposed-cli-surface.md "Login, logout and status").
+/// role (spec/cli-surface.md "Login, logout and status").
 /// </summary>
 internal static class StatusCommand
 {
@@ -22,7 +22,7 @@ internal static class StatusCommand
             var client = context.GetClient();
 
             // Checks run in the order the token, the organisation and partner, then the call
-            // (proposed-cli-surface.md "Errors and exit codes"), so a malformed or contradictory
+            // (spec/cli-surface.md "Errors and exit codes"), so a malformed or contradictory
             // source exits 2 before the call is made.
             var choice = OrganisationResolver.Choose(context);
             var partnerChoice = PartnerResolver.Choose(context);

@@ -1,5 +1,5 @@
 # cli
-A command-line client for the Enclave Management API and the customer routes of the Enclave Partner API. It does not enrol systems, which the Enclave agent `enclave` does, and it has no commands for account settings or accepting invites (browser sign-in flows), payment and billing, or the partner's own settings, users and invites (personal access tokens cannot carry the scopes they need). "Left out" in `proposed-cli-surface.md` lists each one.
+A command-line client for the Enclave Management API and the customer routes of the Enclave Partner API. It does not enrol systems, which the Enclave agent `enclave` does, and it has no commands for account settings or accepting invites (browser sign-in flows), payment and billing, or the partner's own settings, users and invites (personal access tokens cannot carry the scopes they need). "Left out" in `spec/cli-surface.md` lists each one.
 
 ## Supported platforms
 

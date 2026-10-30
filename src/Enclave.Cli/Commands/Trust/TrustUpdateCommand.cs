@@ -7,7 +7,7 @@ using Enclave.Sdk.Network.Abstractions.NetworkPolicy;
 namespace Enclave.Cli.Commands.Trust;
 
 /// <summary>
-/// `trust update`: patches the description, notes and settings given (proposed-cli-surface.md
+/// `trust update`: patches the description, notes and settings given (spec/cli-surface.md
 /// "Command options"). The API's patch replaces the whole settings object (portal
 /// TrustRequirementPatchModel.Settings), so a --set- flag reads the requirement first and replaces
 /// only the setting or conditions of its own kind.

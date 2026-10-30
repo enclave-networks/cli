@@ -6,7 +6,7 @@ using Enclave.Configuration.Data.Identifiers;
 namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
-/// Finds keys by description (proposed-cli-surface.md "Names and IDs").
+/// Finds keys by description (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class KeyLookup
 {

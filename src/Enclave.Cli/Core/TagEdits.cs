@@ -3,7 +3,7 @@ namespace Enclave.Cli.Core;
 /// <summary>
 /// Works out the whole tag list an update sends from --set-tags, --add-tags and --remove-tags. The
 /// patch models take the whole list (portal SystemPatchModel.Tags, DnsRecordPatchModel.Tags), so
-/// adding or removing one tag means reading the item first (proposed-cli-surface.md "Create and
+/// adding or removing one tag means reading the item first (spec/cli-surface.md "Create and
 /// update").
 /// </summary>
 internal static class TagEdits

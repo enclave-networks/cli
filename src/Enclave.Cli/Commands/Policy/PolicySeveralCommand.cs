@@ -8,7 +8,7 @@ namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
 /// `policy enable`, `policy disable` and `policy delete`, which take any number of policies and
-/// make the bulk call (proposed-cli-surface.md "Several IDs"). `enable` with --for or --until takes
+/// make the bulk call (spec/cli-surface.md "Several IDs"). `enable` with --for or --until takes
 /// one policy and makes the timed enable.
 /// </summary>
 internal static class PolicySeveralCommand

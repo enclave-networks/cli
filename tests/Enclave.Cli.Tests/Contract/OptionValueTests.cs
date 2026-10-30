@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Contract;
 // Option values that name an API enum (--sort, --type, --approval, --then, --state, --os, --level,
 // --mode) take lower-case, hyphenated names, matched ignoring case. A value is renamed where the
 // API's name does not say what it does: --then revoke for Delete on a system. JSON output keeps the
-// API's own names (proposed-cli-surface.md "Options on every command").
+// API's own names (spec/cli-surface.md "Options on every command").
 public class OptionValueTests
 {
     private static readonly string SystemEnableUntilPath = TestData.OrgPath("systems/ABCDE/enable-until");

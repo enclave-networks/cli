@@ -52,7 +52,7 @@ internal sealed class CliHost
     /// and the local time zone only through this.
     /// </summary>
     // Durations and the check that an --until time has not passed count from now, and a time
-    // without a zone is read in the system's time zone (proposed-cli-surface.md "Command options",
+    // without a zone is read in the system's time zone (spec/cli-surface.md "Command options",
     // "Details"), so a test fixes both here to get one answer on any machine.
     public required TimeProvider Time { get; init; }
 

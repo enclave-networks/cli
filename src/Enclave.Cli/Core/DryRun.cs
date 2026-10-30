@@ -9,7 +9,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// The changes a command run with --dry-run would send, captured in place of being sent, and the
-/// organisation or partner they are for (proposed-cli-surface.md "Dry run").
+/// organisation or partner they are for (spec/cli-surface.md "Dry run").
 /// </summary>
 internal sealed class DryRun
 {

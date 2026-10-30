@@ -15,7 +15,7 @@ internal static class CliJson
     // internal, so a model prints with the API's field names and enum names; UtcDateTimeConverter is
     // the CLI's own, and prints times in UTC. GatewayPriorityTypeJsonConverter writes the gateway
     // priority Enclave.Sdk.Api.Data names Prioritised as Ordered, the API's name for it
-    // (proposed-cli-surface.md "`Enclave.Sdk.Api` changes", item 9). It goes ahead of the enum
+    // (spec/cli-surface.md "`Enclave.Sdk.Api` changes", item 9). It goes ahead of the enum
     // converter because System.Text.Json uses the first converter in the list that can convert a type
     // (https://learn.microsoft.com/dotnet/standard/serialization/system-text-json/converters-how-to#converter-registration-precedence),
     // and JsonStringEnumConverter converts every enum. Identifier types such as OrganisationGuid

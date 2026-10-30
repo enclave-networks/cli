@@ -5,7 +5,7 @@ using Enclave.Sdk.Network.NetworkPolicy;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// The gateway settings of a policy: --gateway, --mode and --subnet-filter (proposed-cli-surface.md
+/// The gateway settings of a policy: --gateway, --mode and --subnet-filter (spec/cli-surface.md
 /// "Command options").
 /// </summary>
 internal static class PolicyGateways

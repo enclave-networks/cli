@@ -14,7 +14,7 @@ internal static class CliAssert
 
     /// <summary>
     /// Every error code the CLI reports, with the exit code it exits with (AGENTS.md "CLI contract",
-    /// proposed-cli-surface.md "Errors and exit codes").
+    /// spec/cli-surface.md "Errors and exit codes").
     /// </summary>
     public static IReadOnlyDictionary<string, int> ExitCodes { get; } = new Dictionary<string, int>(StringComparer.Ordinal)
     {
@@ -89,7 +89,7 @@ internal static class CliAssert
     /// Asserts the run exited 0 and printed a list of this kind, exactly { "kind", "items", "total" }
     /// with total equal to the number of items, and returns the items array.
     /// </summary>
-    // Every list command reads every page before printing (proposed-cli-surface.md "Output"), and
+    // Every list command reads every page before printing (spec/cli-surface.md "Output"), and
     // total counts the items it prints, the matches when the CLI filters them ("Filters"). A command
     // reading the list from stdin checks the kind, so the kind is compared exactly.
     public static JsonElement List(CliResult result, string kind)

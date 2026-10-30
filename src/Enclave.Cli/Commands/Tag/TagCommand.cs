@@ -4,7 +4,7 @@ using Enclave.Configuration.Data.Modules.Tags.Enums;
 namespace Enclave.Cli.Commands.Tag;
 
 /// <summary>
-/// The `tag` noun (proposed-cli-surface.md "Commands"). Tags are given by name only.
+/// The `tag` noun (spec/cli-surface.md "Commands"). Tags are given by name only.
 /// </summary>
 internal static class TagCommand
 {

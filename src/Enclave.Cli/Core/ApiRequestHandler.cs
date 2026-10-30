@@ -40,7 +40,7 @@ internal sealed class ApiRequestHandler : DelegatingHandler
 
         // The reads a change depends on run under --dry-run: name lookups, the reads that keep tags,
         // labels and conditions, and the read tag set makes to choose between update and create
-        // (proposed-cli-surface.md "Dry run"). Every Enclave.Sdk.Api read is a GET, and every change
+        // (spec/cli-surface.md "Dry run"). Every Enclave.Sdk.Api read is a GET, and every change
         // a POST, PUT, PATCH or DELETE.
         if (_dryRun is not null && request.Method != HttpMethod.Get)
         {

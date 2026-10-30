@@ -9,7 +9,7 @@ namespace Enclave.Cli.Commands.Partner.Customer;
 
 /// <summary>
 /// Reads the partner's customers, and finds a customer by name and a customer's admin or pending
-/// invite by email address (proposed-cli-surface.md "Names and IDs").
+/// invite by email address (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class CustomerLookup
 {
@@ -69,7 +69,7 @@ internal static class CustomerLookup
     /// several, exits 2 with the matches as candidates; a customer the API does not know exits 5.
     /// </summary>
     // The partner API cancels an invite by its ID, and the CLI never takes an invite ID from the user
-    // (proposed-cli-surface.md "Partner API", "ID checks"), so the address is the only way to name
+    // (spec/cli-surface.md "Partner API", "ID checks"), so the address is the only way to name
     // one.
     public static async Task<OrganisationInviteId> InviteIdAsync(ICustomersClient customers, OrganisationGuid customerId, string email, string key)
     {

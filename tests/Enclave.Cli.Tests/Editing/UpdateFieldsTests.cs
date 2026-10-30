@@ -3,7 +3,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Editing;
 
-// An update sends only the fields given, and the rest are left as they are (proposed-cli-surface.md
+// An update sends only the fields given, and the rest are left as they are (spec/cli-surface.md
 // "Create and update"). The API changes the fields a patch body holds and leaves the others (portal
 // Enclave.Api.Scaffolding/Models/PatchModel.cs, WasSet), so a field sent that the caller did not give
 // would overwrite what the item has. A field that needs no read is set with the one PATCH call

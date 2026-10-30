@@ -10,7 +10,7 @@ internal sealed record LabelledEntry(string Value, string? Label)
     /// The entries a --set- flag of labelled values sends: each value given, in order, with the label
     /// given after "=", an empty label as none, and a value given without "=" keeping the label of the
     /// entry the item has with the same value. A new value without a label has none
-    /// (proposed-cli-surface.md "Command options": a flag that replaces a list keeps the label of every
+    /// (spec/cli-surface.md "Command options": a flag that replaces a list keeps the label of every
     /// entry that stays).
     /// </summary>
     /// <param name="given">The flag's values.</param>

@@ -4,7 +4,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// Finds policies by description (proposed-cli-surface.md "Names and IDs").
+/// Finds policies by description (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class PolicyLookup
 {

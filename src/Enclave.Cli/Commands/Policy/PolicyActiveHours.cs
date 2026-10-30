@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
 /// Reads --active-hours and --set-active-hours: "&lt;days&gt; &lt;start&gt;-&lt;end&gt; [&lt;zone&gt;]"
-/// (proposed-cli-surface.md "Command options", "Details").
+/// (spec/cli-surface.md "Command options", "Details").
 /// </summary>
 internal static partial class PolicyActiveHours
 {

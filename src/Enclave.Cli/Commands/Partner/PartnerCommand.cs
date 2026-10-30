@@ -4,7 +4,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Partner;
 
 /// <summary>
-/// The `partner` noun: the default partner and the partner's customers (proposed-cli-surface.md
+/// The `partner` noun: the default partner and the partner's customers (spec/cli-surface.md
 /// "Commands", "Partner API").
 /// </summary>
 internal static class PartnerCommand

@@ -8,18 +8,18 @@ namespace Enclave.Cli.Commands.Partner.Customer;
 
 /// <summary>
 /// The `partner customer` noun: the partner's customers, their admins, invites and auto-sync
-/// (proposed-cli-surface.md "Commands", "Partner API"). A customer is an organisation, given by
+/// (spec/cli-surface.md "Commands", "Partner API"). A customer is an organisation, given by
 /// name or by --org-id, its organisation ID.
 /// </summary>
 // Every call goes through Enclave.Sdk.Api's partner client (IPartnerClient.Customers), one
 // call per command. A customer given by name, an admin given by email address and an invite given
-// by email address each add one read (proposed-cli-surface.md "Calls per command").
+// by email address each add one read (spec/cli-surface.md "Calls per command").
 internal static class PartnerCustomerCommand
 {
     // The partner portal's values for a new customer's counts when the form is left as it opens
     // (portal Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345), which the CLI sends
     // for a flag left out, so a change to the API's own defaults does not change what create does
-    // (proposed-cli-surface.md "Command options", the create table).
+    // (spec/cli-surface.md "Command options", the create table).
     private const int DefaultSystems = 50;
 
     private const int DefaultGateways = 0;
@@ -111,7 +111,7 @@ internal static class PartnerCustomerCommand
 
     // An update sends only the fields given, so one with no change flag has nothing to send, and a
     // flag given with its --no- form leaves the field's new value unclear; both exit 2
-    // (proposed-cli-surface.md "Details"). Auto-sync is not an update flag: it changes through
+    // (spec/cli-surface.md "Details"). Auto-sync is not an update flag: it changes through
     // enable-auto-sync and disable-auto-sync, which have their own API routes ("Command options").
     private static CliVerb Update()
     {
@@ -131,7 +131,7 @@ internal static class PartnerCustomerCommand
         verb.Exclusive(hardLimit, noHardLimit);
 
         // --systems sets LicensedAgentsCount and --gateways LicensedGatewaysCount (portal
-        // CustomerPatchModelValidator.cs:14-16, proposed-cli-surface.md "Command options").
+        // CustomerPatchModelValidator.cs:14-16, spec/cli-surface.md "Command options").
         SetHandler(verb, customer, (context, customers, id) =>
         {
             var patch = customers.Update(id);
@@ -173,7 +173,7 @@ internal static class PartnerCustomerCommand
     }
 
     // --billing-months is required, so the command states the billing period it commits to; the
-    // API's default is 1 month (proposed-cli-surface.md "Command options"; portal
+    // API's default is 1 month (spec/cli-surface.md "Command options"; portal
     // ConvertCustomerModelValidator.cs:13-17).
     private static CliVerb Convert()
     {
@@ -203,7 +203,7 @@ internal static class PartnerCustomerCommand
 
     // The account is given by ID only: it is a partner user, and listing partner users needs a
     // scope personal access tokens cannot carry, so an email address cannot be looked up
-    // (proposed-cli-surface.md "Names and IDs").
+    // (spec/cli-surface.md "Names and IDs").
     private static CliVerb AddAdmin()
     {
         var (verb, customer) = ForCustomer("add-admin", "Make one of the partner's users an admin of the customer, given by account ID, which the partner portal shows.", changes: true);
@@ -215,7 +215,7 @@ internal static class PartnerCustomerCommand
     }
 
     // An email address with an account ID contradict each other, as a name with its ID option does
-    // (proposed-cli-surface.md "Details").
+    // (spec/cli-surface.md "Details").
     private static CliVerb RemoveAdmin()
     {
         var (verb, customer) = ForCustomer("remove-admin", "Remove an admin from the customer, given by email address or account ID.", changes: true);
@@ -261,7 +261,7 @@ internal static class PartnerCustomerCommand
     }
 
     // The partner API cancels an invite by its ID, so the address is looked up in the customer's
-    // invites (proposed-cli-surface.md "Partner API").
+    // invites (spec/cli-surface.md "Partner API").
     private static CliVerb CancelInvite()
     {
         var (verb, customer, email) = ForInvite("cancel-invite", "Cancel a pending admin invite to the customer, given by its email address.");
@@ -280,7 +280,7 @@ internal static class PartnerCustomerCommand
     // the other customer routes answer 404, and Enclave.Sdk.Api reports it by throwing
     // InvalidOperationException (ICustomersClient.EnableAutoSyncAsync and DisableAutoSyncAsync,
     // CustomersClient.SetAutoSyncAsync). That is the unknown customer a single-ID command
-    // exits 5 for (proposed-cli-surface.md "Several IDs").
+    // exits 5 for (spec/cli-surface.md "Several IDs").
     private static CliVerb AutoSync(string name, string description, Func<ICustomersClient, OrganisationGuid, Task<CustomerModel>> call)
     {
         var (verb, customer) = ForCustomer(name, description, changes: true);
@@ -309,7 +309,7 @@ internal static class PartnerCustomerCommand
     }
 
     // An empty or blank address names no admin, invite or owner, so it is refused with the other
-    // argument checks, before the token and any call (proposed-cli-surface.md "Errors and exit
+    // argument checks, before the token and any call (spec/cli-surface.md "Errors and exit
     // codes"). Passed on, it would cost the customer lookup and then match nothing, or reach
     // ICustomersClient.InviteAdminAsync, which throws ArgumentException for a blank address
     // (Enclave.Sdk.Api), or reach the API as create's owner, which the API refuses (portal
@@ -326,7 +326,7 @@ internal static class PartnerCustomerCommand
     // An empty or blank domain or contact name names no domain or contact. The API stores it as the
     // customer's (portal CustomerCreateModelValidator.cs:23 and 48 accept it, and
     // Handlers/CreateCustomerHandler.cs:71 and 76 pass it on), where a flag left out sends null
-    // (proposed-cli-surface.md "Command options", the create table), so it is refused with the other
+    // (spec/cli-surface.md "Command options", the create table), so it is refused with the other
     // argument checks, before the token and any call ("Errors and exit codes").
     private static Option<string?> CreateTextOption(CliVerb verb, string name, string description, string valueName, string takes)
     {
@@ -337,7 +337,7 @@ internal static class PartnerCustomerCommand
 
     // A command that acts on one customer takes its name, or --org-id, its organisation ID, the
     // only ID a customer has (portal CustomersController.cs:69). It takes exactly one of them: a
-    // name with its ID option contradict each other (proposed-cli-surface.md "Details"), and
+    // name with its ID option contradict each other (spec/cli-surface.md "Details"), and
     // ENCLAVE_ORG_ID and the saved organisation choose the organisation that organisation commands
     // act within, so they never stand in for the customer ("Context").
     private static (CliVerb Verb, CustomerChoice Customer) ForCustomer(string name, string description, bool changes)
@@ -351,7 +351,7 @@ internal static class PartnerCustomerCommand
     }
 
     // An empty or blank name names no customer, so it is refused with the other argument checks,
-    // before the token and any call (proposed-cli-surface.md "Errors and exit codes"). Passed on,
+    // before the token and any call (spec/cli-surface.md "Errors and exit codes"). Passed on,
     // the name of the customer a command acts on would cost the customer lookup and then match
     // nothing, and a name for create or update --name would reach the API, which refuses it (portal
     // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:19
@@ -369,7 +369,7 @@ internal static class PartnerCustomerCommand
             }
         });
 
-    // Checks run in the order arguments, token, partner, then the call (proposed-cli-surface.md
+    // Checks run in the order arguments, token, partner, then the call (spec/cli-surface.md
     // "Errors and exit codes"). The declared checks run before the handler, and GetPartnerAsync
     // checks the token and the partner with no call, so it comes before the customer lookup, which
     // is the first call a command given a customer name makes.

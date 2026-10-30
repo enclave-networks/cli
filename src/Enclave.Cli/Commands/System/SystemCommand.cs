@@ -6,7 +6,7 @@ namespace Enclave.Cli.Commands.Systems;
 
 /// <summary>
 /// The `system` noun: enrolled systems, and with --pending the systems waiting for approval
-/// (proposed-cli-surface.md "Commands"). Systems have no names, so they are given by ID.
+/// (spec/cli-surface.md "Commands"). Systems have no names, so they are given by ID.
 /// </summary>
 internal static class SystemCommand
 {

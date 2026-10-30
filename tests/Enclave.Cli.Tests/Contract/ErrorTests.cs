@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Contract;
 
 // An agent decides what to do next from the exit code and the "code" of the one JSON error on
-// stderr, so each API failure maps to a fixed exit code and code (proposed-cli-surface.md "Errors
+// stderr, so each API failure maps to a fixed exit code and code (spec/cli-surface.md "Errors
 // and exit codes"). On every error stdout is empty and stderr holds exactly one line, a JSON object
 // with an "error" object (CliAssert.Failed checks both), so a caller never parses a partial result
 // and nothing but the error reaches stderr without --verbose.

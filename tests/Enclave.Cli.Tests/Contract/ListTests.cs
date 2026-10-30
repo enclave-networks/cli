@@ -17,7 +17,7 @@ using static System.FormattableString;
 namespace Enclave.Cli.Tests.Contract;
 
 // A list prints { "kind", "items", "total" }, where kind names what the items are and total is the
-// number of items printed (proposed-cli-surface.md "Output"). It reads every page, one call per
+// number of items printed (spec/cli-surface.md "Output"). It reads every page, one call per
 // page of 200, the most the API returns (portal PaginationDefaults.cs:11), until the response's
 // metadata.nextPage is null ("Calls per command"), and prints once every page is read, so stdout
 // never holds part of a list. log reads only the pages it needs ("Command options"), so it takes

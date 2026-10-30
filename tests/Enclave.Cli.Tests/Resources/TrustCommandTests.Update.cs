@@ -6,7 +6,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// trust update (proposed-cli-surface.md "Command options"). The API's patch replaces the whole
+// trust update (spec/cli-surface.md "Command options"). The API's patch replaces the whole
 // settings object, configuration and conditions together (portal TrustRequirementPatchModel), so a
 // --set- flag reads the requirement first and replaces only the conditions or setting of its own
 // kind: the rest, and the labels of entries that stay, go back as they were ("Calls per command").

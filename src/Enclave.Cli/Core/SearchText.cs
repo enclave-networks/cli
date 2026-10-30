@@ -2,7 +2,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Builds a list's search text: the --filter text as typed, then each search-key flag as the API's
-/// search syntax, key:value (proposed-cli-surface.md "Filters").
+/// search syntax, key:value (spec/cli-surface.md "Filters").
 /// </summary>
 internal sealed class SearchText
 {

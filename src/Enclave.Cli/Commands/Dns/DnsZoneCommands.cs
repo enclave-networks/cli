@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Dns;
 /// <summary>
 /// The zone verbs of `dns`: list-zones, show-zone, create-zone, update-zone and delete-zone. A zone
 /// is given by its name, looked up with one list call, or by --id, which makes no lookup
-/// (proposed-cli-surface.md "Names and IDs").
+/// (spec/cli-surface.md "Names and IDs").
 /// </summary>
 internal static class DnsZoneCommands
 {
@@ -56,7 +56,7 @@ internal static class DnsZoneCommands
         {
             var org = await context.GetOrganisationAsync();
 
-            // A create sends an empty list for a list flag left out (proposed-cli-surface.md "Details").
+            // A create sends an empty list for a list flag left out (spec/cli-surface.md "Details").
             var zone = await org.Client.Dns.CreateZoneAsync(new DnsZoneCreateModel
             {
                 Name = context.Get(name)!,

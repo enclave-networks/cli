@@ -5,7 +5,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// policy update (proposed-cli-surface.md "Command options" and "Create and update"). An update
+// policy update (spec/cli-surface.md "Command options" and "Create and update"). An update
 // sends only the fields given, as a PolicyPatchModel; Enclave.Sdk.Api keys a PATCH body by the C#
 // property name (PatchClient.Set), so the keys are PascalCase. --set-acl and
 // --set-subnet-filter read the policy first so that entries which stay keep their labels ("Calls

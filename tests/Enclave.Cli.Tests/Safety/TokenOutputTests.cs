@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
 /// No command prints the token, on stdout or stderr, under --verbose and --dry-run too
-/// (proposed-cli-surface.md "Login, logout and status").
+/// (spec/cli-surface.md "Login, logout and status").
 /// </summary>
 // Each command runs with a known token to the point where it could print it, and each test also
 // checks what the command did, so a command that printed nothing because it did nothing does not
@@ -46,7 +46,7 @@ public class TokenOutputTests
         });
     }
 
-    // The token comes from ENCLAVE_TOKEN or from credentials.json (proposed-cli-surface.md "Options
+    // The token comes from ENCLAVE_TOKEN or from credentials.json (spec/cli-surface.md "Options
     // on every command"), and either way stays out of the output.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Token_from_credentials_json_is_printed_on_neither_stdout_nor_stderr(ChangeCommand command)

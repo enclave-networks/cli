@@ -5,7 +5,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The tag commands (proposed-cli-surface.md "Commands", "Command options", "Names and IDs", "ID
+// The tag commands (spec/cli-surface.md "Commands", "Command options", "Names and IDs", "ID
 // checks", "Details"). Tags are given by name only, and a tag name goes into the URL path of show
 // and set, so each is checked against the API's tag rule, ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal
 // TagValidationExtensions.cs:13), before any call. An argument starting "ref:" is not a tag

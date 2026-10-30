@@ -7,7 +7,7 @@ namespace Enclave.Cli.Commands.Systems;
 /// <summary>
 /// The system verbs that take several systems, approve, decline, enable, disable and revoke: any
 /// number of system IDs, or "-" to read a list from stdin, sent in bulk calls of 200, printing
-/// { requested, affected } (proposed-cli-surface.md "Several IDs").
+/// { requested, affected } (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class SystemBulkCommand
 {

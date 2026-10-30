@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Contract;
 
 // The CLI reads stdin and writes stdout in one encoding, UTF-8, so a list one run prints and the
 // next reads with "-" holds the same text on every OS, non-ASCII names included, and a token file
-// saved with a byte order mark gives the token (proposed-cli-surface.md "Several IDs", "Login,
+// saved with a byte order mark gives the token (spec/cli-surface.md "Several IDs", "Login,
 // logout and status"). Console's own encodings differ by OS and by setting: the console code pages
 // on Windows (dotnet/runtime release/10.0, src/libraries/System.Console/src/System/
 // ConsolePal.Windows.cs, InputEncoding and OutputEncoding, from GetConsoleCP and

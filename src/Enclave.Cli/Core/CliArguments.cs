@@ -5,7 +5,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Creates the CLI's positional arguments: names, email addresses, hostnames, tag names and system
-/// IDs (proposed-cli-surface.md "Commands"). Other IDs are never positional; they go after --id.
+/// IDs (spec/cli-surface.md "Commands"). Other IDs are never positional; they go after --id.
 /// </summary>
 internal static class CliArguments
 {
@@ -159,7 +159,7 @@ internal static class CliArguments
     // lookup would read the list, which needs the token, and then match nothing, and a create would
     // reach the API, which refuses it, so the same command line would exit 3 without a token and 2
     // or 1 with one. Refused as it is parsed, it exits 2 before the token and any call
-    // (proposed-cli-surface.md "Details").
+    // (spec/cli-surface.md "Details").
     private static string? ReadName(ArgumentResult result, string name, string takes)
     {
         if (result.Tokens.Count == 0)

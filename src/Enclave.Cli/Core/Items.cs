@@ -6,7 +6,7 @@ namespace Enclave.Cli.Core;
 
 /// <summary>
 /// Reads the items a command that takes several was given: arguments, --id a,b, or "-" to read a
-/// list printed by an enclave-cli list command from stdin (proposed-cli-surface.md "Several IDs").
+/// list printed by an enclave-cli list command from stdin (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class Items
 {
@@ -38,7 +38,7 @@ internal static class Items
         {
             // --id "" or --id "," reads as an empty list (CliOptions.Pieces). It names nothing, as a
             // command given no items does; only "-" with an empty list succeeds with nothing to do,
-            // so that a pipeline fed by an empty list succeeds (proposed-cli-surface.md "Several
+            // so that a pipeline fed by an empty list succeeds (spec/cli-surface.md "Several
             // IDs").
             return idList.Count > 0
                 ? new ItemSelection<TId>(idList.Distinct().ToArray(), [])

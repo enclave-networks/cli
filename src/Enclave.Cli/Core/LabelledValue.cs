@@ -11,7 +11,7 @@ namespace Enclave.Cli.Core;
 internal readonly record struct LabelledValue(string Value, bool HasLabel, string? Label)
 {
     // The split is at the first "=", which no range, country code, ACL or subnet contains, so a
-    // label can itself contain "=" (proposed-cli-surface.md "Command options").
+    // label can itself contain "=" (spec/cli-surface.md "Command options").
     public static LabelledValue Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

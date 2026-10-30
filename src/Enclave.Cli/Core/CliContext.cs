@@ -116,7 +116,7 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The organisation the command acts in, with its client (proposed-cli-surface.md "Context").
+    /// The organisation the command acts in, with its client (spec/cli-surface.md "Context").
     /// Call it after checking the command's own arguments: checks run in the order arguments, the
     /// token, the organisation, then the call ("Errors and exit codes"). It makes one lookup call
     /// when the organisation is named or not chosen, and none when it is given by ID. Under
@@ -160,7 +160,7 @@ internal sealed class CliContext : IDisposable
     /// The instant a time given to <paramref name="option"/> names, read forwards from now (a
     /// duration counts from now, a clock time is its next occurrence), as UTC. A time that has
     /// passed, does not exist in the local time zone, or lies beyond the times the CLI holds exits 2
-    /// (proposed-cli-surface.md "Details").
+    /// (spec/cli-surface.md "Details").
     /// </summary>
     public DateTimeOffset FutureInstant(TimeInput input, Option option)
     {

@@ -3,7 +3,7 @@ namespace Enclave.Cli.Core;
 /// <summary>
 /// Runs the call of a command that names one item: show, update, an enable with --for or --until,
 /// dns delete-zone, org remove-user, org cancel-invite. A 404 from it exits 5 with not_found, where
-/// any other command reports a 404 as api_error (proposed-cli-surface.md "Several IDs").
+/// any other command reports a 404 as api_error (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class SingleItem
 {

@@ -149,7 +149,7 @@ internal static class TrustSettings
     /// <summary>
     /// The conditions of a public IP requirement with those of one kind replaced by the values
     /// given, each keeping the label of the condition of that kind with the same value unless the
-    /// flag gives one, and the conditions of other kinds left as they are (proposed-cli-surface.md
+    /// flag gives one, and the conditions of other kinds left as they are (spec/cli-surface.md
     /// "Command options", trust update). Countries compare ignoring case.
     /// </summary>
     public static IReadOnlyList<IReadOnlyDictionary<string, string?>> Replace(

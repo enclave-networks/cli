@@ -21,7 +21,7 @@ internal static class CliErrors
 
     /// <summary>
     /// Exit 2: a name matched no item or several. <paramref name="candidates"/> holds the matches,
-    /// and is empty for no match (proposed-cli-surface.md "Errors and exit codes").
+    /// and is empty for no match (spec/cli-surface.md "Errors and exit codes").
     /// </summary>
     public static CliException NameNotUnique(string key, string message, JsonArray candidates) =>
         new(ErrorCode.InvalidArgument, message, errors: Field(key, message)) { Candidates = candidates };

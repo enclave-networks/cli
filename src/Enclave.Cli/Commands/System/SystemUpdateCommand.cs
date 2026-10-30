@@ -9,7 +9,7 @@ namespace Enclave.Cli.Commands.Systems;
 /// <summary>
 /// `system update`: changes a system's description, notes, tags or gateway routes, or with
 /// --pending a waiting system's description, notes or tags, and prints the system the API returns.
-/// It sends only the fields given (proposed-cli-surface.md "Create and update").
+/// It sends only the fields given (spec/cli-surface.md "Create and update").
 /// </summary>
 internal static class SystemUpdateCommand
 {
@@ -21,7 +21,7 @@ internal static class SystemUpdateCommand
         // and a waiting system (portal Enclave.Api/Modules/SystemManagement:
         // Systems/Validators/SystemPatchModelValidator.cs:15 and 23,
         // UnapprovedSystems/Validators/UnapprovedSystemPatchModelValidator.cs:13, MaximumLength
-        // only), so "" clears them (proposed-cli-surface.md "Details").
+        // only), so "" clears them (spec/cli-surface.md "Details").
         var description = verb.Add(CliOptions.Text("--description", "The system's description."));
         var notes = verb.Add(CliOptions.Text("--notes", "The system's notes."));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the system's tags; \"\" removes them all."));

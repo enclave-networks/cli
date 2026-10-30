@@ -6,7 +6,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
 /// "-" in place of the arguments reads a list an enclave-cli list command printed, of the command's
-/// own kind, and acts on its items by ID (proposed-cli-surface.md "Several IDs").
+/// own kind, and acts on its items by ID (spec/cli-surface.md "Several IDs").
 /// </summary>
 public class StdinListTests
 {
@@ -56,7 +56,7 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
     }
 
-    // proposed-cli-surface.md "Several IDs": the kind is what stops key list | policy delete -
+    // spec/cli-surface.md "Several IDs": the kind is what stops key list | policy delete -
     // deleting the policies that share the keys' numbers.
     [Test]
     public async Task Policy_delete_refuses_a_key_list_so_key_ids_never_delete_policies()
@@ -77,7 +77,7 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds("policyIds")), Is.EqualTo("12,13"));
     }
 
-    // "Any other kind, or input that is not a list, exits 2" (proposed-cli-surface.md "Several
+    // "Any other kind, or input that is not a list, exits 2" (spec/cli-surface.md "Several
     // IDs"), and stdin with no bytes is not a list ("Details"). An empty stdin is what a failed list
     // command leaves in a pipe, since a failed list prints nothing ("Output").
     [TestCaseSource(nameof(NotAListCases))]
@@ -147,7 +147,7 @@ public class StdinListTests
     }
 
     // A list built or joined with jq can name an item twice. Each item is acted on once and counted
-    // once in requested, and the rest keep the list's order (proposed-cli-surface.md "Several IDs").
+    // once in requested, and the rest keep the list's order (spec/cli-surface.md "Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_removes_duplicate_ids_from_the_list_and_keeps_its_order(BulkCommand command)
     {
@@ -163,7 +163,7 @@ public class StdinListTests
     }
 
     // A pipeline fed by an empty list, such as system list --pending with nothing waiting, succeeds
-    // and changes nothing (proposed-cli-surface.md "Several IDs").
+    // and changes nothing (spec/cli-surface.md "Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_with_an_empty_list_prints_zero_counts_makes_no_call_and_exits_0(BulkCommand command)
     {
@@ -205,7 +205,7 @@ public class StdinListTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
-    // Examples 3, 5, 13, 14 and 16 in proposed-cli-surface.md pipe a list command into a bulk
+    // Examples 3, 5, 13, 14 and 16 in spec/cli-surface.md pipe a list command into a bulk
     // command. Each list here is in the form that list command prints, with the API's models as its
     // items.
     [TestCaseSource(nameof(PipelineExamples))]

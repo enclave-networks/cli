@@ -5,7 +5,7 @@ namespace Enclave.Cli.Commands.Trust;
 
 /// <summary>
 /// `trust delete`: deletes any number of trust requirements with the bulk call
-/// (proposed-cli-surface.md "Several IDs").
+/// (spec/cli-surface.md "Several IDs").
 /// </summary>
 internal static class TrustDeleteCommand
 {

@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Contract;
 
 // --for takes a duration (30m, 8h, 14d) and --until a time: RFC 3339 with its zone, used as given,
 // or a time without a zone read in the system's time zone, either a date and time or a clock time
-// meaning its next occurrence. Formats do not follow the system locale (proposed-cli-surface.md
+// meaning its next occurrence. Formats do not follow the system locale (spec/cli-surface.md
 // "Command options"). A time that has passed exits 2, and the CLI sends the expiry as a UTC
 // instant ("Details"). `policy enable --id 42` carries each value: the API's timed enable takes one
 // item by ID (PUT policies/{id}/enable-until), and the expiryDateTime of the body (AutoExpireModel)

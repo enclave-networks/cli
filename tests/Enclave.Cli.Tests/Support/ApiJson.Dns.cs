@@ -3,7 +3,7 @@ using System.Text.Json.Nodes;
 namespace Enclave.Cli.Tests.Support;
 
 // The CLI writes a hostname in full, db.internal, and its zone is the zone its name ends in
-// (proposed-cli-surface.md "Commands"). The API keeps a hostname as a record name within a zone and
+// (spec/cli-surface.md "Commands"). The API keeps a hostname as a record name within a zone and
 // returns the full name as fqdn (portal Enclave.Api/Modules/SystemManagement/Dns/Models/DnsRecordModel.cs),
 // so db.internal is the record "db" in the zone "internal". The body is ApiJson.Record's with the
 // zone, full name and tags changed, so it carries the properties HarnessTests proves Enclave.Sdk.Api reads.

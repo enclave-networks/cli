@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Support;
 /// (TestData.OrgId), then Globex (TestData.OtherOrgId).
 /// </summary>
 // With two organisations, a command that has none chosen exits 2 no_org, and a name chooses
-// between them (proposed-cli-surface.md "Context"), so a test that uses this answer shows which
+// between them (spec/cli-surface.md "Context"), so a test that uses this answer shows which
 // organisation the CLI chose.
 internal static class BothOrgs
 {

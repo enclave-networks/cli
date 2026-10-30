@@ -5,7 +5,7 @@ namespace Enclave.Cli.Core;
 /// <summary>
 /// A noun, such as `system`, which holds verbs. Its plural is accepted as a hidden alias, so a guess
 /// such as `systems list` runs `system list`; help and `commands` show the singular name only
-/// (proposed-cli-surface.md "Shape and naming"). Given without a verb it exits 2.
+/// (spec/cli-surface.md "Shape and naming"). Given without a verb it exits 2.
 /// </summary>
 internal sealed class CliNoun : Command
 {

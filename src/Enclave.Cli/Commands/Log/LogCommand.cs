@@ -6,7 +6,7 @@ using Enclave.Sdk.Api.Clients.Interfaces;
 namespace Enclave.Cli.Commands.Log;
 
 /// <summary>
-/// `log`: the organisation's activity log, a noun with no verbs (proposed-cli-surface.md
+/// `log`: the organisation's activity log, a noun with no verbs (spec/cli-surface.md
 /// "Commands", "Command options").
 /// </summary>
 internal static class LogCommand

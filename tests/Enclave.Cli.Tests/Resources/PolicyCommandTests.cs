@@ -7,7 +7,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The policy commands (proposed-cli-surface.md "Commands", "Command options", "Filters", "Names and
+// The policy commands (spec/cli-surface.md "Commands", "Command options", "Filters", "Names and
 // IDs", "Details"). This part holds list, show, enable, disable and delete; PolicyCommandTests.Create.cs
 // and PolicyCommandTests.Update.cs hold create and update. A policy is given by its description,
 // which costs one lookup call, or by --id, which costs none ("Calls per command").

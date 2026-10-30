@@ -4,7 +4,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Trust;
 
 /// <summary>
-/// Finds trust requirements by description (proposed-cli-surface.md "Names and IDs"), for the trust
+/// Finds trust requirements by description (spec/cli-surface.md "Names and IDs"), for the trust
 /// commands and for --trust on policies.
 /// </summary>
 internal static class TrustLookup

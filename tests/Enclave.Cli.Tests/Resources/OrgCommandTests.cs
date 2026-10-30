@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Resources;
 
 // The org commands that act on the organisation in use: its properties, users and invites
-// (proposed-cli-surface.md "Commands" and "Command options"). org list and org use choose the
+// (spec/cli-surface.md "Commands" and "Command options"). org list and org use choose the
 // organisation and are tested with the organisation context.
 public class OrgCommandTests
 {
@@ -43,7 +43,7 @@ public class OrgCommandTests
         });
     }
 
-    // Example 63 in proposed-cli-surface.md. The flags set the OrganisationPatchModel fields of the
+    // Example 63 in spec/cli-surface.md. The flags set the OrganisationPatchModel fields of the
     // same name (portal Enclave.Api/Modules/OrganisationManagement/Organisation/Models/OrganisationPatchModel.cs).
     // The command prints the organisation the API answers with. The fake answers with another name
     // from the one sent and with fields the request does not carry, so output copied from the
@@ -74,7 +74,7 @@ public class OrgCommandTests
         });
     }
 
-    // An update sends only the fields given (proposed-cli-surface.md "Create and update"); a Name the
+    // An update sends only the fields given (spec/cli-surface.md "Create and update"); a Name the
     // caller did not give would rename the organisation.
     [TestCase("--name", "Acme Ltd", "Name")]
     [TestCase("--website", "https://acme.example", "Website")]
@@ -96,7 +96,7 @@ public class OrgCommandTests
 
     // The API returns the users in one body, with no pages
     // (OrganisationScopedClient.GetOrganisationUsersAsync, Enclave.Sdk.Api), and the CLI prints
-    // them as a user list (proposed-cli-surface.md "Output").
+    // them as a user list (spec/cli-surface.md "Output").
     [Test]
     public async Task Org_list_users_prints_the_organisation_users_as_a_user_list()
     {
@@ -116,7 +116,7 @@ public class OrgCommandTests
         });
     }
 
-    // Example 19 in proposed-cli-surface.md. org remove-user takes an email address in place of the
+    // Example 19 in spec/cli-surface.md. org remove-user takes an email address in place of the
     // account ID and looks it up with one call, matching ignoring case ("Names and IDs"). Sam is the
     // second user the lookup reads, so a lookup that took the first user removes the wrong account.
     // The API answers the removal with the removed user's model (portal
@@ -151,7 +151,7 @@ public class OrgCommandTests
         });
     }
 
-    // --id gives the account ID and makes no lookup (proposed-cli-surface.md "Names and IDs"). No
+    // --id gives the account ID and makes no lookup (spec/cli-surface.md "Names and IDs"). No
     // command asks for confirmation ("Changes run when given"), so the removal runs with stdin a
     // terminal, where a prompt would wait for an answer.
     [Test]
@@ -175,7 +175,7 @@ public class OrgCommandTests
     }
 
     // An email address no member has matches nothing, which exits 2 invalid_argument with no
-    // candidates (proposed-cli-surface.md "Errors and exit codes").
+    // candidates (spec/cli-surface.md "Errors and exit codes").
     [Test]
     public async Task Org_remove_user_given_an_email_no_member_has_exits_2_with_no_candidates()
     {
@@ -195,7 +195,7 @@ public class OrgCommandTests
     }
 
     // An email address with --id contradicts itself and exits 2 before any call
-    // (proposed-cli-surface.md "Details"). The removal by --id alone run next shows the rejection
+    // (spec/cli-surface.md "Details"). The removal by --id alone run next shows the rejection
     // comes from the pair.
     [Test]
     public async Task Org_remove_user_given_an_email_and_an_id_exits_2_without_a_request()
@@ -212,7 +212,7 @@ public class OrgCommandTests
     }
 
     // An account ID is a GUID, checked before any call, so a malformed one exits 2 naming it and
-    // sends nothing (proposed-cli-surface.md "ID checks"). An email address after --id is
+    // sends nothing (spec/cli-surface.md "ID checks"). An email address after --id is
     // not read as one, since the option decides how a value is read ("Commands"). The removal with a
     // GUID run next shows the rejection comes from the ID.
     [TestCase(SamEmail)]
@@ -233,7 +233,7 @@ public class OrgCommandTests
     }
 
     // org remove-user is a single-ID command, which exits 5 for an unknown ID
-    // (proposed-cli-surface.md "Several IDs").
+    // (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task Org_remove_user_with_an_account_id_the_api_does_not_know_exits_5()
     {
@@ -250,7 +250,7 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // Example 64 in proposed-cli-surface.md, second command. An invite is identified by its email
+    // Example 64 in spec/cli-surface.md, second command. An invite is identified by its email
     // address (OrganisationInviteModel), and the API returns the invites in one body, with no pages.
     [Test]
     public async Task Org_list_invites_prints_the_pending_invites_as_an_invite_list()
@@ -270,7 +270,7 @@ public class OrgCommandTests
         });
     }
 
-    // Example 64 in proposed-cli-surface.md, first command. The API takes the invite as
+    // Example 64 in spec/cli-surface.md, first command. The API takes the invite as
     // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api). The API
     // answers with the invite's model (portal OrganisationController.CreateInvite), which the
     // command prints. The invite holds the address it was first sent to, which can differ in case
@@ -296,7 +296,7 @@ public class OrgCommandTests
         });
     }
 
-    // Example 19 in proposed-cli-surface.md, second command. The main API cancels an invite by email
+    // Example 19 in spec/cli-surface.md, second command. The main API cancels an invite by email
     // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api),
     // so the CLI sends the address and makes no lookup ("Partner API"). The API answers with
     // the cancelled invite's model (portal OrganisationController.DeleteInvite), which a single-ID
@@ -324,7 +324,7 @@ public class OrgCommandTests
     }
 
     // org cancel-invite is a single-ID command, which exits 5 for an unknown ID
-    // (proposed-cli-surface.md "Several IDs"); the API answers 404 for an address with no pending
+    // (spec/cli-surface.md "Several IDs"); the API answers 404 for an address with no pending
     // invite (portal OrganisationController.DeleteInvite).
     [Test]
     public async Task Org_cancel_invite_for_an_address_with_no_invite_exits_5()
@@ -382,7 +382,7 @@ public class OrgCommandTests
 
     // Organisation update, user removal and invites need organisation membership and no token scope
     // (portal OrganisationController.cs:49,91,132), and no command asks for confirmation
-    // (proposed-cli-surface.md "Changes run when given"). Each command sends its one request and
+    // (spec/cli-surface.md "Changes run when given"). Each command sends its one request and
     // nothing else, with stdin a terminal, where a prompt would wait for an answer.
     [TestCase("org update --name Initech", "PATCH", null)]
     [TestCase("org invite alex@example.com", "POST", "invites")]
@@ -402,7 +402,7 @@ public class OrgCommandTests
     // A change the API did not make must never be reported as made. A plain 502 from a proxy is a
     // failure without problem details, which the CLI maps to transient ("Errors and exit codes").
     // These calls report it because Enclave.Sdk.Api checks their status before it reads the
-    // body (OrganisationScopedClient.ReadModelAsync; proposed-cli-surface.md "`Enclave.Sdk.Api`
+    // body (OrganisationScopedClient.ReadModelAsync; spec/cli-surface.md "`Enclave.Sdk.Api`
     // changes", item 6), so the HTML body is never read as a model.
     [TestCase("org invite alex@example.com", "POST", "invites")]
     [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
@@ -442,7 +442,7 @@ public class OrgCommandTests
     }
 
     // --dry-run prints the requests the change would send and sends none of them; org.name is null
-    // when the organisation was given by ID, as CliRun gives it (proposed-cli-surface.md "Dry run").
+    // when the organisation was given by ID, as CliRun gives it (spec/cli-surface.md "Dry run").
     // None of these commands needs a read first, and each change is one call.
     [TestCase("org update --name Initech --dry-run", "PATCH", null, "Name", "Initech")]
     [TestCase("org invite alex@example.com --dry-run", "POST", "invites", "emailAddress", AlexEmail)]
@@ -463,7 +463,7 @@ public class OrgCommandTests
     }
 
     // The email lookup is a read the change depends on, so it runs, and only the DELETE it finds the
-    // account for is withheld (proposed-cli-surface.md "Dry run").
+    // account for is withheld (spec/cli-surface.md "Dry run").
     [Test]
     public async Task Org_remove_user_with_dry_run_looks_the_email_up_and_prints_the_removal_without_sending_it()
     {
@@ -484,7 +484,7 @@ public class OrgCommandTests
     }
 
     // --dry-run is an option of commands that change something, and a read does not take it
-    // (proposed-cli-surface.md "Details"). The read without it run next shows the rejection comes
+    // (spec/cli-surface.md "Details"). The read without it run next shows the rejection comes
     // from the option.
     [TestCase("show", null)]
     [TestCase("list-users", "users")]

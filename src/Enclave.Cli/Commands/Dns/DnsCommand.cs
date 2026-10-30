@@ -3,7 +3,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Dns;
 
 /// <summary>
-/// The `dns` noun: the organisation's DNS zones and hostnames (proposed-cli-surface.md "Commands").
+/// The `dns` noun: the organisation's DNS zones and hostnames (spec/cli-surface.md "Commands").
 /// A zone is given by name and a hostname in full (db.internal), or either by --id. dns has no
 /// plural.
 /// </summary>

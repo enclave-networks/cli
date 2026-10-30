@@ -26,7 +26,7 @@ public readonly record struct ChangeCommand(
     string? ReadResponse = null,
     string? OtherPathSuffix = null)
 {
-    // Every command in proposed-cli-surface.md "Commands" that changes something through the main
+    // Every command in spec/cli-surface.md "Commands" that changes something through the main
     // API. login, logout and the use commands change local files only, and the partner customer
     // commands use the partner API; they are tested in Partner/. Items are given by ID where the
     // command allows it, so the change is the only request; dns create-hostname finds its zone from

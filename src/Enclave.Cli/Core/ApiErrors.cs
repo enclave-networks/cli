@@ -68,7 +68,7 @@ internal static class ApiErrors
             // machine does not trust, also has no status (HttpRequestError.SecureConnectionError,
             // .NET 8 and later, https://learn.microsoft.com/dotnet/api/system.net.http.httprequesterror)
             // and gets the same code, though a retry does not fix it; that is accepted
-            // (proposed-cli-surface.md "Accepted for now").
+            // (spec/cli-surface.md "Accepted for now").
             case HttpRequestException http:
                 return new CliException(ErrorCode.Transient, $"The Enclave API could not be reached: {http.Message}", innerException: http);
 
@@ -115,7 +115,7 @@ internal static class ApiErrors
     };
 
     /// <summary>
-    /// The error code for an HTTP status the API answered with (proposed-cli-surface.md "Errors and
+    /// The error code for an HTTP status the API answered with (spec/cli-surface.md "Errors and
     /// exit codes").
     /// </summary>
     public static ErrorCode ForStatus(int status, bool notFoundIsUnknownItem = false) => status switch

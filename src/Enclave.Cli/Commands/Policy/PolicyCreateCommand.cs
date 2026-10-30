@@ -13,7 +13,7 @@ namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
 /// `policy create &lt;description&gt;`: sends every setting of the policy, with the documented value
-/// for each flag left out (proposed-cli-surface.md "Command options", "Create and update").
+/// for each flag left out (spec/cli-surface.md "Command options", "Create and update").
 /// </summary>
 internal static class PolicyCreateCommand
 {

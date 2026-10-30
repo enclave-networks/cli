@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Contract;
 
 // Outside tests the CLI calls production: the Enclave API at https://api.enclave.io, and the partner
-// API at the address Enclave.Sdk.Api gives when the CLI passes none (proposed-cli-surface.md "Partner
+// API at the address Enclave.Sdk.Api gives when the CLI passes none (spec/cli-surface.md "Partner
 // API"). Every other test points both at fakes, so these tests are the ones that check the
 // addresses a released CLI uses.
 public class ProductionAddressTests

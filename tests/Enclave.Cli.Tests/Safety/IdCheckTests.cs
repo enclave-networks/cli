@@ -7,7 +7,7 @@ namespace Enclave.Cli.Tests.Safety;
 
 /// <summary>
 /// Every ID is checked against its format before any call, and one bad ID stops the command with
-/// exit 2 (proposed-cli-surface.md "ID checks"). A parse error also exits 2, so each test runs the
+/// exit 2 (spec/cli-surface.md "ID checks"). A parse error also exits 2, so each test runs the
 /// command again with valid IDs and checks it then sends its request.
 /// </summary>
 public class IdCheckTests
@@ -20,7 +20,7 @@ public class IdCheckTests
     // Until, which keeps each case's answer the same whatever the date.
     private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
 
-    // proposed-cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
+    // spec/cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
     // exits 2 naming it and sends nothing. Put into a URL path unescaped, this ID would send DELETE
     // org/<id>/systems/ABCDE and revoke system ABCDE, since .NET resolves ".." when it combines the
     // path with the base address; Enclave.Sdk.Api escapes it (ClientBase.PathSegment), and the
@@ -155,7 +155,7 @@ public class IdCheckTests
     }
 
     // partner use saves the partner as the default for later commands, and partners are given by
-    // GUID (proposed-cli-surface.md "ID checks"), so an ID that is not a GUID is refused before
+    // GUID (spec/cli-surface.md "ID checks"), so an ID that is not a GUID is refused before
     // anything is saved. partner use makes no call either way ("Login, logout and status").
     [Test]
     public async Task Partner_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
@@ -238,7 +238,7 @@ public class IdCheckTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { call }));
     }
 
-    // Partners and customers are given by GUID (proposed-cli-surface.md "ID checks"), and arguments
+    // Partners and customers are given by GUID (spec/cli-surface.md "ID checks"), and arguments
     // are checked before anything else ("Errors and exit codes"), so a bad ID exits 2 and sends
     // nothing. The second run, with GUIDs, passes the check and makes the command's one call, on the
     // partner API route of the partner and customer it was given.
@@ -341,7 +341,7 @@ public class IdCheckTests
         yield return Case("tag set ../systems/ABCDE", ["tag", "set", "../systems/ABCDE", "--notes", "front end"], ["tag", "set", "web", "--notes", "front end"], "PATCH", "tags/web", ApiJson.Tag("web"), readPathSuffix: "tags/web", readResponse: ApiJson.Tag("web"));
 
         // Keys, policies, zones, hostnames and trust requirements: integers after --id or an option
-        // naming the item. Integer IDs are 32-bit (proposed-cli-surface.md "Details"; portal
+        // naming the item. Integer IDs are 32-bit (spec/cli-surface.md "Details"; portal
         // Enclave.Configuration.Data/Identifiers, IdBackingType.Int), so 99999999999 is refused.
         yield return Case("key show --id 12a", ["key", "show", "--id", "12a"], ["key", "show", "--id", "12"], "GET", "enrolment-keys/12", ApiJson.Key(12));
         yield return Case("key update --id ../policies/3", ["key", "update", "--id", "../policies/3", "--description", "build agents"], ["key", "update", "--id", "12", "--description", "build agents"], "PATCH", "enrolment-keys/12", ApiJson.Key(12, "build agents"));

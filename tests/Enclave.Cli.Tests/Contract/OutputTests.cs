@@ -15,7 +15,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Contract;
 
 // stdout is JSON using the Enclave.Sdk.Api models unchanged, so field names and values match the
-// API (proposed-cli-surface.md "Output"; AGENTS.md "CLI contract"). --help and --version print text
+// API (spec/cli-surface.md "Output"; AGENTS.md "CLI contract"). --help and --version print text
 // for people, and are the only output that is not JSON ("Errors and exit codes"). Lists and their
 // envelope are in ListTests; the output-format options the CLI does not have are in
 // ParseErrorTests.
@@ -101,7 +101,7 @@ public class OutputTests
         });
     }
 
-    // Output times are UTC (AGENTS.md "CLI contract"; proposed-cli-surface.md "Command options").
+    // Output times are UTC (AGENTS.md "CLI contract"; spec/cli-surface.md "Command options").
     // System.Text.Json reads a DateTime written with an offset other than Z as local time in the
     // machine's zone, and one written without a zone as of no kind (dotnet/runtime release/10.0,
     // src/libraries/System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and
@@ -182,7 +182,7 @@ public class OutputTests
     }
 
     // The API names the gateway priority that follows the order of the gateways Ordered, and
-    // Enclave.Sdk.Api.Data names that enum member Prioritised (proposed-cli-surface.md
+    // Enclave.Sdk.Api.Data names that enum member Prioritised (spec/cli-surface.md
     // "`Enclave.Sdk.Api` changes", item 9). Output keeps the API's names ("Output"), so a policy the
     // API sends as Ordered prints as Ordered, in a single item and in a list.
     [TestCase("policy show --id 7")]

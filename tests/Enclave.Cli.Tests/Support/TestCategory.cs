@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Support;
 /// </summary>
 internal static class TestCategory
 {
-    // Tests in this category state behaviour from proposed-cli-surface.md that the CLI does not
+    // Tests in this category state behaviour from spec/cli-surface.md that the CLI does not
     // meet. CI runs every test outside it (.github/workflows/ci.yml, --filter "TestCategory!=Pending"),
     // so a pull request fails when it breaks behaviour the CLI meets. A fixture or test leaves
     // the category once the CLI meets it, and from then on CI guards it.

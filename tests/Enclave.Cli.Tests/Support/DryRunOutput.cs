@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
 /// Reads what --dry-run prints, { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
-/// (proposed-cli-surface.md "Dry run"), failing the test when its shape is wrong.
+/// (spec/cli-surface.md "Dry run"), failing the test when its shape is wrong.
 /// </summary>
 internal static class DryRunOutput
 {

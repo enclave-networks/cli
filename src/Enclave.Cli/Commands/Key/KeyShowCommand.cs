@@ -3,7 +3,7 @@ using Enclave.Cli.Core;
 namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
-/// `key show`: one key, with its secret, printed as the API returned it (proposed-cli-surface.md
+/// `key show`: one key, with its secret, printed as the API returned it (spec/cli-surface.md
 /// "Output").
 /// </summary>
 internal static class KeyShowCommand

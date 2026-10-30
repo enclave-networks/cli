@@ -5,7 +5,7 @@ namespace Enclave.Cli.Tests.Resources;
 
 // A list filter given "", only white space, or a list with no entries (",") filters by nothing, so
 // it exits 2 invalid_argument, keyed by the option, with the other argument checks: before the
-// token is read and before any call (proposed-cli-surface.md "Details", "Errors and exit codes").
+// token is read and before any call (spec/cli-surface.md "Details", "Errors and exit codes").
 // It is never read as the filter left out: an empty value usually comes from an unset shell
 // variable, and the list would then hold every item, so `system list --tag "$RETIRED" | enclave-cli
 // system revoke -` would revoke every system.

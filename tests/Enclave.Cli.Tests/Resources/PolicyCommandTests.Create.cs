@@ -6,7 +6,7 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// policy create <description> (proposed-cli-surface.md "Command options" and "Create and update").
+// policy create <description> (spec/cli-surface.md "Command options" and "Create and update").
 // A create sends every setting that changes behaviour, with the documented value when a flag is
 // left out, so a change to the API's defaults does not change what the command does. The body is
 // the API's PolicyCreateModel, which the portal fills the same way (portal-spa

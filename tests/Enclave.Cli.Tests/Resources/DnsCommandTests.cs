@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The dns commands of proposed-cli-surface.md "Commands" and "Command options". Zones and hostnames
+// The dns commands of spec/cli-surface.md "Commands" and "Command options". Zones and hostnames
 // are given by name, looked up with one list call, or by ID after --id, which makes no lookup
 // ("Names and IDs"). A hostname is written in full, and the API keeps db.internal as the record
 // "db" in the zone "internal" (portal DnsRecordModel: name, zoneId, fqdn). A hostname's zone is the
@@ -47,7 +47,7 @@ public class DnsCommandTests
     }
 
     // Three zones two to a page make the CLI follow nextPage to a second page. A list reads every
-    // page before it prints, 200 to a page, the most the API returns (proposed-cli-surface.md
+    // page before it prints, 200 to a page, the most the API returns (spec/cli-surface.md
     // "Output" and "Calls per command").
     [Test]
     public async Task Dns_list_zones_reads_every_page_and_prints_a_zone_list()
@@ -69,7 +69,7 @@ public class DnsCommandTests
     }
 
     // lab is the second zone the lookup reads, so a lookup that took the first zone gets the wrong
-    // one. Names match ignoring case (proposed-cli-surface.md "Names and IDs").
+    // one. Names match ignoring case (spec/cli-surface.md "Names and IDs").
     [TestCase("lab")]
     [TestCase("LAB")]
     public async Task Dns_show_zone_looks_the_zone_up_by_name_ignoring_case_and_prints_it(string name)
@@ -110,7 +110,7 @@ public class DnsCommandTests
     }
 
     // A name that matches nothing exits 2 invalid_argument, and the error's candidates are the
-    // items that matched, none here (proposed-cli-surface.md "Errors and exit codes"). The argument
+    // items that matched, none here (spec/cli-surface.md "Errors and exit codes"). The argument
     // "4" is a name, since the option decides how a value is read and the CLI never inspects it to
     // guess its type ("Commands"); zone 4 exists, so treating the argument as an ID would print it.
     [TestCase("nowhere")]
@@ -131,7 +131,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 29 in proposed-cli-surface.md. A zone is created by name, so there is nothing to look
+    // Example 29 in spec/cli-surface.md. A zone is created by name, so there is nothing to look
     // up. A create sends every field of DnsZoneCreateModel (portal
     // Enclave.Api/Modules/SystemManagement/Dns/Models/DnsZoneCreateModel.cs; "Create and update"),
     // notes null when --notes is left out.
@@ -177,7 +177,7 @@ public class DnsCommandTests
         });
     }
 
-    // A create sends an empty list for a list flag left out (proposed-cli-surface.md "Details"), so
+    // A create sends an empty list for a list flag left out (spec/cli-surface.md "Details"), so
     // the API's own default never decides which systems get a name in the zone.
     [Test]
     public async Task Dns_create_zone_without_auto_dns_tags_sends_an_empty_list()
@@ -201,7 +201,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 60 in proposed-cli-surface.md, by name and by ID. Only the auto DNS tags are sent, so
+    // Example 60 in spec/cli-surface.md, by name and by ID. Only the auto DNS tags are sent, so
     // the zone's name and notes stay as they are ("Create and update").
     [TestCase("dns update-zone internal --set-auto-dns-tags web,api", true)]
     [TestCase("dns update-zone --id 4 --set-auto-dns-tags web,api", false)]
@@ -257,7 +257,7 @@ public class DnsCommandTests
     }
 
     // The API deletes one zone per call and has no bulk zone delete (portal DnsController.cs:145), so
-    // delete-zone prints the deleted zone, as single-ID commands do (proposed-cli-surface.md "Several
+    // delete-zone prints the deleted zone, as single-ID commands do (spec/cli-surface.md "Several
     // IDs").
     [TestCase("dns delete-zone internal", true)]
     [TestCase("dns delete-zone --id 4", false)]
@@ -280,7 +280,7 @@ public class DnsCommandTests
         });
     }
 
-    // delete-zone takes one zone (proposed-cli-surface.md "Several IDs"). The single-zone command run
+    // delete-zone takes one zone (spec/cli-surface.md "Several IDs"). The single-zone command run
     // next in the same sandbox shows the command exists and the rejection comes from the second
     // zone.
     [TestCase("dns delete-zone --id 4,5")]
@@ -318,7 +318,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 62 in proposed-cli-surface.md. --zone takes the zone's name, looked up with one call,
+    // Example 62 in spec/cli-surface.md. --zone takes the zone's name, looked up with one call,
     // and --zone-id its ID, which needs no lookup ("Names and IDs"); either way every page asks the
     // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api).
     [TestCase("dns list-hostnames --zone internal", true)]
@@ -341,7 +341,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 16 in proposed-cli-surface.md. --filter is sent as typed, as the API's search
+    // Example 16 in spec/cli-surface.md. --filter is sent as typed, as the API's search
     // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api).
     [Test]
     public async Task Dns_list_hostnames_sends_the_filter_as_the_api_search()
@@ -361,7 +361,7 @@ public class DnsCommandTests
         });
     }
 
-    // A zone name that matches nothing exits 2 with no candidates (proposed-cli-surface.md "Errors
+    // A zone name that matches nothing exits 2 with no candidates (spec/cli-surface.md "Errors
     // and exit codes"), before any hostname is read.
     [Test]
     public async Task Dns_list_hostnames_in_a_zone_no_zone_has_exits_2_without_listing_hostnames()
@@ -381,7 +381,7 @@ public class DnsCommandTests
     }
 
     // db.internal and db.lab are both the record "db", so only a lookup by the full hostname picks
-    // one of them, and names match ignoring case (proposed-cli-surface.md "Names and IDs").
+    // one of them, and names match ignoring case (spec/cli-surface.md "Names and IDs").
     [TestCase("db.lab", "9")]
     [TestCase("DB.Internal", "7")]
     public async Task Dns_show_hostname_looks_the_full_hostname_up_and_prints_it(string hostname, string id)
@@ -420,7 +420,7 @@ public class DnsCommandTests
         });
     }
 
-    // A hostname is its full name (proposed-cli-surface.md "Names and IDs"): "db" is the record name
+    // A hostname is its full name (spec/cli-surface.md "Names and IDs"): "db" is the record name
     // of db.internal and db.lab, and the full name of neither. A name that matches nothing exits 2
     // with no candidates ("Errors and exit codes").
     [TestCase("nowhere.internal")]
@@ -443,7 +443,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 15 in proposed-cli-surface.md. The zone is found with one zone list call; the API
+    // Example 15 in spec/cli-surface.md. The zone is found with one zone list call; the API
     // takes the record name within the zone and the zone's ID (portal DnsRecordCreateModel), and
     // ENCLAVE is the only record type it has (portal DnsRecordTypeFormatConverter.cs:12). A create
     // sends every field, and --tags, the list flag left out, as an empty list ("Create and update",
@@ -474,7 +474,7 @@ public class DnsCommandTests
     }
 
     // A hostname's zone is the longest zone name it ends in, at a label boundary, and the record
-    // name is the rest, which may contain dots (proposed-cli-surface.md "Details"). internal comes
+    // name is the rest, which may contain dots (spec/cli-surface.md "Details"). internal comes
     // before eu.internal in the zone list, so a lookup that took the first zone the hostname ends
     // in puts db.eu.internal in the wrong zone; corp.example has two labels, so its zone is more
     // than the hostname's last label.
@@ -515,7 +515,7 @@ public class DnsCommandTests
         Assert.That(JsonRead.StringList(JsonAssert.Property(posts[0].BodyJson, "tags")), Is.EqualTo("web,frontend"));
     }
 
-    // A hostname with no zone, or equal to a zone's name, exits 2 (proposed-cli-surface.md
+    // A hostname with no zone, or equal to a zone's name, exits 2 (spec/cli-surface.md
     // "Details"). No zone is named nowhere; xinternal ends in the text "internal" but not at a label
     // boundary; internal and eu.internal are zone names, and eu.internal would be the record "eu"
     // in internal if the zone were not matched whole.
@@ -535,7 +535,7 @@ public class DnsCommandTests
         Assert.That(run.RequestsTo("POST", Records), Is.Empty);
     }
 
-    // Example 61 in proposed-cli-surface.md, by name and by ID. --set-systems replaces the whole list
+    // Example 61 in spec/cli-surface.md, by name and by ID. --set-systems replaces the whole list
     // ("Create and update"), and nothing else is sent.
     [TestCase("dns update-hostname db.internal --set-systems ABCDE,FGHIJ,KLMNO", true)]
     [TestCase("dns update-hostname --id 7 --set-systems ABCDE,FGHIJ,KLMNO", false)]
@@ -583,7 +583,7 @@ public class DnsCommandTests
     }
 
     // --name takes a full hostname in the hostname's own zone, and the API takes the record name
-    // within the zone (portal DnsRecordPatchModel.Name; proposed-cli-surface.md "Details"). The
+    // within the zone (portal DnsRecordPatchModel.Name; spec/cli-surface.md "Details"). The
     // record name may contain dots. The reads that find the hostname's zone are not fixed, so the
     // test checks the one PATCH it sends.
     [TestCase("dns update-hostname --id 7 --name db2.internal", "db2")]
@@ -613,7 +613,7 @@ public class DnsCommandTests
     }
 
     // The API cannot move a record between zones, so a new name in another zone exits 2
-    // (proposed-cli-surface.md "Details"). db.lab is in lab, db2 is in no zone, and db2.eu.internal
+    // (spec/cli-surface.md "Details"). db.lab is in lab, db2 is in no zone, and db2.eu.internal
     // is in eu.internal, the longest zone it ends in, although it also ends in internal. The error
     // names --name and repeats no part of the value given, as no CLI error does, since a value can
     // be a token passed by mistake. Each case checks stderr for a part of its value that a message
@@ -641,7 +641,7 @@ public class DnsCommandTests
     }
 
     // A command that takes several items looks each name up with one list call and sends one bulk
-    // call, printing { requested, affected } (proposed-cli-surface.md "Several IDs").
+    // call, printing { requested, affected } (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task Dns_delete_hostname_looks_each_hostname_up_and_deletes_them_in_one_bulk_call()
     {
@@ -661,7 +661,7 @@ public class DnsCommandTests
         });
     }
 
-    // --id gives IDs and makes no lookup, and one ID goes to the bulk call too (proposed-cli-surface.md
+    // --id gives IDs and makes no lookup, and one ID goes to the bulk call too (spec/cli-surface.md
     // "Names and IDs" and "Several IDs").
     [TestCase("7,8", 2)]
     [TestCase("7", 1)]
@@ -683,7 +683,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 16 in proposed-cli-surface.md: the list list-hostnames prints, read from stdin, carries
+    // Example 16 in spec/cli-surface.md: the list list-hostnames prints, read from stdin, carries
     // each hostname's ID, so no lookup is made ("Names and IDs").
     [Test]
     public async Task Dns_delete_hostname_deletes_the_hostnames_of_a_list_read_from_stdin()
@@ -705,7 +705,7 @@ public class DnsCommandTests
     }
 
     // Zones and hostnames both have integer IDs, so the list's kind is what stops a zone list
-    // deleting the hostnames that share its numbers (proposed-cli-surface.md "Several IDs"). The
+    // deleting the hostnames that share its numbers (spec/cli-surface.md "Several IDs"). The
     // hostname list run next in the same sandbox shows the rejection comes from the kind.
     [Test]
     public async Task Dns_delete_hostname_given_a_zone_list_on_stdin_exits_2_without_a_request()
@@ -721,7 +721,7 @@ public class DnsCommandTests
         Assert.That(string.Join(",", request.BodyIds("recordIds")), Is.EqualTo("10,11"));
     }
 
-    // Single-ID commands exit 5 for an unknown ID, dns delete-zone among them (proposed-cli-surface.md
+    // Single-ID commands exit 5 for an unknown ID, dns delete-zone among them (spec/cli-surface.md
     // "Several IDs"). The fake answers as the API does for a zone or hostname it does not have: 404
     // with the problem type zone-not-found or dns-record-not-found (portal DnsController.cs:352-368).
     [TestCase("dns show-zone --id 4", "GET", "dns/zones/4", "zone-not-found")]
@@ -747,7 +747,7 @@ public class DnsCommandTests
         });
     }
 
-    // Exit 5 means the item the command names was not found (proposed-cli-surface.md "Errors and
+    // Exit 5 means the item the command names was not found (spec/cli-surface.md "Errors and
     // exit codes"). The API also answers 404 when a --set-systems system is not an approved system
     // of the organisation (problem type no-such-system, portal DnsRecordHandlerBase.cs:117-123), and
     // the hostname exists then, so that 404 exits 1 api_error and carries the API's detail, which
@@ -773,7 +773,7 @@ public class DnsCommandTests
     }
 
     // dns update-hostname exits 5 only for the problem type dns-record-not-found
-    // (proposed-cli-surface.md "Errors and exit codes"). A 404 with no body, such as a proxy in front
+    // (spec/cli-surface.md "Errors and exit codes"). A 404 with no body, such as a proxy in front
     // of the API sends, or with another problem type does not say the hostname was not found, so
     // each exits 1 api_error with the status. zone-not-found is a type the API sends for a zone
     // (portal DnsController.cs:352-359).
@@ -803,7 +803,7 @@ public class DnsCommandTests
     }
 
     // create-hostname names a hostname that does not exist yet, so no 404 means it was not found
-    // (proposed-cli-surface.md "Errors and exit codes"). The API answers 404 for a --systems system
+    // (spec/cli-surface.md "Errors and exit codes"). The API answers 404 for a --systems system
     // the organisation does not have (no-such-system, portal DnsRecordHandlerBase.cs:117-123) and
     // for a zone deleted after the CLI read the zones (no-such-zone, portal
     // DnsRecordCreateHandler.cs:65-68), and each exits 1 api_error with the API's detail.
@@ -830,7 +830,7 @@ public class DnsCommandTests
     // upper-cases system IDs and answers 404 no-such-system when it finds fewer systems than it was
     // given (DnsRecordCreateHandler.cs:104, DnsRecordHandlerBase.cs:93-124), so it refuses a system
     // twice too, and abcde repeats ABCDE. Each exits 2 before any call, the zone read included
-    // (proposed-cli-surface.md "Command options"). The list with each value once, run next, shows
+    // (spec/cli-surface.md "Command options"). The list with each value once, run next, shows
     // the rejection comes from the repeat.
     [TestCase("--tags", "web,db,web", "web,db")]
     [TestCase("--systems", "ABCDE,FGHIJ,ABCDE", "ABCDE,FGHIJ")]
@@ -866,7 +866,7 @@ public class DnsCommandTests
     }
 
     // Zone and hostname IDs are integers, and every ID is checked before any call, so a malformed
-    // one exits 2 naming it and sends nothing (proposed-cli-surface.md "ID checks").
+    // one exits 2 naming it and sends nothing (spec/cli-surface.md "ID checks").
     // The same command with integer IDs run next shows the rejection comes from the ID.
     [TestCase("dns show-zone --id ../records", "dns show-zone --id 4", "GET", "dns/zones/4")]
     [TestCase("dns update-zone --id 4a --notes Reviewed", "dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4")]
@@ -887,7 +887,7 @@ public class DnsCommandTests
     }
 
     // A name argument with --id contradicts itself and exits 2 before any call
-    // (proposed-cli-surface.md "Details"). The command with --id alone run next shows the rejection
+    // (spec/cli-surface.md "Details"). The command with --id alone run next shows the rejection
     // comes from the pair.
     [TestCase("dns show-zone internal --id 4", "dns show-zone --id 4", "GET", "dns/zones/4")]
     [TestCase("dns update-hostname db.internal --id 7 --notes Reviewed", "dns update-hostname --id 7 --notes Reviewed", "PATCH", "dns/records/7")]
@@ -904,7 +904,7 @@ public class DnsCommandTests
     }
 
     // --dry-run is an option of commands that change something, and a read does not take it
-    // (proposed-cli-surface.md "Details"). The read without it run next shows the rejection comes
+    // (spec/cli-surface.md "Details"). The read without it run next shows the rejection comes
     // from the option.
     [TestCase("dns show", "dns")]
     [TestCase("dns list-zones", "dns/zones")]
@@ -925,7 +925,7 @@ public class DnsCommandTests
     }
 
     // --dry-run prints the requests the change would send and sends none of them; org.name is null
-    // when the organisation was given by ID, as CliRun gives it (proposed-cli-surface.md "Dry run").
+    // when the organisation was given by ID, as CliRun gives it (spec/cli-surface.md "Dry run").
     // None of these commands needs a read, so the fake API receives no request at all, and each
     // change is one call.
     [TestCase("dns create-zone internal --dry-run", "POST", "dns/zones")]
@@ -945,7 +945,7 @@ public class DnsCommandTests
     }
 
     // The zone lookup is a read the change depends on, so it runs, and only the POST is withheld
-    // (proposed-cli-surface.md "Dry run"). The printed body carries the zone the lookup found and the
+    // (spec/cli-surface.md "Dry run"). The printed body carries the zone the lookup found and the
     // record type.
     [Test]
     public async Task Dns_create_hostname_with_dry_run_looks_the_zone_up_and_prints_the_post_without_sending_it()

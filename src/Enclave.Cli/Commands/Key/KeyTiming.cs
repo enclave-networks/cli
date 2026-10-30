@@ -8,7 +8,7 @@ namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
 /// --for, --until and --then, which make a key create or a key enable temporary
-/// (proposed-cli-surface.md "Command options").
+/// (spec/cli-surface.md "Command options").
 /// </summary>
 internal sealed class KeyTiming
 {
@@ -59,7 +59,7 @@ internal sealed class KeyTiming
     // The API takes the expiry as ISO 8601 text (AutoExpireModel.ExpiryDateTime), which "o" writes
     // with the instant's +00:00 offset, as Enclave.Sdk.Api EnrolmentKeysClient.EnableUntilAsync
     // writes it. No time zone ID is sent: with one, the API moves the expiry when that zone's rules
-    // change (AutoExpireModel.TimeZoneId), and the CLI sends an instant (proposed-cli-surface.md
+    // change (AutoExpireModel.TimeZoneId), and the CLI sends an instant (spec/cli-surface.md
     // "Details").
     public AutoExpireModel? AutoExpire(CliContext context) =>
         Expiry(context) is { } instant

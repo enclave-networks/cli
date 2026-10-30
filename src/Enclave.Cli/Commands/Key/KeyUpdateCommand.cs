@@ -6,7 +6,7 @@ namespace Enclave.Cli.Commands.Key;
 
 /// <summary>
 /// `key update`: changes the settings given, leaves the rest as they are, and prints the key
-/// (proposed-cli-surface.md "Command options", "Create and update").
+/// (spec/cli-surface.md "Command options", "Create and update").
 /// </summary>
 internal static class KeyUpdateCommand
 {

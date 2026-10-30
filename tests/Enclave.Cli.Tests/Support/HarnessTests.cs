@@ -759,7 +759,7 @@ public class HarnessTests
         }
     }
 
-    // The partner API runs on its own host (proposed-cli-surface.md "Partner API"). A run gives the
+    // The partner API runs on its own host (spec/cli-surface.md "Partner API"). A run gives the
     // CLI a second fake's URL as the partner API address, on loopback at another port, so a partner
     // call can never reach the live partner API, and a partner call sent to the main API's address
     // shows. A partner command run through CliRun sends its call there, with the run's token.
@@ -970,7 +970,7 @@ public class HarnessTests
         });
     }
 
-    // ENCLAVE_ORG takes a name and ENCLAVE_ORG_ID an ID (proposed-cli-surface.md "Context"). The
+    // ENCLAVE_ORG takes a name and ENCLAVE_ORG_ID an ID (spec/cli-surface.md "Context"). The
     // test organisation is given by ID, which needs no lookup call, so a run's requests are the
     // command's own.
     [Test]
@@ -1455,7 +1455,7 @@ public class HarnessTests
     private static string Canonical(string id) =>
         Guid.TryParse(id, CultureInfo.InvariantCulture, out var guid) ? guid.ToString("N") : id;
 
-    // The formats of proposed-cli-surface.md "ID checks". The tag rule is the API's
+    // The formats of spec/cli-surface.md "ID checks". The tag rule is the API's
     // ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal TagValidationExtensions.cs:13).
     private static bool IsValidId(string kind, string id) => kind switch
     {

@@ -11,7 +11,7 @@ namespace Enclave.Cli.Commands.Dns;
 /// The hostname verbs of `dns`: list-hostnames, show-hostname, create-hostname, update-hostname and
 /// delete-hostname. A hostname is written in full, db.internal, which the API keeps as the record
 /// "db" in the zone "internal" (portal DnsRecordModel: name, zoneId, fqdn); it is given by that full
-/// name, looked up with one list call, or by --id, which makes no lookup (proposed-cli-surface.md
+/// name, looked up with one list call, or by --id, which makes no lookup (spec/cli-surface.md
 /// "Names and IDs").
 /// </summary>
 internal static class DnsHostnameCommands
@@ -81,7 +81,7 @@ internal static class DnsHostnameCommands
             var (zone, recordName) = DnsLookup.Place(context.Get(hostname)!, zones, hostname.Name);
 
             // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter.cs:12),
-            // and a create sends an empty list for a list flag left out (proposed-cli-surface.md
+            // and a create sends an empty list for a list flag left out (spec/cli-surface.md
             // "Details"). The hostname does not exist yet, so a 404 here is about another item, a
             // zone or a system (portal DnsRecordCreateHandler.cs:65-68, DnsRecordHandlerBase.cs:117-123),
             // and exits 1 as any API error does ("Errors and exit codes").
@@ -179,7 +179,7 @@ internal static class DnsHostnameCommands
             var selection = await Items.ReadAsync(context, hostnames, ids, ListKind.Hostname, IdFormats.Int32);
 
             // An empty list makes no call and exits 0, so a pipeline fed by an empty list succeeds
-            // (proposed-cli-surface.md "Several IDs"). Its dry run prints the dry run output, which
+            // (spec/cli-surface.md "Several IDs"). Its dry run prints the dry run output, which
             // names the organisation, with no request ("Dry run"), so it goes on to resolve the
             // organisation.
             if (selection.Ids.Count == 0 && selection.Names.Count == 0 && !context.IsDryRun)

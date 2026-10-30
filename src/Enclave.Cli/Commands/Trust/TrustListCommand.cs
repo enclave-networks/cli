@@ -4,7 +4,7 @@ using Enclave.Configuration.Data.Modules.TrustRequirements.Enums;
 namespace Enclave.Cli.Commands.Trust;
 
 /// <summary>
-/// `trust list`: every trust requirement, reading every page (proposed-cli-surface.md "Command
+/// `trust list`: every trust requirement, reading every page (spec/cli-surface.md "Command
 /// options", "Filters").
 /// </summary>
 internal static class TrustListCommand

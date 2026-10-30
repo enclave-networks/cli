@@ -5,7 +5,7 @@ namespace Enclave.Cli.Commands.Org;
 
 /// <summary>
 /// `org remove-user`: removes a user from the organisation, given by email address, looked up with
-/// one call, or by account ID after --id, which makes no lookup (proposed-cli-surface.md "Names and
+/// one call, or by account ID after --id, which makes no lookup (spec/cli-surface.md "Names and
 /// IDs").
 /// </summary>
 internal static class OrgRemoveUserCommand

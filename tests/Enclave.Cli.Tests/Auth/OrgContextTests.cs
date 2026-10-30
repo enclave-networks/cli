@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// The organisation a command acts in (proposed-cli-surface.md "Context", "Details", and "Shape and
+// The organisation a command acts in (spec/cli-surface.md "Context", "Details", and "Shape and
 // naming" for --org and --org-id). system list (GET /org/{orgId}/systems) shows which organisation
 // a command used, since the organisation ID is in the request path, and the requests before it show
 // whether the CLI looked the organisation up.

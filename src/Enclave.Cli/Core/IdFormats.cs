@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace Enclave.Cli.Core;
 
 /// <summary>
-/// The ID forms of proposed-cli-surface.md "ID checks". Every ID is checked against its form before
+/// The ID forms of spec/cli-surface.md "ID checks". Every ID is checked against its form before
 /// any call, so a malformed one exits 2 with an error that names it, and nothing is sent.
 /// Enclave.Sdk.Api escapes the IDs it takes as text in URL paths (ClientBase.PathSegment) and
 /// takes the others as numbers or GUIDs, so an ID such as "../systems/ABCDE" cannot move a request
