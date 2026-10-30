@@ -26,63 +26,63 @@ Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json`
 
 ## Example usage
 
-**List the organisations you have access to:**
+- List the organisations you have access to:
 
-```
-enclave-cli org list
-```
+  ```
+  enclave-cli org list
+  ```
 
-**List your customers, after choosing your partner account once:**
+- List your customers, after choosing your partner account once:
 
-```
-enclave-cli partner use --id <partnerId>
-enclave-cli partner customer list
-```
+  ```
+  enclave-cli partner use --id <partnerId>
+  enclave-cli partner customer list
+  ```
 
-**Find a customer's disconnected systems:**
+- Find a customer's disconnected systems:
 
-```
-enclave-cli system list --org "Acme Ltd" --state disconnected
-```
+  ```
+  enclave-cli system list --org "Acme Ltd" --state disconnected
+  ```
 
-**Approve every system waiting for approval:**
+- Approve every system waiting for approval:
 
-```
-enclave-cli system list --org "Acme Ltd" --pending | enclave-cli system approve --org "Acme Ltd" -
-```
+  ```
+  enclave-cli system list --org "Acme Ltd" --pending | enclave-cli system approve --org "Acme Ltd" -
+  ```
 
-**Create an enrolment key for a new site, so its systems join with the right tags:**
+- Create an enrolment key for a new site, so its systems join with the right tags:
 
-```
-enclave-cli key create "Leeds office" --org "Acme Ltd" --tags leeds,office
-```
+  ```
+  enclave-cli key create "Leeds office" --org "Acme Ltd" --tags leeds,office
+  ```
 
-**Create a policy that lets laptops reach the file servers over SMB:**
+- Create a policy that lets laptops reach the file servers over SMB:
 
-```
-enclave-cli policy create "laptops to file servers" --org "Acme Ltd" --senders laptops --receivers file-servers --acl tcp:445
-```
+  ```
+  enclave-cli policy create "laptops to file servers" --org "Acme Ltd" --senders laptops --receivers file-servers --acl tcp:445
+  ```
 
-**Make system `ABCDE` a gateway to the office network, then let laptops reach that network through it:**
+- Make system `ABCDE` a gateway to the office network, then let laptops reach that network through it:
 
-```
-enclave-cli system update ABCDE --org "Acme Ltd" --enable-gateway-for 192.168.1.0/24
-enclave-cli policy create "laptops to office network" --org "Acme Ltd" --senders laptops --gateway ABCDE:192.168.1.0/24 --acl any
-```
+  ```
+  enclave-cli system update ABCDE --org "Acme Ltd" --enable-gateway-for 192.168.1.0/24
+  enclave-cli policy create "laptops to office network" --org "Acme Ltd" --senders laptops --gateway ABCDE:192.168.1.0/24 --acl any
+  ```
 
-**Create a disabled policy that gives contractors SSH and RDP access, then turn it on for 8 hours when they need it:**
+- Create a disabled policy that gives contractors SSH and RDP access, then turn it on for 8 hours when they need it:
 
-```
-enclave-cli policy create contractors --org "Acme Ltd" --senders contractors --receivers servers --acl tcp:22 --acl tcp:3389 --disabled
-enclave-cli policy enable contractors --org "Acme Ltd" --for 8h
-```
+  ```
+  enclave-cli policy create contractors --org "Acme Ltd" --senders contractors --receivers servers --acl tcp:22 --acl tcp:3389 --disabled
+  enclave-cli policy enable contractors --org "Acme Ltd" --for 8h
+  ```
 
-**Preview and revoke systems that haven't connected for 90 days:**
+- Preview and revoke systems that haven't connected for 90 days:
 
-```
-enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" - --dry-run
-enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" -
-```
+  ```
+  enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" - --dry-run
+  enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" -
+  ```
 
 ## Command conventions
 
