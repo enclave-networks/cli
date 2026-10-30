@@ -46,6 +46,8 @@ bld/
 [Oo]ut/
 [Ll]og/
 [Ll]ogs/
+# The log command's source folder matches [Ll]og/ above.
+!src/Enclave.Cli/Commands/Log/
 
 # Build results on 'Bin' directories
 **/[Bb]in/*

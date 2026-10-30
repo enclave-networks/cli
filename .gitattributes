@@ -1,0 +1,2 @@
+# Normalise line endings in the repository so files are identical whichever OS checked them out.
+* text=auto eol=lf

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+
+    <!--
+      An advisory on a package only the tests use is reported as a warning and does not fail
+      restore. Directory.Build.props sets TreatWarningsAsErrors, and NuGet audits transitive
+      packages as well as direct ones for a project that targets net10.0 (NuGetAuditMode defaults
+      to all from NuGet 7.0, .NET SDK 10.0.100; https://learn.microsoft.com/nuget/concepts/auditing-packages).
+      Without this property, an advisory anywhere in WireMock.Net's dependencies fails the test
+      job, which the release job needs. NU1901 to NU1904 are the audit warnings for low, moderate,
+      high and critical advisories, and this is the form that page gives for keeping them as
+      warnings under TreatWarningsAsErrors ("Warning codes").
+
+      The trade-off: such an advisory does not stop CI, and shows only as a warning in the build
+      output. That is accepted because these packages never ship. The CLI project keeps the
+      warnings as errors, so an advisory on a package the CLI ships, transitive packages included,
+      fails its restore and blocks a release.
+    -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="NUnit.Analyzers" />
+    <PackageReference Include="WireMock.Net" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Enclave.Cli\Enclave.Cli.csproj" />
+  </ItemGroup>
+
+</Project>
