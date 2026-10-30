@@ -5,12 +5,9 @@ using System.Text;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Writes help text for people: usage, arguments, options and the commands below a command.
-/// </summary>
-// System.CommandLine's own help lists a command's aliases beside its name (HelpBuilder.Default.cs,
-// GetIdentifierSymbolUsageLabel, version 2.0.12), which would show each hidden plural noun, and its
-// HelpBuilder is internal, so the CLI writes its own.
+// System.CommandLine's own help lists a command's aliases beside its name, which would show each
+// hidden plural noun (System.CommandLine 2.0.12, HelpBuilder.Default.cs,
+// GetIdentifierSymbolUsageLabel), and its HelpBuilder is internal.
 internal static class HelpWriter
 {
     private const int MaxLabelWidth = 32;
@@ -39,15 +36,12 @@ internal static class HelpWriter
         text.Append(subcommands.Length > 0 ? " <command>" : string.Empty).Append(" [options]\n");
 
         AppendRows(text, "Arguments", command.Arguments.Where(argument => !argument.Hidden).Select(argument => ($"<{argument.Name}>", argument.Description)));
-        AppendRows(text, "Options", Options(result).Select(option => (Label(option), Describe(option))));
+        AppendRows(text, "Options", VisibleOptions(result).Select(option => (Label(option), Describe(option))));
         AppendRows(text, "Commands", subcommands.Select(subcommand => (subcommand.Name, subcommand.Description)));
 
         return text.ToString();
     }
 
-    /// <summary>
-    /// The options a command takes, its own first and then the ones every command of its scope takes.
-    /// </summary>
     public static IEnumerable<Option> CommandOptions(Command command)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -59,22 +53,22 @@ internal static class HelpWriter
             .Concat(common.Where(option => !option.Hidden));
     }
 
-    private static IEnumerable<Option> Options(CommandResult result)
+    // The command's own options, then the recursive options of the commands above it, such as help
+    // from the root.
+    public static IEnumerable<Option> VisibleOptions(CommandResult result)
     {
+        ArgumentNullException.ThrowIfNull(result);
+
         foreach (var option in CommandOptions(result.Command))
         {
             yield return option;
         }
 
-        // Help is recursive from the root, so every command's help lists it.
-        if (result.Parent is not null)
+        for (var parent = result.Parent as CommandResult; parent is not null; parent = parent.Parent as CommandResult)
         {
-            for (var parent = result.Parent as CommandResult; parent is not null; parent = parent.Parent as CommandResult)
+            foreach (var option in parent.Command.Options.Where(option => option.Recursive && !option.Hidden))
             {
-                foreach (var option in parent.Command.Options.Where(option => option.Recursive && !option.Hidden))
-                {
-                    yield return option;
-                }
+                yield return option;
             }
         }
     }

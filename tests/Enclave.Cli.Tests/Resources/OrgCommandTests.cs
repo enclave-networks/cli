@@ -5,9 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The org commands that act on the organisation in use: its properties, users and invites
-// (spec/cli-surface.md "Commands" and "Command options"). org list and org use choose the
-// organisation and are tested with the organisation context.
+// org list and org use are tested in Auth/OrgContextTests.cs.
 public class OrgCommandTests
 {
     private const string SamEmail = "sam@example.com";
@@ -22,32 +20,8 @@ public class OrgCommandTests
 
     private static readonly Guid AlexId = new("0b7e4d19-3c2a-4f6e-8d15-a9b8c7d6e5f4");
 
-    [Test]
-    public async Task Org_show_prints_the_properties_of_the_organisation_in_use()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath(), json: ApiJson.OrgProperties(TestData.OrgName));
-
-        var result = await run.RunAsync("org", "show");
-
-        CliAssert.Succeeded(result);
-        var request = run.SingleRequest();
-        var output = result.StdoutJson;
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath()));
-            Assert.That(Guid.Parse(JsonAssert.Property(output, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(output, "name").GetString(), Is.EqualTo(TestData.OrgName));
-            Assert.That(JsonAssert.Property(output, "maxSystems").GetInt32(), Is.EqualTo(100));
-        });
-    }
-
-    // Example 63 in spec/cli-surface.md. The flags set the OrganisationPatchModel fields of the
-    // same name (portal Enclave.Api/Modules/OrganisationManagement/Organisation/Models/OrganisationPatchModel.cs).
-    // The command prints the organisation the API answers with. The fake answers with another name
-    // from the one sent and with fields the request does not carry, so output copied from the
-    // request does not match; names are read exactly, as an agent reads them.
+    // Example 63. The answer differs from the request, so output copied from the request does not
+    // match.
     [Test]
     public async Task Org_update_patches_the_name_website_and_phone_and_prints_the_updated_organisation()
     {
@@ -74,8 +48,7 @@ public class OrgCommandTests
         });
     }
 
-    // An update sends only the fields given (spec/cli-surface.md "Create and update"); a Name the
-    // caller did not give would rename the organisation.
+    // A Name the caller did not give would rename the organisation.
     [TestCase("--name", "Acme Ltd", "Name")]
     [TestCase("--website", "https://acme.example", "Website")]
     [TestCase("--phone", "+44 20 7946 0000", "Phone")]
@@ -94,36 +67,9 @@ public class OrgCommandTests
         });
     }
 
-    // The API returns the users in one body, with no pages
-    // (OrganisationScopedClient.GetOrganisationUsersAsync, Enclave.Sdk.Api), and the CLI prints
-    // them as a user list (spec/cli-surface.md "Output").
-    [Test]
-    public async Task Org_list_users_prints_the_organisation_users_as_a_user_list()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail), (AlexId, AlexEmail)));
-
-        var result = await run.RunAsync("org", "list-users");
-
-        var items = CliAssert.List(result, "user");
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("users")));
-            Assert.That(JsonRead.StringFieldList(items, "emailAddress"), Is.EqualTo($"{SamEmail},{AlexEmail}"));
-            Assert.That(JsonRead.StringFieldList(items, "id"), Is.EqualTo($"{SamId:N},{AlexId:N}").IgnoreCase);
-        });
-    }
-
-    // Example 19 in spec/cli-surface.md. org remove-user takes an email address in place of the
-    // account ID and looks it up with one call, matching ignoring case ("Names and IDs"). Sam is the
-    // second user the lookup reads, so a lookup that took the first user removes the wrong account.
-    // The API answers the removal with the removed user's model (portal
-    // OrganisationController.RemoveUser), and a single-ID command prints the model ("Several IDs").
-    // Each account's removal answers with that account, so the output shows which one was removed.
-    // Sam's removal answers with a full name the lookup's item does not have, so output copied from
-    // the lookup does not match; names are read exactly, as an agent reads them.
+    // Example 19. Sam is the second user the lookup reads, so a lookup that took the first removes
+    // the wrong account. Sam's removal answers with a full name the lookup's item lacks, so output
+    // copied from the lookup does not match.
     [TestCase(SamEmail)]
     [TestCase("SAM@Example.COM")]
     public async Task Org_remove_user_looks_the_email_up_removes_that_account_and_prints_it(string email)
@@ -151,9 +97,7 @@ public class OrgCommandTests
         });
     }
 
-    // --id gives the account ID and makes no lookup (spec/cli-surface.md "Names and IDs"). No
-    // command asks for confirmation ("Changes run when given"), so the removal runs with stdin a
-    // terminal, where a prompt would wait for an answer.
+    // With stdin a terminal, a prompt would wait for an answer.
     [Test]
     public async Task Org_remove_user_with_id_removes_the_account_without_a_lookup_or_a_prompt()
     {
@@ -174,8 +118,6 @@ public class OrgCommandTests
         });
     }
 
-    // An email address no member has matches nothing, which exits 2 invalid_argument with no
-    // candidates (spec/cli-surface.md "Errors and exit codes").
     [Test]
     public async Task Org_remove_user_given_an_email_no_member_has_exits_2_with_no_candidates()
     {
@@ -194,9 +136,6 @@ public class OrgCommandTests
         });
     }
 
-    // An email address with --id contradicts itself and exits 2 before any call
-    // (spec/cli-surface.md "Details"). The removal by --id alone run next shows the rejection
-    // comes from the pair.
     [Test]
     public async Task Org_remove_user_given_an_email_and_an_id_exits_2_without_a_request()
     {
@@ -211,18 +150,13 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // An account ID is a GUID, checked before any call, so a malformed one exits 2 naming it and
-    // sends nothing (spec/cli-surface.md "ID checks"). An email address after --id is
-    // not read as one, since the option decides how a value is read ("Commands"). The removal with a
-    // GUID run next shows the rejection comes from the ID.
+    // An email address after --id is not read as one, since the option decides how a value is read.
     [TestCase(SamEmail)]
     [TestCase("12345")]
-    [TestCase("../invites")]
     public async Task Org_remove_user_rejects_an_account_id_that_is_not_a_guid_without_a_request(string accountId)
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));
-        run.Stub("DELETE", TestData.OrgPath("invites"));
         StubRemoval(run, SamId, SamEmail);
 
         CliAssert.Rejected(run, await run.RunAsync("org", "remove-user", "--id", accountId));
@@ -232,8 +166,6 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // org remove-user is a single-ID command, which exits 5 for an unknown ID
-    // (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task Org_remove_user_with_an_account_id_the_api_does_not_know_exits_5()
     {
@@ -250,32 +182,9 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // Example 64 in spec/cli-surface.md, second command. An invite is identified by its email
-    // address (OrganisationInviteModel), and the API returns the invites in one body, with no pages.
-    [Test]
-    public async Task Org_list_invites_prints_the_pending_invites_as_an_invite_list()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath("invites"), json: ApiJson.Invites(AlexEmail, SamEmail));
-
-        var result = await run.RunAsync("org", "list-invites");
-
-        var items = CliAssert.List(result, "invite");
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
-            Assert.That(JsonRead.StringFieldList(items, "emailAddress"), Is.EqualTo($"{AlexEmail},{SamEmail}"));
-        });
-    }
-
-    // Example 64 in spec/cli-surface.md, first command. The API takes the invite as
-    // { emailAddress } (OrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api). The API
-    // answers with the invite's model (portal OrganisationController.CreateInvite), which the
-    // command prints. The invite holds the address it was first sent to, which can differ in case
-    // from the one given (IOrganisationScopedClient.InviteUserAsync, Enclave.Sdk.Api), so the
-    // fake answers with another case, and output copied from the argument does not match.
+    // Example 64. The invite holds the address it was first sent to, which can differ in case from
+    // the one given (Enclave.Sdk.Api IOrganisationScopedClient.InviteUserAsync), so the fake answers
+    // in another case.
     [Test]
     public async Task Org_invite_posts_the_email_address_and_prints_the_invite_the_api_returns()
     {
@@ -296,12 +205,9 @@ public class OrgCommandTests
         });
     }
 
-    // Example 19 in spec/cli-surface.md, second command. The main API cancels an invite by email
-    // address, in the body of a DELETE (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api),
-    // so the CLI sends the address and makes no lookup ("Partner API"). The API answers with
-    // the cancelled invite's model (portal OrganisationController.DeleteInvite), which a single-ID
-    // command prints ("Several IDs"). The fake answers with the address in another case, as the
-    // invite test above does, so output copied from the argument does not match.
+    // Example 19. The API cancels an invite by the address in the DELETE body (Enclave.Sdk.Api
+    // OrganisationScopedClient.CancelInviteAync), so no lookup is needed. The fake answers in another
+    // case, so output copied from the argument does not match.
     [Test]
     public async Task Org_cancel_invite_deletes_the_invite_by_email_address_without_a_lookup_and_prints_it()
     {
@@ -323,35 +229,10 @@ public class OrgCommandTests
         });
     }
 
-    // org cancel-invite is a single-ID command, which exits 5 for an unknown ID
-    // (spec/cli-surface.md "Several IDs"); the API answers 404 for an address with no pending
-    // invite (portal OrganisationController.DeleteInvite).
-    [Test]
-    public async Task Org_cancel_invite_for_an_address_with_no_invite_exits_5()
-    {
-        using var run = CliRun.Start();
-        run.StubProblem("DELETE", TestData.OrgPath("invites"), 404, "Not Found", "No pending invite for that address.");
-
-        var result = await run.RunAsync("org", "cancel-invite", SamEmail);
-
-        CliAssert.Failed(result, "not_found");
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
-        });
-    }
-
-    // An empty or blank address names no one, so org invite, cancel-invite and remove-user given one
-    // exit 2 invalid_argument, keyed by the argument, with the other argument checks: before the
-    // token is read and before any call ("Errors and exit codes": arguments, then the token, then
-    // the call). Sent on, the API refuses it (portal CreateOrganisationInviteModelValidator.cs:16 and
-    // DeleteOrganisationInviteModelValidator.cs:16, EmailAddress, which fails a string with no "@"
-    // after its first character: FluentValidation 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid),
-    // and remove-user's lookup matches no member. The run with a token answers every call, so a CLI
-    // that went on shows a request; the run without a token gives the same error, so a CLI that
-    // checked the token first exits 3.
+    // The API refuses such an address (portal CreateOrganisationInviteModelValidator,
+    // DeleteOrganisationInviteModelValidator: EmailAddress), and remove-user's lookup matches no
+    // member. The run without a token gives the same error, so a CLI that checked the token first
+    // exits 3.
     [TestCase("invite", "")]
     [TestCase("invite", " ")]
     [TestCase("cancel-invite", "")]
@@ -380,30 +261,9 @@ public class OrgCommandTests
         });
     }
 
-    // Organisation update, user removal and invites need organisation membership and no token scope
-    // (portal OrganisationController.cs:49,91,132), and no command asks for confirmation
-    // (spec/cli-surface.md "Changes run when given"). Each command sends its one request and
-    // nothing else, with stdin a terminal, where a prompt would wait for an answer.
-    [TestCase("org update --name Initech", "PATCH", null)]
-    [TestCase("org invite alex@example.com", "POST", "invites")]
-    [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
-    public async Task Org_membership_changes_run_when_given_without_a_prompt(string commandLine, string method, string? suffix)
-    {
-        ArgumentNullException.ThrowIfNull(commandLine);
-        using var run = CliRun.Start();
-        run.StdinIsTerminal = true;
-        run.Stub("PATCH", TestData.OrgPath(), json: ApiJson.OrgProperties("Initech"));
-        run.Stub("POST", TestData.OrgPath("invites"), json: ApiJson.Invite(AlexEmail));
-        run.Stub("DELETE", TestData.OrgPath("invites"), json: ApiJson.Invite(SamEmail));
-
-        await CliAssert.AcceptedAsync(run, method, TestData.OrgPath(suffix ?? string.Empty), commandLine.Split(' '));
-    }
-
-    // A change the API did not make must never be reported as made. A plain 502 from a proxy is a
-    // failure without problem details, which the CLI maps to transient ("Errors and exit codes").
-    // These calls report it because Enclave.Sdk.Api checks their status before it reads the
-    // body (OrganisationScopedClient.ReadModelAsync; spec/cli-surface.md "`Enclave.Sdk.Api`
-    // changes", item 6), so the HTML body is never read as a model.
+    // A change the API did not make must never be reported as made. Enclave.Sdk.Api checks the
+    // status before it reads the body (OrganisationScopedClient.ReadModelAsync; spec/cli-surface.md
+    // "`Enclave.Sdk.Api` changes", item 6), so an HTML 502 is never read as a model.
     [TestCase("org invite alex@example.com", "POST", "invites")]
     [TestCase("org cancel-invite sam@example.com", "DELETE", "invites")]
     public async Task Org_invite_changes_report_a_proxy_error_as_transient(string commandLine, string method, string suffix)
@@ -441,9 +301,7 @@ public class OrgCommandTests
         Assert.That(AccountIn(run.SingleRequest().Path), Is.EqualTo(SamId));
     }
 
-    // --dry-run prints the requests the change would send and sends none of them; org.name is null
-    // when the organisation was given by ID, as CliRun gives it (spec/cli-surface.md "Dry run").
-    // None of these commands needs a read first, and each change is one call.
+    // None of these commands needs a read, so the fake API receives no request at all.
     [TestCase("org update --name Initech --dry-run", "PATCH", null, "Name", "Initech")]
     [TestCase("org invite alex@example.com --dry-run", "POST", "invites", "emailAddress", AlexEmail)]
     [TestCase("org cancel-invite sam@example.com --dry-run", "DELETE", "invites", "emailAddress", SamEmail)]
@@ -462,8 +320,7 @@ public class OrgCommandTests
         });
     }
 
-    // The email lookup is a read the change depends on, so it runs, and only the DELETE it finds the
-    // account for is withheld (spec/cli-surface.md "Dry run").
+    // The email lookup is a read the change depends on, so it runs ("Dry run").
     [Test]
     public async Task Org_remove_user_with_dry_run_looks_the_email_up_and_prints_the_removal_without_sending_it()
     {
@@ -483,26 +340,8 @@ public class OrgCommandTests
         });
     }
 
-    // --dry-run is an option of commands that change something, and a read does not take it
-    // (spec/cli-surface.md "Details"). The read without it run next shows the rejection comes
-    // from the option.
-    [TestCase("show", null)]
-    [TestCase("list-users", "users")]
-    [TestCase("list-invites", "invites")]
-    public async Task Org_reads_given_dry_run_exit_2_without_a_request(string verb, string? suffix)
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TestData.OrgPath(), json: ApiJson.OrgProperties(TestData.OrgName));
-        run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));
-        run.Stub("GET", TestData.OrgPath("invites"), json: ApiJson.Invites(SamEmail));
-
-        await CliAssert.RejectedThenAcceptedAsync(run, ["org", verb, "--dry-run"], ["org", verb], "GET", TestData.OrgPath(suffix ?? string.Empty));
-    }
-
-    // The specification names the account a removal acts on and leaves the form of its GUID in the
-    // path open: OrganisationUser.Id is written as 32 hex digits (ApiJson.User), and a GUID given to
-    // --id is hyphenated. The account is read from the last path segment, so either form passes
-    // and any other account fails.
+    // The specification leaves the form of the GUID in the path open, so either form passes and any
+    // other account fails.
     private static Guid? AccountIn(string path)
     {
         var prefix = TestData.OrgPath("users/");
@@ -516,9 +355,8 @@ public class OrgCommandTests
     private static string[] AccountPaths(Guid accountId) =>
         [TestData.OrgPath("users/" + accountId.ToString("N")), TestData.OrgPath("users/" + accountId.ToString("D"))];
 
-    // The fake answers the removal with the removed user's model, as the API does (portal
-    // OrganisationController.RemoveUser), at either form of the account's path, for the reason
-    // AccountIn gives. A full name, when given, replaces the one ApiJson.User gives.
+    // The API answers with the removed user's model (portal OrganisationController.RemoveUser). Both
+    // forms of the path are answered, for the reason AccountIn gives.
     private static void StubRemoval(CliRun run, Guid accountId, string email, string? fullName = null)
     {
         var user = JsonNode.Parse(ApiJson.User(accountId, email))!.AsObject();

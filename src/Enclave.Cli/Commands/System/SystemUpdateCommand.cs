@@ -6,22 +6,14 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Systems;
 
-/// <summary>
-/// `system update`: changes a system's description, notes, tags or gateway routes, or with
-/// --pending a waiting system's description, notes or tags, and prints the system the API returns.
-/// It sends only the fields given (spec/cli-surface.md "Create and update").
-/// </summary>
 internal static class SystemUpdateCommand
 {
     public static CliVerb Create()
     {
         var verb = new CliVerb("update", "Change a system's description, notes, tags or gateway routes, or with --pending a waiting system's description, notes or tags, and print the system.", CommandScope.Organisation, changes: true);
         var systemId = verb.Add(CliArguments.Id("systemId", "The system's ID.", IdFormats.System));
-        // A system's description and notes are optional: the API takes them empty, for an enrolled
-        // and a waiting system (portal Enclave.Api/Modules/SystemManagement:
-        // Systems/Validators/SystemPatchModelValidator.cs:15 and 23,
-        // UnapprovedSystems/Validators/UnapprovedSystemPatchModelValidator.cs:13, MaximumLength
-        // only), so "" clears them (spec/cli-surface.md "Details").
+        // The API takes an empty description and notes, enrolled or waiting (portal
+        // SystemPatchModelValidator, UnapprovedSystemPatchModelValidator), so "" clears them.
         var description = verb.Add(CliOptions.Text("--description", "The system's description."));
         var notes = verb.Add(CliOptions.Text("--notes", "The system's notes."));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the system's tags; \"\" removes them all."));
@@ -33,9 +25,7 @@ internal static class SystemUpdateCommand
 
         verb.Exclusive(enableGatewayFor, disableGateway);
 
-        // A waiting system has no gateway routes to set: UnapprovedSystemPatchModel takes a
-        // description, notes and tags only (Enclave.Sdk.Api.Data), so the gateway flags exit
-        // 2 with --pending ("Details").
+        // UnapprovedSystemPatchModel has no gateway routes (Enclave.Sdk.Api.Data).
         Option[] enrolledOnly = [enableGatewayFor, disableGateway];
         verb.Check(context =>
         {
@@ -81,9 +71,7 @@ internal static class SystemUpdateCommand
         return verb;
     }
 
-    // update names one system, so a 404 on the read or the patch exits 5 ("Several IDs"). The read
-    // is made only when the patch needs what the system has: its tags for --add-tags and
-    // --remove-tags, and its routes for --enable-gateway-for ("Calls per command").
+    // The read is made only when the patch needs what the system has ("Calls per command").
     private static async Task<SystemModel> UpdateEnrolledAsync(OrganisationInUse org, string id, Change change)
     {
         var current = change.NeedsCurrentTags || change.GatewayFor is not null

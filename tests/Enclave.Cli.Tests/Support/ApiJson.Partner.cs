@@ -3,15 +3,8 @@ using System.Text.Json.Nodes;
 
 namespace Enclave.Cli.Tests.Support;
 
-// Partner API bodies have the property names, value types and nullability of the partner API's
-// models, which Enclave.Sdk.Api defines in Enclave.Sdk.Api.Partner.Models and the deployed
-// schema gives (https://partner-api.enclave.io/swagger/v1/swagger.json, components.schemas
-// CustomerModel, CustomerUsersModel, CustomerUserModel, CustomerPendingAdminInvitesModel and
-// CustomerAdminInviteModel). As for the main API's bodies, each carries every property of its
-// model, GUIDs are 32 hex digits, enums are member names, and times end in Z (DateTime) or
-// +00:00 (DateTimeOffset), so a model read from a body and written back gives the same JSON.
-// PartnerCommandTests compares what the CLI prints with these bodies, which shows they read into
-// the models field for field.
+// Bodies follow Enclave.Sdk.Api.Partner.Models and the deployed schema
+// (https://partner-api.enclave.io/swagger/v1/swagger.json), in the same form as the main API's.
 
 /// <summary>
 /// Partner API response bodies: customers, their admins and their admin invites.
@@ -21,9 +14,9 @@ internal static partial class ApiJson
     private const string TrialEnd = "2026-02-01T00:00:00+00:00";
 
     /// <summary>
-    /// A CustomerModel, the customer GET, create, update, convert and auto-sync body and the customer
-    /// list item, for the customer with this organisation ID. Only the customer list sets
-    /// oldestEnclaveVersion (CustomerModel.OldestEnclaveVersion, Enclave.Sdk.Api).
+    /// A CustomerModel, the customer GET, create, update, convert and auto-sync body and the list
+    /// item. Only the list sets oldestEnclaveVersion (Enclave.Sdk.Api
+    /// CustomerModel.OldestEnclaveVersion).
     /// </summary>
     public static string Customer(string orgId, string name, string? oldestEnclaveVersion = null) => new JsonObject
     {
@@ -49,7 +42,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// A CustomerUsersModel, the GET .../customers/{id}/admins body, whose users are CustomerUserModel.
+    /// A CustomerUsersModel, the GET .../customers/{id}/admins body.
     /// </summary>
     public static string CustomerAdmins(params string[] users)
     {
@@ -63,8 +56,8 @@ internal static partial class ApiJson
     }
 
     /// <summary>
-    /// A CustomerUserModel: one item of <see cref="CustomerAdmins"/>, and the body add-admin and
-    /// remove-admin return. Role is Owner or Admin (UserOrganisationRole).
+    /// A CustomerUserModel, also the body add-admin and remove-admin return. Role is Owner or Admin
+    /// (UserOrganisationRole).
     /// </summary>
     public static string CustomerAdmin(string accountId, string email, string role = "Admin") => new JsonObject
     {
@@ -76,8 +69,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// A CustomerPendingAdminInvitesModel, the GET .../customers/{id}/invites body, whose invites are
-    /// CustomerAdminInviteModel.
+    /// A CustomerPendingAdminInvitesModel, the GET .../customers/{id}/invites body.
     /// </summary>
     public static string CustomerInvites(params string[] invites)
     {
@@ -91,9 +83,7 @@ internal static partial class ApiJson
     }
 
     /// <summary>
-    /// A CustomerAdminInviteModel: one item of <see cref="CustomerInvites"/>, and the body an invite
-    /// returns. The API writes the invite ID as a string, the organisation ID and a number joined by a
-    /// hyphen (Enclave.Sdk.Api, CustomersClientTests).
+    /// A CustomerAdminInviteModel, also the body an invite returns.
     /// </summary>
     public static string CustomerInvite(string orgId, int number, string email) => new JsonObject
     {
@@ -102,9 +92,8 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// The body the API answers a cancelled invite with: the email address, and the ID written as
-    /// null (portal DeleteCustomerPendingAdminInviteHandler.cs leaves it unset, as
-    /// CustomersClient.CancelInviteAsync records, Enclave.Sdk.Api).
+    /// The body the API answers a cancelled invite with, whose ID is null (portal
+    /// DeleteCustomerPendingAdminInviteHandler; Enclave.Sdk.Api CustomersClient.CancelInviteAsync).
     /// </summary>
     public static string CancelledCustomerInvite(string email) => new JsonObject
     {

@@ -2,10 +2,6 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Key;
 
-/// <summary>
-/// The `key` noun: enrolment keys (spec/cli-surface.md "Commands"). A key is given by its
-/// description, or by --id.
-/// </summary>
 internal static class KeyCommand
 {
     public static CliNoun Create()

@@ -1,17 +1,13 @@
 namespace Enclave.Cli.Core;
 
 /// <summary>
-/// The kind a list prints in its envelope, and the item property that holds each item's ID, which
-/// a command reading the list after "-" acts on.
+/// IdField is the item property a command reading the list from "-" takes each ID from.
 /// </summary>
 internal sealed record ListKind(string Name, string? IdField)
 {
-    // spec/cli-surface.md "Output" names the kinds. The ID fields are the properties of the
-    // Enclave.Sdk.Api models that identify an item to the API: SystemSummaryModel.SystemId, the
-    // integer Id of keys, policies, zones, records and trust requirements, TagSummaryModel.Tag,
-    // AccountOrganisationModel.OrgId, OrganisationUser.Id, and OrganisationInviteModel.EmailAddress,
-    // since the API cancels an invite by email address (OrganisationClient.CancelInviteAync).
-    // Log entries have no ID.
+    // spec/cli-surface.md "Output" names the kinds. Each ID field is the model property that
+    // identifies an item to the API; an invite's is its email address, since the API cancels an
+    // invite by email address (OrganisationScopedClient.CancelInviteAync). Log entries have no ID.
     public static ListKind System { get; } = new("system", "systemId");
 
     public static ListKind PendingSystem { get; } = new("pending-system", "systemId");

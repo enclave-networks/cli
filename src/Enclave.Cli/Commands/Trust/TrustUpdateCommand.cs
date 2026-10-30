@@ -6,12 +6,8 @@ using Enclave.Sdk.Network.Abstractions.NetworkPolicy;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// `trust update`: patches the description, notes and settings given (spec/cli-surface.md
-/// "Command options"). The API's patch replaces the whole settings object (portal
-/// TrustRequirementPatchModel.Settings), so a --set- flag reads the requirement first and replaces
-/// only the setting or conditions of its own kind.
-/// </summary>
+// The API's patch replaces the whole settings object (portal TrustRequirementPatchModel.Settings),
+// so a --set- flag reads the requirement first and replaces only the settings of its own kind.
 internal static class TrustUpdateCommand
 {
     public static CliVerb Create()
@@ -19,10 +15,8 @@ internal static class TrustUpdateCommand
         var verb = new CliVerb("update", "Change a trust requirement and print it. Each --set- flag replaces only the conditions of its own kind.", CommandScope.Organisation, changes: true);
         var requirement = verb.Add(CliArguments.OptionalName("trust", "The trust requirement's description, matched whole and ignoring case.", "a trust requirement's description"));
         var id = verb.Add(CliOptions.Id("--id", "The trust requirement's ID.", IdFormats.Int32));
-        // The API refuses a blank description (portal
-        // Enclave.Api/Modules/SystemManagement/TrustRequirements/Validators/TrustRequirementPatchBasicValidator.cs:15,
-        // NotEmpty when set) and takes empty notes (same file, 17, MaximumLength only), which clear
-        // them.
+        // The API refuses a blank description and takes empty notes, which clear them (portal
+        // TrustRequirementPatchBasicValidator).
         var description = verb.Add(CliOptions.NonBlank("--description", "The trust requirement's description.", "a trust requirement's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The trust requirement's notes."));
         var tenant = verb.Add(CliOptions.Text("--set-tenant", "Replace the Entra ID tenant (azure).", "id"));
@@ -55,8 +49,7 @@ internal static class TrustUpdateCommand
         verb.ExactlyOne(requirement, id);
         verb.AtLeastOne([description, notes, .. signIn, .. publicIpOptions]);
 
-        // A trust requirement is a sign-in or a public IP one, so flags of both kinds cannot apply
-        // to it, whichever type it has.
+        // Flags of both kinds cannot apply, whichever type the requirement has, so this needs no read.
         verb.Check(context =>
         {
             var signInGiven = signIn.FirstOrDefault(context.IsGiven);
@@ -79,12 +72,8 @@ internal static class TrustUpdateCommand
                 throw CliErrors.InvalidArgument(clientId.Name, "--set-client-id takes the client ID, which the authority requires.");
             }
 
-            // A setting given only white space carries no value: the API refuses such a client ID or
-            // audience (portal TrustRequirementSettingsUserAuthValidator.cs:48-49, whose
-            // MustHaveKeyWithValue and KeyNotEmptyIfSet test string.IsNullOrWhiteSpace,
-            // DictionaryValidationExtensions.cs:45,82) and stores such a tenant (same validator,
-            // 35-38), so it exits 2 as on trust create. "" alone is left to the handler, where it
-            // removes a setting the authority does not require.
+            // As on trust create, a setting of only white space exits 2. "" goes on to the handler,
+            // where it removes a setting the authority does not require.
             foreach (var (option, _) in settings)
             {
                 if (context.Get(option) is { Length: > 0 } value && string.IsNullOrWhiteSpace(value))
@@ -134,7 +123,6 @@ internal static class TrustUpdateCommand
                 patch.Set(model => model.Settings, newSettings);
             }
 
-            // One trust requirement named: a 404 means it does not exist, exit 5 ("Several IDs").
             var updated = await SingleItem.CallAsync(() => patch.ApplyAsync());
             await context.Output.WriteAsync(updated, context.CancellationToken);
         });
@@ -142,9 +130,8 @@ internal static class TrustUpdateCommand
         return verb;
     }
 
-    // update takes the create flags of the requirement's own type, and each authority takes only
-    // its own settings (TrustSettings.KeysOf), which are known once the requirement is read. The
-    // configuration's other keys and, without --set-claim, the claims go back as they were.
+    // The settings the authority takes (TrustSettings.KeysOf) are known only once the requirement
+    // is read. What is not given goes back as it was.
     private static TrustRequirementSettingsModel SignIn(
         CliContext context,
         TrustRequirementModel current,
@@ -173,8 +160,8 @@ internal static class TrustUpdateCommand
                 throw CliErrors.InvalidArgument(option.Name, $"Trust requirement {current.Id} signs in with {authority ?? "no authority"}, which does not take {option.Name}.");
             }
 
-            // An empty value removes a setting the authority does not require, since the API
-            // rejects an empty audience (portal TrustRequirementSettingsUserAuthValidator.cs:49).
+            // "" removes the setting, since the API refuses an empty audience (portal
+            // TrustRequirementSettingsUserAuthValidator).
             if (value.Length == 0)
             {
                 configuration.Remove(key);

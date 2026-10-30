@@ -1,52 +1,33 @@
 using System.CommandLine;
 using Enclave.Cli.Context;
 using Enclave.Cli.Core;
-using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// `policy enable`, `policy disable` and `policy delete`, which take any number of policies and
-/// make the bulk call (spec/cli-surface.md "Several IDs"). `enable` with --for or --until takes
-/// one policy and makes the timed enable.
-/// </summary>
 internal static class PolicySeveralCommand
 {
     public static CliVerb Enable()
     {
         var verb = Several("enable", "Enable policies; with --for or --until, enable one policy until then.", out var policies, out var ids);
-        var forOption = verb.Add(CliOptions.Duration("--for", "Enable the policy for this long."));
-        var untilOption = verb.Add(CliOptions.Time("--until", "Enable the policy until this time."));
-        var then = verb.Add(CliOptions.Choice("--then", "What happens when the time is up: disable the policy (the default), or delete it.", ("disable", ExpiryAction.Disable), ("delete", ExpiryAction.Delete)));
-
-        verb.Exclusive(forOption, untilOption);
-        verb.Requires(then, forOption, untilOption);
+        var timing = Timing.AddTo(verb, "Enable the policy", "policy");
 
         verb.SetHandler(async context =>
         {
             var selection = await Items.ReadAsync(context, policies, ids, ListKind.Policy, IdFormats.Int32);
 
-            if (context.ExpiryFrom(forOption, untilOption) is not { } expiry)
+            if (timing.Expiry(context) is not { } expiry)
             {
                 await RunBulkAsync(context, selection, policies.Name, (org, batch) => org.Client.Policies.EnablePoliciesAsync(batch.Select(PolicyId.FromInt)));
                 return;
             }
 
-            // The API's timed enable takes one policy and has no bulk form ("Several IDs"). A name
-            // given twice names one policy, since names match whole and ignoring case, as
-            // NameLookup.Match compares them ("Names and IDs"); IDs arrive with duplicates removed.
-            if (selection.Ids.Count + selection.Names.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
-            {
-                Option timed = context.IsGiven(forOption) ? forOption : untilOption;
-                throw CliErrors.InvalidArgument(timed.Name, $"{timed.Name} takes one policy: the API's timed enable has no bulk form.");
-            }
+            timing.RequireOne(context, selection, "policy");
 
             var org = await context.GetOrganisationAsync();
             var policyId = selection.Ids.Count == 1 ? selection.Ids[0] : (await PolicyLookup.IdsAsync(context, org, selection.Names, policies.Name))[0];
-            var action = context.Get(then) ?? ExpiryAction.Disable;
+            var action = timing.Action(context);
 
-            // One policy named: a 404 means it does not exist, exit 5 ("Several IDs").
             var policy = await SingleItem.CallAsync(() => org.Client.Policies.EnableUntilAsync(PolicyId.FromInt(policyId), expiry, action));
             await context.Output.WriteAsync(policy, context.CancellationToken);
         });
@@ -90,14 +71,10 @@ internal static class PolicySeveralCommand
         return verb;
     }
 
-    // An empty list from stdin makes no call and needs no organisation, so a pipeline fed by an
-    // empty list succeeds ("Several IDs"). Under --dry-run an empty list resolves the organisation
-    // too, since the dry run output names it ("Dry run").
     private static async Task RunBulkAsync(CliContext context, ItemSelection<int> selection, string key, Func<OrganisationInUse, IReadOnlyList<int>, Task<int>> call)
     {
-        if (selection.Ids.Count == 0 && selection.Names.Count == 0 && !context.IsDryRun)
+        if (await Bulk.WroteEmptyAsync(context, selection.Count))
         {
-            await context.Output.WriteBulkAsync(new BulkResult(0, 0), context.CancellationToken);
             return;
         }
 

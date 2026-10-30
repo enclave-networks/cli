@@ -3,10 +3,6 @@ using Enclave.Configuration.Data.Modules.TrustRequirements.Enums;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// `trust list`: every trust requirement, reading every page (spec/cli-surface.md "Command
-/// options", "Filters").
-/// </summary>
 internal static class TrustListCommand
 {
     public static CliVerb Create()
@@ -14,8 +10,8 @@ internal static class TrustListCommand
         var verb = new CliVerb("list", "List the trust requirements, reading every page.", CommandScope.Organisation);
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
 
-        // The search values are the API's TrustRequirementType names, which the type search key
-        // reads ("Filters"; portal TrustRequirementSearchKeyService.BuildFilterAsync).
+        // The values are the API's TrustRequirementType names, which the type search key reads
+        // (portal TrustRequirementSearchKeyService.BuildFilterAsync).
         var type = verb.Add(CliOptions.ChoiceText("--type", "Sign-in or public IP requirements.", ("user-auth", "UserAuthentication"), ("public-ip", "PublicIp")));
         var sort = verb.Add(CliOptions.Enum("--sort", "The order to list trust requirements in.", TrustRequirementSortOrder.Description, TrustRequirementSortOrder.RecentlyCreated));
 

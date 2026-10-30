@@ -3,9 +3,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Reads values out of JSON for assertions, failing the test when the shape is wrong.
-/// </summary>
 internal static class JsonAssert
 {
     /// <summary>
@@ -24,9 +21,8 @@ internal static class JsonAssert
             return exact;
         }
 
-        // Enclave.Sdk.Api's PatchClient keys a PATCH body by the C# property name
-        // (PatchClient.cs, Set: property.Member.Name), so PATCH bodies use PascalCase
-        // keys while every other body uses camelCase.
+        // Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set), so PATCH
+        // bodies use PascalCase.
         foreach (var property in obj.EnumerateObject())
         {
             if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
@@ -39,7 +35,7 @@ internal static class JsonAssert
     }
 
     /// <summary>
-    /// The items of a JSON array of strings. Fails the test when the value is not such an array.
+    /// Fails the test when the value is not an array of strings.
     /// </summary>
     public static string[] Strings(JsonElement array)
     {

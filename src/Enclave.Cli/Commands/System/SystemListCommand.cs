@@ -1,16 +1,12 @@
 using System.CommandLine;
 using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Modules.SystemManagement.UnapprovedSystems.Models;
-using Enclave.Cli.Context;
+using Enclave.Cli.Commands.Key;
 using Enclave.Cli.Core;
 using Enclave.Configuration.Data.Modules.Systems.Enums;
 
 namespace Enclave.Cli.Commands.Systems;
 
-/// <summary>
-/// `system list`: the enrolled systems, or with --pending the systems waiting for approval
-/// (spec/cli-surface.md "Command options", "Filters").
-/// </summary>
 internal static class SystemListCommand
 {
     public static CliVerb Create()
@@ -20,12 +16,8 @@ internal static class SystemListCommand
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var tags = verb.Add(CliOptions.TagFilter("--tag", "Systems with every tag given."));
 
-        // The values each flag stands for are the API's search values ("Filters"). The API matches os
-        // against the platform name it stores exactly and case-sensitively (UseExactMatch), so
-        // windows and linux are sent as Windows and Linux. It stores macOS as Darwin, and rewrites an
-        // os value of Mac, matched ignoring case, to Darwin before matching, so mac is sent as Mac
-        // (portal Enclave.Configuration.Data/Modules/Systems/SystemSearchKeyService.cs, the "os"
-        // search key and BuildFilterAsync).
+        // The API matches os exactly and case-sensitively, and rewrites Mac to Darwin, the name it
+        // stores for macOS (portal SystemSearchKeyService, the "os" key and BuildFilterAsync).
         var state = verb.Add(CliOptions.ChoiceText("--state", "Connected or disconnected systems.", ("connected", "connected"), ("disconnected", "disconnected")));
         var os = verb.Add(CliOptions.ChoiceText("--os", "Systems on this operating system.", ("windows", "Windows"), ("linux", "Linux"), ("mac", "Mac")));
         var type = verb.Add(CliOptions.ChoiceText("--type", "General-purpose or ephemeral systems.", ("general", "general"), ("ephemeral", "ephemeral")));
@@ -51,15 +43,9 @@ internal static class SystemListCommand
         verb.Exclusive(key, keyId);
         verb.Requires(waitingFor, pending);
 
-        // The API keeps waiting systems apart, and their list request has no include_disabled or dns
-        // parameter (portal UnapprovedSystems/Models/UnapprovedSystemsRequestModel.cs;
-        // UnapprovedSystemsClient.GetSystemsAsync, Enclave.Sdk.Api). Its search is parsed by
-        // the same search key service as the enrolled systems' list (portal
-        // UnapprovedSystems/Handlers/PaginatedUnapprovedSystemsHandler.cs:49,75 pass it to
-        // Enclave.Configuration.Data/Modules/Systems/SystemRepository.cs:513-515), so --filter takes
-        // the same keys with --pending. "Command options" gives the state, platform, type and gateway
-        // flags, --not-seen-for and --include-disabled to enrolled systems only, so with --pending
-        // they exit 2 ("Details").
+        // The spec gives these flags to enrolled systems only ("Command options", "Details").
+        // --filter takes the same keys with --pending: the API parses both lists' searches the same
+        // way (portal PaginatedUnapprovedSystemsHandler, SystemRepository.BuildFilterAsync).
         Option[] enrolledOnly = [state, os, type, gateway, notSeenFor, includeDisabled];
         verb.Check(context =>
         {
@@ -79,8 +65,6 @@ internal static class SystemListCommand
             }
         });
 
-        // --not-seen-for asks the API for disconnected systems only, so --state connected contradicts
-        // it ("Filters").
         verb.Check(context =>
         {
             if (context.IsGiven(notSeenFor) && context.Get(state) == "connected")
@@ -91,14 +75,13 @@ internal static class SystemListCommand
 
         verb.SetHandler(async context =>
         {
-            // A duration that reaches back before the earliest time the CLI holds is an argument
-            // error, so the cut-offs are worked out before the token is read or any call is made
-            // ("Errors and exit codes": arguments are checked first).
+            // A duration that reaches back too far exits 2, so the cut-offs are worked out before
+            // the token is read ("Errors and exit codes").
             var unseenSince = context.Get(notSeenFor) is { } unseen ? context.PastInstant(unseen, notSeenFor) : (DateTimeOffset?)null;
             var waitingSince = context.Get(waitingFor) is { } wait ? context.PastInstant(wait, waitingFor) : (DateTimeOffset?)null;
 
             var org = await context.GetOrganisationAsync();
-            var enrolmentKey = context.Get(keyId) ?? await KeyIdAsync(context, org, context.Get(key));
+            var enrolmentKey = context.Get(keyId) ?? (context.Get(key) is { } description ? (await KeyLookup.FindAsync(context, org, [description], key.Name))[0].ToInt() : null);
 
             var search = new SearchText(context.Get(filter))
                 .Add("tags", context.Get(tags))
@@ -108,22 +91,11 @@ internal static class SystemListCommand
                 .AddFlag("gateway", context.Get(gateway))
                 .ToSearchTerm();
 
-            // --not-seen-for asks the API for disconnected systems: state:disconnected matches a
-            // system whose session is Disconnected or GracefulDisconnected, or that has no session,
-            // whether or not it is enabled (portal
-            // Enclave.Configuration.Data/Modules/Systems/SystemSearchKeyService.cs:192-207). The
-            // search is what leaves out a disabled system that is connected: the API gives a disabled
-            // system the state Disabled whether or not it is connected (portal
-            // Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:43-52), so with
-            // --include-disabled such a system passes the check on state below.
-            //
-            // The API reads the first state: term of a search and no later one: its parser adds a
-            // repeated key's values after the first (portal
-            // Enclave.Configuration.Data/Modules/Search/BaseSearchKeyService.cs:616-639,
-            // AddOrUpdateQueryDetails), and the state key reads Values[0]
-            // (SystemSearchKeyService.cs:194). So the term goes ahead of the --filter text, where a
-            // state: term in the filter cannot replace it. --state disconnected is the same term, and
-            // is not sent twice.
+            // state:disconnected matches on the session whether or not the system is enabled, so it
+            // keeps out a disabled system that is online, which the API reports as Disabled (portal
+            // SystemSearchKeyService, the "state" key; SystemExtensions). The API reads only the first
+            // state: term (BaseSearchKeyService.AddOrUpdateQueryDetails), so this one goes ahead of the
+            // --filter text, where a later one cannot replace it.
             if (unseenSince is not null)
             {
                 search = search is null ? "state:disconnected" : $"state:disconnected {search}";
@@ -136,20 +108,18 @@ internal static class SystemListCommand
                     (page, perPage) => org.Client.UnapprovedSystems.GetSystemsAsync(enrolmentKey, search, pendingSort, page, perPage),
                     context.CancellationToken);
 
-                // --waiting-for has no API search key, so the CLI keeps the matches from every page
-                // it read, and total counts them ("Filters").
+                // --waiting-for has no API search key ("Filters").
                 if (waitingSince is { } enrolledBy)
                 {
-                    waiting = waiting.Where(system => AsUtc(system.EnrolledAt) <= enrolledBy).ToList();
+                    waiting = waiting.Where(system => new DateTimeOffset(CliJson.ToUtc(system.EnrolledAt)) <= enrolledBy).ToList();
                 }
 
                 await context.Output.WriteListAsync(ListKind.PendingSystem, waiting, context.CancellationToken);
                 return;
             }
 
-            // The list handler never reads the dns parameter (portal
-            // Systems/Handlers/PaginatedSystemsHandler.cs), so the CLI sends none
-            // (spec/cli-surface.md "Left out").
+            // The list handler never reads the dns parameter (portal PaginatedSystemsHandler), so the
+            // CLI sends none ("Left out").
             var systems = await Paging.ReadAllAsync(
                 (page, perPage) => org.Client.EnrolledSystems.GetSystemsAsync(
                     enrolmentKey,
@@ -161,20 +131,11 @@ internal static class SystemListCommand
                     perPage: perPage),
                 context.CancellationToken);
 
-            // The time --not-seen-for gives has no API search key either. A system never seen counts
-            // from when it enrolled, so one that has just enrolled is not listed for removal
-            // ("Filters").
-            //
-            // A connected system is being seen now, so it is never listed, whatever its lastSeen.
-            // lastSeen is when the discovery service last wrote the system's session (portal
-            // Enclave.Api/Modules/SystemManagement/Systems/SystemExtensions.cs:63 reads
-            // systemSession.LastUpdate, which services
-            // Enclave.Discover/Discovery/PeerSessionReporter.cs:129 sets when it writes the
-            // session), and a system that stays connected can go long without that write; the portal
-            // shows lastSeen for disconnected systems only (portal-spa
-            // src/modules/Systems/Columns/Status.tsx). Reading lastSeen alone would put live systems
-            // in the list that example 14 revokes. The search for disconnected systems keeps them
-            // out, and the check on state is a second guard.
+            // --not-seen-for has no API search key either. A system never seen counts from when it
+            // enrolled, so one that has just enrolled is not listed for removal. A connected system
+            // can go long without a new lastSeen, and this list feeds `system revoke` in example 14,
+            // so a connected system is never listed ("Filters"); the check on state backs up the
+            // search.
             if (unseenSince is { } lastSeenBy)
             {
                 systems = systems
@@ -188,29 +149,8 @@ internal static class SystemListCommand
         return verb;
     }
 
-    // --key names the key by description, looked up with one list call that includes disabled keys
-    // ("Names and IDs", "Filters"), and its ID goes in the enrolment_key parameter as --key-id's does.
-    private static async Task<int?> KeyIdAsync(CliContext context, OrganisationInUse org, string? description)
-    {
-        if (description is null)
-        {
-            return null;
-        }
-
-        var keys = await NameLookup.FindAsync(
-            [description],
-            (page, perPage) => org.Client.EnrolmentKeys.GetEnrolmentKeysAsync(includeDisabled: true, pageNumber: page, perPage: perPage),
-            enrolmentKey => enrolmentKey.Description,
-            enrolmentKey => enrolmentKey.Id,
-            "--key",
-            "key",
-            context.CancellationToken);
-
-        return keys[0].Id.ToInt();
-    }
-
     // UnapprovedSystemQuerySortMode's members are a subset of SystemQuerySortMode's (portal
-    // UnapprovedSystems/Models/UnapprovedSystemQuerySortMode.cs).
+    // UnapprovedSystemQuerySortMode).
     private static UnapprovedSystemQuerySortMode? PendingSort(SystemQuerySortMode mode) => mode switch
     {
         SystemQuerySortMode.RecentlyEnrolled => UnapprovedSystemQuerySortMode.RecentlyEnrolled,
@@ -219,13 +159,4 @@ internal static class SystemListCommand
         SystemQuerySortMode.DescriptionOrHostname => UnapprovedSystemQuerySortMode.DescriptionOrHostname,
         _ => null,
     };
-
-    // UnapprovedSystemSummaryModel.EnrolledAt is a DateTime, which the API writes in UTC; one read
-    // without a zone is taken as UTC too. System.Text.Json reads a time written with another offset
-    // as local time in the machine's zone (dotnet/runtime release/10.0, System.Text.Json
-    // JsonHelpers.Date.cs, TryParseAsISO, returns DateTimeOffset.LocalDateTime), and ToUniversalTime
-    // converts back with that same zone, which is why it reads the machine's zone outside CliHost:
-    // CliHost.Time's zone, which tests fix, is not the zone System.Text.Json used.
-    private static DateTimeOffset AsUtc(DateTime time) =>
-        new(time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : DateTime.SpecifyKind(time, DateTimeKind.Utc));
 }

@@ -3,13 +3,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// No command prints the token, on stdout or stderr, under --verbose and --dry-run too
-/// (spec/cli-surface.md "Login, logout and status").
-/// </summary>
-// Each command runs with a known token to the point where it could print it, and each test also
-// checks what the command did, so a command that printed nothing because it did nothing does not
-// pass. Partner commands are covered with their own outcomes in Partner/.
+// spec/cli-surface.md "Login, logout and status". Each test also checks what the command did, so a
+// command that printed nothing because it did nothing does not pass. Partner/ covers the partner
+// commands.
 public class TokenOutputTests
 {
     // The change request carrying the token shows the CLI held the token it left out.
@@ -46,8 +42,6 @@ public class TokenOutputTests
         });
     }
 
-    // The token comes from ENCLAVE_TOKEN or from credentials.json (spec/cli-surface.md "Options
-    // on every command"), and either way stays out of the output.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Token_from_credentials_json_is_printed_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
@@ -66,8 +60,7 @@ public class TokenOutputTests
         });
     }
 
-    // login saves the token, logout deletes it, and org use saves a default organisation. Whether
-    // the file exists afterwards shows the command ran.
+    // Whether the file exists afterwards shows the command ran.
     [TestCaseSource(nameof(LocalCommands))]
     public async Task Command_that_changes_local_files_prints_the_token_on_neither_stdout_nor_stderr(LocalCommand command)
     {

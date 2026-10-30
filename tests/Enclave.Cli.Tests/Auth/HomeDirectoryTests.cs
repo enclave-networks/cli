@@ -6,12 +6,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// The CLI keeps credentials.json and cli.json in ~/.enclave, under the user's home directory
-// (spec/cli-surface.md "Login, logout and status"). A user profile path that is empty or not
-// fully qualified names no home directory: resolved against the current directory, it would have
-// the CLI read a credentials.json from wherever it is run and send the token to that file's
-// baseUrl. With no home directory the CLI reads no saved file, ENCLAVE_TOKEN and the organisation
-// and partner variables work, and the commands that save or delete a file there exit 2.
+// A profile path that is empty or not fully qualified names no home directory: resolved against
+// the current directory, it would have the CLI read a credentials.json from wherever it is run and
+// send the token to that file's baseUrl.
 public class HomeDirectoryTests
 {
     private const string FileToken = "file-token-8b31e6";
@@ -20,13 +17,12 @@ public class HomeDirectoryTests
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
 
-    // "" is the profile path .NET gives on Linux and macOS, unless asked not to verify it, when HOME
-    // names a directory that does not exist (CliHost.HomeDirectory); a relative one comes from a
-    // HOME that is relative.
+    // .NET gives "" on Linux and macOS when HOME names a directory that does not exist
+    // (CliHost.HomeDirectory), and a relative path for a relative HOME.
     private static readonly string[] Homes = [string.Empty, "home"];
 
-    // A fully qualified path names the same directory wherever the CLI is run. Path.GetTempPath is
-    // fully qualified on every OS; a literal such as /home/user is not on Windows.
+    // Path.GetTempPath is fully qualified on every OS; a literal such as /home/user is not on
+    // Windows.
     [Test]
     public void A_fully_qualified_profile_path_is_the_home_directory()
     {
@@ -35,10 +31,8 @@ public class HomeDirectoryTests
         Assert.That(EnclaveDirectory.HomeFrom(profile), Is.EqualTo(profile));
     }
 
-    // Each of these resolves against the current directory or the current drive on at least one OS,
-    // and none is fully qualified on any: C:home is relative to drive C's current directory on
-    // Windows and a file name elsewhere, and \home is relative to the current drive on Windows and
-    // a file name elsewhere.
+    // On Windows C:home is relative to drive C's current directory and \home to the current drive;
+    // elsewhere each is a file name.
     [TestCase("")]
     [TestCase(" ")]
     [TestCase("home")]
@@ -51,10 +45,8 @@ public class HomeDirectoryTests
         Assert.That(EnclaveDirectory.HomeFrom(profile), Is.Null);
     }
 
-    // With no home directory credentials.json is not read, so ENCLAVE_TOKEN goes to the default API
-    // address. The file here lies where a CLI that resolved ~/.enclave against the current directory
-    // would find it, and its baseUrl is a second fake API's, so a request there, or a read of the
-    // path, shows the file was used.
+    // The file lies where a CLI that resolved ~/.enclave against the current directory would find
+    // it, and its baseUrl is a second fake API's.
     [TestCaseSource(nameof(Homes))]
     public async Task With_no_home_directory_a_command_sends_ENCLAVE_TOKEN_to_the_default_api_and_reads_no_credentials_json(string home)
     {
@@ -80,9 +72,8 @@ public class HomeDirectoryTests
         });
     }
 
-    // With no home directory and no ENCLAVE_TOKEN the CLI has no token, so it exits 3 token_missing
-    // before any call, and says why the file was not read. A CLI that read the credentials.json in
-    // the current directory would send that file's token to the second fake API.
+    // The error says why the file was not read. A CLI that read the credentials.json in the current
+    // directory would send its token to the second fake API.
     [TestCaseSource(nameof(Homes))]
     public async Task With_no_home_directory_and_no_ENCLAVE_TOKEN_a_command_exits_3_with_token_missing(string home)
     {
@@ -108,10 +99,8 @@ public class HomeDirectoryTests
         });
     }
 
-    // cli.json is not read either, so the organisation and partner come from the command line, the
-    // environment or the lookup ("Context"). The cli.json here, where a CLI that resolved
-    // ~/.enclave against the current directory would find it, names Globex and a partner, and the
-    // token sees Acme only, so status shows the one organisation the token sees and no partner.
+    // The cli.json, where a CLI that resolved ~/.enclave against the current directory would find
+    // it, names Globex and a partner; the token sees Acme only.
     [TestCaseSource(nameof(Homes))]
     public async Task With_no_home_directory_status_reads_no_cli_json(string home)
     {
@@ -136,10 +125,8 @@ public class HomeDirectoryTests
         });
     }
 
-    // These commands save or delete a file in ~/.enclave, and with no home directory there is no
-    // ~/.enclave, so each exits 2 invalid_argument before any call, saying so, and writes nothing.
-    // A credentials.json and a cli.json lie where a CLI that resolved ~/.enclave against the
-    // current directory would find them, so a run that wrote or deleted there changes them.
+    // The error says why. A credentials.json and a cli.json lie where a CLI that resolved ~/.enclave
+    // against the current directory would change them.
     [TestCaseSource(nameof(SavingRuns))]
     public async Task With_no_home_directory_a_command_that_saves_or_deletes_a_file_exits_2_and_writes_nothing(string home, string[] args)
     {
@@ -182,8 +169,7 @@ public class HomeDirectoryTests
         }
     }
 
-    // A default organisation, Globex, and a default partner, in the form org use and partner use
-    // save them.
+    // Globex and a partner, as org use and partner use save them.
     private static string SavedDefaults() =>
         $$"""{ "org": { "id": "{{TestData.OtherOrgId}}", "name": "{{TestData.OtherOrgName}}" }, "partner": { "id": "{{TestData.PartnerId}}" } }""";
 

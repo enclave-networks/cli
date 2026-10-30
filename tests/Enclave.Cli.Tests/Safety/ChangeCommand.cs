@@ -5,8 +5,7 @@ namespace Enclave.Cli.Tests.Safety;
 // A value type, so the public test methods taking one need no null check (CA1062).
 
 /// <summary>
-/// A command that changes something through the API in the organisation in use: a command line
-/// that runs it, the request that makes the change, and the answers the fake API gives.
+/// A command that changes something through the API in the organisation in use.
 /// </summary>
 /// <param name="Name">The command words, with any option that selects a different request.</param>
 /// <param name="Args">The command line.</param>
@@ -26,15 +25,11 @@ public readonly record struct ChangeCommand(
     string? ReadResponse = null,
     string? OtherPathSuffix = null)
 {
-    // Every command in spec/cli-surface.md "Commands" that changes something through the main
-    // API. login, logout and the use commands change local files only, and the partner customer
-    // commands use the partner API; they are tested in Partner/. Items are given by ID where the
-    // command allows it, so the change is the only request; dns create-hostname finds its zone from
-    // the hostname, and tag set reads the tag to choose between the API's update and create calls
-    // ("Dry run"), so those reads are answered. Routes are those of Enclave.Sdk.Api.
-    //
-    // RemoveUserAsync takes the account ID as a string (OrganisationScopedClient.cs:92), so the path
-    // carries whichever GUID form the CLI passes, and both forms are answered.
+    // The partner customer commands use the partner API and are tested in Partner/. Items are given
+    // by ID where the command allows it, so the change is the only request; dns create-hostname and
+    // tag set read first ("Dry run"), so those reads are answered. Enclave.Sdk.Api
+    // OrganisationScopedClient.RemoveUserAsync takes the account ID as a string, so the path carries
+    // whichever GUID form the CLI passes, and both forms are answered.
     public static IReadOnlyList<ChangeCommand> All { get; } =
     [
         new("org update", ["org", "update", "--name", "Acme Ltd"], "PATCH", string.Empty, ApiJson.OrgProperties("Acme Ltd")),
@@ -74,14 +69,8 @@ public readonly record struct ChangeCommand(
         new("trust delete", ["trust", "delete", "--id", "5"], "DELETE", "trust-requirements", ApiJson.Bulk("requirementsDeleted", 1)),
     ];
 
-    /// <summary>
-    /// The change's full URL path for the test organisation.
-    /// </summary>
     public string Path => TestData.OrgPath(PathSuffix);
 
-    /// <summary>
-    /// The full URL paths the change may be sent to: Path, and the other spelling where there is one.
-    /// </summary>
     public IReadOnlyList<string> Paths
     {
         get
@@ -114,9 +103,6 @@ public readonly record struct ChangeCommand(
         }
     }
 
-    /// <summary>
-    /// The requests the fake API received that make the change, in order.
-    /// </summary>
     internal RecordedRequest[] ChangeRequests(CliRun run)
     {
         // A lambda in a struct cannot use the struct's own members, so they are copied first.

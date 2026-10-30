@@ -4,25 +4,20 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// Outside tests the CLI calls production: the Enclave API at https://api.enclave.io, and the partner
-// API at the address Enclave.Sdk.Api gives when the CLI passes none (spec/cli-surface.md "Partner
-// API"). Every other test points both at fakes, so these tests are the ones that check the
-// addresses a released CLI uses.
+// Every other test points both APIs at fakes, so these are the tests that check the addresses a
+// released CLI uses (spec/cli-surface.md "Partner API").
 public class ProductionAddressTests
 {
-    // Enclave.Sdk.Api's production addresses (src/Enclave.Sdk.Api/Constants.cs:27-29, ApiUrl
-    // and PartnerApiUrl, which the EnclaveClientOptions constructor sets; EnclaveClient.cs:185
-    // names the partner one).
+    // Enclave.Sdk.Api Constants.ApiUrl and Constants.PartnerApiUrl.
     private const string ProductionApi = "https://api.enclave.io";
 
     private const string ProductionPartnerApi = "https://partner-api.enclave.io";
 
     private static readonly string[] PostOnly = ["POST"];
 
-    // FromProcess replaces Console.Out and Console.Error when they are redirected, as they are under
-    // the test host, so the test puts the test host's writers back. The host's environment, home
-    // directory, files and stdin are the process's own, so the test reads only the two addresses
-    // and the network the host sends through, which must be the network itself.
+    // FromProcess replaces Console.Out and Console.Error when they are redirected, as under the test
+    // host, so the test puts them back. The host's environment, home directory, files and stdin are
+    // the process's own, so the test reads only the addresses and the network handler.
     [Test]
     public void The_host_outside_tests_calls_the_production_api_and_leaves_the_partner_api_to_Enclave_Sdk_Api()
     {
@@ -48,11 +43,9 @@ public class ProductionAddressTests
         });
     }
 
-    // With no partner API address from the host or credentials.json, the CLI passes none, and
-    // Enclave.Sdk.Api's default decides where partner calls go. --dry-run prints the URL the call
-    // would go to and sends nothing, and create makes no read. The network beneath the CLI's
-    // handler fails every request, so a read added to create would fail the test without reaching
-    // the live partner API, and it records none.
+    // --dry-run prints the URL without sending, and create makes no read. The network beneath the
+    // CLI's handler fails every request, so a read added to create would fail the test without
+    // reaching the live partner API.
     [Test]
     public async Task A_partner_command_with_no_partner_api_address_given_goes_to_the_production_partner_api()
     {

@@ -4,13 +4,10 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// The exit code and captured output of one in-process CLI run.
-/// </summary>
 internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
 {
     /// <summary>
-    /// The whole of stdout as one JSON value. Fails the test when stdout is not JSON.
+    /// Fails the test when stdout is not one JSON value.
     /// </summary>
     public JsonElement StdoutJson => ParseJson(Stdout, "stdout");
 
@@ -52,9 +49,9 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
         }
     }
 
-    // Records print every public property in ToString, and the JSON properties above fail the test
-    // when the output is not JSON. NUnit calls ToString to describe a value in a failure message,
-    // so printing only the captured fields keeps that message from raising a second failure.
+    // A record's ToString prints every public property, and the JSON properties above fail the test
+    // when the output is not JSON, so a failure message NUnit builds with ToString would raise a
+    // second failure.
     private bool PrintMembers(StringBuilder builder)
     {
         builder.Append(Describe());
@@ -80,10 +77,9 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
         }
     }
 
-    // Assert.Fail inside Assert.Multiple records the failure and returns (NUnit 4 docs, "Multiple
-    // Asserts": https://docs.nunit.org/articles/nunit/writing-tests/assertions/multiple-asserts.html).
-    // The callers here have no value to return after a failure, so they throw the assertion
-    // exception themselves.
+    // Assert.Fail inside Assert.Multiple records the failure and returns
+    // (https://docs.nunit.org/articles/nunit/writing-tests/assertions/multiple-asserts.html), and
+    // the callers have no value to return after a failure.
     private AssertionException Failure(string message) => new($"{message}{Describe()}");
 
     private string Describe() =>

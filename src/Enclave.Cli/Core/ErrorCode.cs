@@ -1,8 +1,5 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// One of the fixed error codes the CLI reports on stderr, with the exit code it exits with.
-/// </summary>
 internal sealed record ErrorCode(string Code, int ExitCode, string Title)
 {
     // spec/cli-surface.md "Errors and exit codes" fixes the set and each code's exit code;

@@ -5,10 +5,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// The organisation a command acts in (spec/cli-surface.md "Context", "Details", and "Shape and
-// naming" for --org and --org-id). system list (GET /org/{orgId}/systems) shows which organisation
-// a command used, since the organisation ID is in the request path, and the requests before it show
-// whether the CLI looked the organisation up.
+// spec/cli-surface.md "Context". system list's path shows which organisation a command used, and
+// the requests before it show whether the CLI looked it up.
 public class OrgContextTests
 {
     private const string OrgLookup = "GET /account/orgs";
@@ -19,22 +17,19 @@ public class OrgContextTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    // The saved organisation in cli.json, { "org": { "id", "name" } } ("Login, logout and status").
     private static readonly string[] OrgFields = ["id", "name"];
 
     private static readonly string OrgSystems = TestData.OrgPath("systems");
 
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
-    // The same path form as TestData.OrgPath: Enclave.Sdk.Api writes the organisation ID as 32 hex
-    // digits (OrganisationGuid.ToString, Enclave.Sdk.Api.Data).
+    // Enclave.Sdk.Api writes the organisation ID as 32 hex digits (Enclave.Sdk.Api.Data
+    // OrganisationGuid.ToString).
     private static readonly string ThirdOrgSystems = $"/org/{ThirdOrgId:N}/systems";
 
-    // Precedence is --org or --org-id, then ENCLAVE_ORG or ENCLAVE_ORG_ID, then the default org use
-    // saves ("Context"). Each case gives the higher source Globex and the lower source Acme, and the
-    // token sees both, so a CLI that took the lower source acts on Acme and one that took neither
-    // exits 2. A name costs one lookup call and an ID none ("Calls per command"). The org use that
-    // saves a default makes its own request, so only the requests after it are checked.
+    // The higher source names Globex and the lower Acme, and the token sees both. A name costs one
+    // lookup and an ID none ("Calls per command"). The org use that saves a default makes its own
+    // request, so only the requests after it are checked.
     [TestCase("--org-id over ENCLAVE_ORG_ID", false)]
     [TestCase("--org over ENCLAVE_ORG_ID", true)]
     [TestCase("--org-id over ENCLAVE_ORG", false)]
@@ -101,9 +96,7 @@ public class OrgContextTests
             Is.EqualTo(lookup ? new[] { OrgLookup, $"GET {OtherOrgSystems}" } : new[] { $"GET {OtherOrgSystems}" }));
     }
 
-    // A source lower in the precedence is not read when a higher one is given, so a malformed lower
-    // source does not fail the command ("Details"). Each lower source here exits 2 when it is read:
-    // an ENCLAVE_ORG_ID that is not a GUID, and a cli.json that is not JSON.
+    // "Details". Each lower source exits 2 when it is read.
     [TestCase("ENCLAVE_ORG_ID under --org-id")]
     [TestCase("ENCLAVE_ORG_ID under --org")]
     [TestCase("cli.json under ENCLAVE_ORG_ID")]
@@ -137,11 +130,8 @@ public class OrgContextTests
         Assert.That(run.Calls(), Is.EqualTo(expected));
     }
 
-    // org use saves { "org": { "id", "name" } } and partner use { "partner": { "id" } } ("Login,
-    // logout and status"). A saved default in another shape names no organisation or partner, and
-    // a command that read past it would act somewhere the caller did not choose, so it exits 2
-    // before any call and names the file to fix. ENCLAVE_ORG_ID is unset so the file is read, and
-    // the token sees one organisation, so a CLI that skipped the default would use it and succeed.
+    // A command that read past a malformed default would act somewhere the caller did not choose.
+    // The token sees one organisation, so a CLI that skipped the default would use it and succeed.
     [TestCase("org", """{ "org": "3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17" }""")]
     [TestCase("org", """{ "org": [] }""")]
     [TestCase("partner", """{ "partner": "9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48" }""")]
@@ -161,9 +151,7 @@ public class OrgContextTests
         Assert.That(result.Error.GetProperty("detail").GetString(), Does.Contain(run.CliConfigPath));
     }
 
-    // An organisation name given with an organisation ID contradict each other and exit 2
-    // ("Details"). Both name Globex here, so a CLI that picked either one succeeds. The corrected
-    // run, with one source, proves the rejection withheld the request.
+    // "Details". Both name Globex, so a CLI that picked either one would succeed.
     [TestCase("options")]
     [TestCase("environment")]
     public async Task An_organisation_name_given_with_an_organisation_id_exits_2(string where)
@@ -187,9 +175,8 @@ public class OrgContextTests
         await CliAssert.AcceptedAsync(run, "GET", OtherOrgSystems, "system", "list");
     }
 
-    // An empty environment variable counts as unset ("Login, logout and status"). An empty
-    // ENCLAVE_ORG_ID falls through to the saved default, and an empty variable beside the other
-    // one is no conflict.
+    // An empty ENCLAVE_ORG_ID falls through to the saved default, and an empty variable beside the
+    // other is no conflict ("Login, logout and status").
     [TestCase("empty ENCLAVE_ORG_ID with a saved default", false)]
     [TestCase("empty ENCLAVE_ORG beside ENCLAVE_ORG_ID", false)]
     [TestCase("empty ENCLAVE_ORG_ID beside ENCLAVE_ORG", true)]
@@ -224,11 +211,8 @@ public class OrgContextTests
             Is.EqualTo(lookup ? new[] { OrgLookup, $"GET {OtherOrgSystems}" } : new[] { $"GET {OtherOrgSystems}" }));
     }
 
-    // Example 2: a CI job fixes its organisation in the environment, and the default other sessions
-    // share stays as it is ("Context": the environment variables let each agent session fix its
-    // organisation without writing the shared file). The saved default is Globex, so a CLI that
-    // used it acts on Globex. The filter flags are the example's; they reach the API in the search
-    // text, with the API's own values ("Filters").
+    // Example 2. The saved default is Globex, so a CLI that used it acts on Globex. The filter flags
+    // are the example's.
     [TestCase("ENCLAVE_ORG")]
     [TestCase("ENCLAVE_ORG_ID")]
     public async Task An_organisation_fixed_in_the_environment_is_used_and_the_saved_default_is_left_unchanged(string variable)
@@ -260,11 +244,8 @@ public class OrgContextTests
         });
     }
 
-    // Example 18, first form: --org names the organisation for one change, whatever the saved
-    // default is. The default is Globex and the change must reach Acme. The organisation name and
-    // the policy description each cost one lookup ("Calls per command"); the organisation comes
-    // first because the policy lookup is a call within it. A command that takes several items makes
-    // the bulk call for one ("Several IDs").
+    // Example 18, first form. The organisation lookup comes first because the policy lookup is a
+    // call within it ("Calls per command").
     [Test]
     public async Task A_change_given_an_organisation_name_acts_in_that_organisation_whatever_the_saved_default_is()
     {
@@ -285,8 +266,7 @@ public class OrgContextTests
         Assert.That(string.Join(",", run.RequestsTo("PUT", disable)[0].BodyIds("policyIds")), Is.EqualTo("42"));
     }
 
-    // Example 18, second form: --org-id needs no lookup, since the CLI builds the organisation
-    // client from the ID ("Context"), and --id needs no policy lookup ("Names and IDs").
+    // Example 18, second form.
     [Test]
     public async Task A_change_given_an_organisation_id_acts_in_that_organisation_with_no_lookup_whatever_the_saved_default_is()
     {
@@ -305,9 +285,7 @@ public class OrgContextTests
         Assert.That(string.Join(",", run.RequestsTo("PUT", disable)[0].BodyIds("policyIds")), Is.EqualTo("42"));
     }
 
-    // With no organisation chosen the command looks up the token's organisations, one extra call,
-    // and uses the only one ("Context"). The only organisation is Globex, so a CLI that used the
-    // test organisation acts on Acme.
+    // The only organisation is Globex, so a CLI that used the test organisation acts on Acme.
     [Test]
     public async Task With_no_organisation_chosen_the_only_organisation_the_token_sees_is_used()
     {
@@ -323,9 +301,8 @@ public class OrgContextTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { OrgLookup, $"GET {OtherOrgSystems}" }));
     }
 
-    // Guessing among several organisations could change the wrong one. no_org carries the token's
-    // organisations as candidates, { id, name }, so the caller can choose without another call
-    // ("Errors and exit codes").
+    // Guessing among several could change the wrong one. The candidates let the caller choose
+    // without another call ("Errors and exit codes").
     [Test]
     public async Task With_no_organisation_chosen_several_organisations_exit_2_with_no_org_and_the_organisations_as_candidates()
     {
@@ -343,8 +320,7 @@ public class OrgContextTests
         });
     }
 
-    // Names match exactly, ignoring case ("Context"). "Globex Ltd" starts with and contains
-    // "Globex", so a prefix or substring match finds two organisations and exits 2.
+    // "Globex Ltd" starts with "Globex", so a prefix or substring match finds two and exits 2.
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
     public async Task An_organisation_name_matches_the_whole_name_ignoring_case(string source)
@@ -362,9 +338,8 @@ public class OrgContextTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { OrgLookup, $"GET {OtherOrgSystems}" }));
     }
 
-    // Organisation names are free text, so two can differ only in case. A name that matches several
-    // exits 2 invalid_argument, and its candidates are the matching organisations only, which lets
-    // the caller pick one by ID ("Errors and exit codes"). org use saves nothing.
+    // Organisation names are free text, so two can differ only in case. Only the matches are
+    // candidates, so the caller can pick one by ID ("Errors and exit codes").
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
     [TestCase("org use")]
@@ -388,9 +363,8 @@ public class OrgContextTests
         });
     }
 
-    // A name that matches nothing exits 2 invalid_argument with an empty list of candidates ("Errors
-    // and exit codes"). no_org is for an organisation not chosen at all, so a name that was given
-    // and found nothing is not reported as no_org. org use saves nothing.
+    // no_org is for an organisation not chosen at all, so a name that found nothing is
+    // invalid_argument ("Errors and exit codes").
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
     [TestCase("org use")]
@@ -411,12 +385,8 @@ public class OrgContextTests
         });
     }
 
-    // An empty or blank organisation name names no organisation, so --org and org use's name given
-    // one exit 2 invalid_argument with the other argument checks, keyed by the option or argument,
-    // and make no lookup ("Errors and exit codes": arguments, then the token, then the
-    // organisation). ENCLAVE_ORG_ID names Acme, so a CLI that read --org "" as no --org acts on
-    // Acme, and one that passed the name on looks it up. org use saves nothing. The corrected run
-    // shows the command takes a name there.
+    // ENCLAVE_ORG_ID names Acme, so a CLI that read --org "" as no --org acts on Acme, and one that
+    // passed the name on looks it up.
     [TestCase("--org", "")]
     [TestCase("--org", "   ")]
     [TestCase("org use", "")]
@@ -440,9 +410,8 @@ public class OrgContextTests
         Assert.That(run.Calls()[0], Is.EqualTo(OrgLookup));
     }
 
-    // --org takes a name and the option decides how a value is read ("Shape and naming": the CLI
-    // never inspects a value to guess its type). An organisation can be named "12", and --org 12
-    // must find it by that name; a CLI that read 12 as an ID rejects it as one.
+    // The option decides how a value is read ("Shape and naming"), and an organisation can be named
+    // "12".
     [Test]
     public async Task Org_option_reads_a_number_as_an_organisation_name()
     {
@@ -458,10 +427,8 @@ public class OrgContextTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { OrgLookup, $"GET {ThirdOrgSystems}" }));
     }
 
-    // --org, ENCLAVE_ORG and org use's argument take a name, so a GUID given there is a name too
-    // ("Shape and naming", "Context"). The token sees Globex, and a third organisation whose name
-    // is Globex's ID: the name must choose the third organisation. A CLI that guessed the value was
-    // an ID acts on Globex.
+    // The third organisation is named with Globex's ID, so a CLI that guessed the value was an ID
+    // acts on Globex ("Shape and naming").
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
     [TestCase("org use")]
@@ -497,9 +464,8 @@ public class OrgContextTests
         Assert.That(run.Calls(before), Is.EqualTo(expected));
     }
 
-    // An organisation ID is a GUID ("ID checks"), and every ID is checked before any call. The token
-    // sees organisations named "Acme" and "12", so a CLI that fell back to a name lookup sends a
-    // request. The corrected run proves the command and option exist.
+    // The token sees organisations named "Acme" and "12", so a CLI that fell back to a name lookup
+    // sends a request ("ID checks").
     [TestCase("12")]
     [TestCase("Acme")]
     [TestCase("../systems")]
@@ -519,8 +485,8 @@ public class OrgContextTests
             OtherOrgSystems);
     }
 
-    // ENCLAVE_ORG_ID takes an ID and ENCLAVE_ORG a name ("Context"), and an ID is checked before any
-    // call ("ID checks"), so a name in ENCLAVE_ORG_ID is refused without a lookup.
+    // A name in ENCLAVE_ORG_ID is refused without a lookup, although the token sees an organisation
+    // named "12" ("ID checks").
     [TestCase("Acme")]
     [TestCase("12")]
     public async Task ENCLAVE_ORG_ID_takes_a_guid_only(string value)
@@ -538,8 +504,7 @@ public class OrgContextTests
         await CliAssert.AcceptedAsync(run, "GET", OtherOrgSystems, "system", "list");
     }
 
-    // A lookup needs the token's ReadOrgList scope ("Context"). A token without it gets 403, which
-    // is exit 4 forbidden ("Errors and exit codes"), and the command's own request is not sent.
+    // A lookup needs the token's ReadOrgList scope ("Context").
     [TestCase("no organisation chosen")]
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG")]
@@ -558,10 +523,8 @@ public class OrgContextTests
         Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
     }
 
-    // Example 1. org use saves the default, and later commands build the organisation client from
-    // the saved ID with no lookup ("Context"). org use --id makes one lookup call for the name
-    // ("Login, logout and status"). The token sees two organisations, so a later command that
-    // ignored the default exits 2.
+    // Example 1. org use --id makes one lookup, for the name ("Login, logout and status"). The token
+    // sees two organisations, so a later command that ignored the default exits 2.
     [TestCase("Globex")]
     [TestCase("GLOBEX")]
     [TestCase("--id")]
@@ -583,9 +546,7 @@ public class OrgContextTests
         Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
     }
 
-    // org use saves { "org": { "id", "name" } } in cli.json and leaves the saved partner as it is
-    // ("Login, logout and status"). Given an ID, it takes the name from its lookup. The partner is
-    // saved first by partner use, which writes { "partner": { "id" } } beside the organisation.
+    // Given an ID, org use takes the name from its lookup ("Login, logout and status").
     [TestCase("globex")]
     [TestCase("--id")]
     public async Task Org_use_saves_the_organisation_id_and_name_in_cli_json_and_keeps_the_saved_partner(string choice)
@@ -609,10 +570,9 @@ public class OrgContextTests
         });
     }
 
-    // org use prints the organisation's model (AccountOrganisationModel, printed unchanged:
-    // "Output"), so a caller that chose by name learns the ID and one that chose by ID learns the
-    // name. Enclave.Sdk.Api writes orgId as 32 hex digits (OrganisationGuid JSON converter,
-    // Enclave.Sdk.Api.Data).
+    // A caller that chose by name learns the ID, and one that chose by ID learns the name.
+    // Enclave.Sdk.Api writes orgId as 32 hex digits (Enclave.Sdk.Api.Data OrganisationGuid JSON
+    // converter).
     [TestCase("globex")]
     [TestCase("--id")]
     public async Task Org_use_prints_the_organisation_it_saves(string choice)
@@ -631,9 +591,8 @@ public class OrgContextTests
         });
     }
 
-    // org use --id looks the organisation up for its name, so an ID the token does not see exits 2
-    // after that one call ("Login, logout and status"), and nothing is saved. The ID is a valid
-    // GUID, so the refusal comes from the lookup.
+    // org use --id looks the organisation up for its name ("Login, logout and status"). The ID is a
+    // valid GUID, so the refusal comes from the lookup.
     [Test]
     public async Task Org_use_id_exits_2_and_saves_nothing_for_an_organisation_the_token_does_not_see()
     {
@@ -650,8 +609,6 @@ public class OrgContextTests
         });
     }
 
-    // org use --id takes an organisation ID, a GUID ("ID checks"), checked before any call. A bad
-    // one saves nothing. The corrected run proves the option exists.
     [TestCase("12")]
     [TestCase("Globex")]
     public async Task Org_use_id_takes_a_guid_only_and_saves_nothing_for_another_value(string value)
@@ -665,8 +622,7 @@ public class OrgContextTests
         await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "org", "use", "--id", TestData.OtherOrgId.ToString());
     }
 
-    // org use takes a name or --id ("Commands": use <name> | --id <orgId>). With neither there is
-    // nothing to save, and a name argument with --id contradict each other ("Details").
+    // "Commands", "Details".
     [TestCase(false)]
     [TestCase(true)]
     public async Task Org_use_takes_exactly_one_of_a_name_or_id(bool both)
@@ -683,9 +639,7 @@ public class OrgContextTests
         await CliAssert.AcceptedAsync(run, "GET", "/account/orgs", "org", "use", TestData.OtherOrgName);
     }
 
-    // org use changes only a local file and org list is a read, so neither takes --dry-run ("Dry
-    // run"), and an option a command does not take exits 2 ("Details"). The corrected run proves
-    // the rejection withheld the request.
+    // org use changes only a local file and org list only reads ("Dry run").
     [TestCase("use")]
     [TestCase("list")]
     public async Task Org_use_and_org_list_do_not_take_dry_run(string verb)
@@ -697,9 +651,7 @@ public class OrgContextTests
         await CliAssert.RejectedThenAcceptedAsync(run, [.. command, "--dry-run"], command, "GET", "/account/orgs");
     }
 
-    // org list needs no organisation chosen: it is how a caller finds one. It runs with several
-    // organisations and none chosen, where a command that acts in an organisation exits 2. It prints
-    // an org list of AccountOrganisationModel, unchanged ("Output").
+    // org list is how a caller finds an organisation, so it needs none chosen.
     [Test]
     public async Task Org_list_prints_the_organisations_the_token_sees_with_none_chosen()
     {
@@ -727,8 +679,6 @@ public class OrgContextTests
         run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
     }
 
-    // Gives an organisation name the way the case names: --org on system list, ENCLAVE_ORG for
-    // system list, or org use's argument.
     private static Task<CliResult> RunWithOrgNameAsync(CliRun run, string source, string name)
     {
         switch (source)
@@ -749,9 +699,8 @@ public class OrgContextTests
         Assert.That(run.Files.Exists(run.CliConfigPath), Is.True, "org use saved no cli.json.");
     }
 
-    // no_org and a name that matches several organisations carry error.candidates as { id, name }
-    // ("Errors and exit codes"). Each is written "<32 hex digits>=<name>" and the list is sorted, so
-    // the comparison holds whatever GUID form and order the CLI uses.
+    // Written "<32 hex digits>=<name>" and sorted, so the comparison holds whatever GUID form and
+    // order the CLI uses.
     private static string Candidates(JsonElement error)
     {
         if (!error.TryGetProperty("candidates", out var candidates) || candidates.ValueKind != JsonValueKind.Array)
@@ -765,9 +714,8 @@ public class OrgContextTests
     private static string Candidate(JsonElement candidate) =>
         Pair(Guid.Parse(JsonAssert.Property(candidate, "id").GetString()!, CultureInfo.InvariantCulture), JsonAssert.Property(candidate, "name").GetString()!);
 
-    // For a name that matches nothing the error carries candidates as an empty list ("Errors and
-    // exit codes": "the items that matched, or an empty list for no match"), so a caller reads one
-    // shape whatever the match. No property, or null, is another shape.
+    // A caller reads one shape whatever the match, so no property, or null, does not pass ("Errors
+    // and exit codes").
     private static bool HasEmptyCandidates(JsonElement error) =>
         error.TryGetProperty("candidates", out var candidates)
         && candidates.ValueKind == JsonValueKind.Array

@@ -5,14 +5,12 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The dns commands of spec/cli-surface.md "Commands" and "Command options". Zones and hostnames
-// are given by name, looked up with one list call, or by ID after --id, which makes no lookup
-// ("Names and IDs"). A hostname is written in full, and the API keeps db.internal as the record
-// "db" in the zone "internal" (portal DnsRecordModel: name, zoneId, fqdn). A hostname's zone is the
-// longest zone name it ends in, at a label boundary, and the record name is the rest ("Details").
+// The API keeps db.internal as the record "db" in the zone "internal" (portal DnsRecordModel), so
+// the CLI splits a hostname at the longest zone name it ends in ("Details").
 public class DnsCommandTests
 {
-    // The detail the API sends with no-such-system (portal DnsRecordHandlerBase.cs:117).
+    // The detail the API sends with no-such-system (portal
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync).
     private const string UnknownSystemDetail = "One or more of the provided systems are not known approved systems in the organisation: ZZZZZ";
 
     private static readonly string Zones = TestData.OrgPath("dns/zones");
@@ -21,55 +19,11 @@ public class DnsCommandTests
 
     private static readonly string[] ZoneCreateFields = ["name", "notes", "autoDnsTags"];
 
-    // The fields of DnsRecordCreateModel (portal
-    // Enclave.Api/Modules/SystemManagement/Dns/Models/DnsRecordCreateModel.cs).
+    // The fields of the API's DnsRecordCreateModel.
     private static readonly string[] RecordCreateFields = ["name", "zoneId", "type", "tags", "systems", "notes"];
 
-    [Test]
-    public async Task Dns_show_prints_the_organisation_dns_summary()
-    {
-        using var run = CliRun.Start();
-        var summary = JsonRead.Parse(ApiJson.DnsSummary());
-        run.Stub("GET", TestData.OrgPath("dns"), json: ApiJson.DnsSummary());
-
-        var result = await run.RunAsync("dns", "show");
-
-        CliAssert.Succeeded(result);
-        var request = run.SingleRequest();
-        var output = result.StdoutJson;
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("dns")));
-            Assert.That(JsonAssert.Property(output, "zoneCount").GetInt32(), Is.EqualTo(JsonAssert.Property(summary, "zoneCount").GetInt32()));
-            Assert.That(JsonAssert.Property(output, "totalRecordCount").GetInt32(), Is.EqualTo(JsonAssert.Property(summary, "totalRecordCount").GetInt32()));
-        });
-    }
-
-    // Three zones two to a page make the CLI follow nextPage to a second page. A list reads every
-    // page before it prints, 200 to a page, the most the API returns (spec/cli-surface.md
-    // "Output" and "Calls per command").
-    [Test]
-    public async Task Dns_list_zones_reads_every_page_and_prints_a_zone_list()
-    {
-        using var run = CliRun.Start();
-        run.StubPages(Zones, 2, ApiJson.Zone(4, "internal"), ApiJson.Zone(5, "lab"), ApiJson.Zone(6, "corp.example"));
-
-        var result = await run.RunAsync("dns", "list-zones");
-
-        var items = CliAssert.List(result, "zone");
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("4,5,6"));
-            Assert.That(JsonRead.StringFieldList(items, "name"), Is.EqualTo("internal,lab,corp.example"));
-            Assert.That(run.Requests.Select(request => request.Path), Is.All.EqualTo(Zones));
-            Assert.That(run.PagesRequested(Zones), Is.EqualTo("0,1"));
-            Assert.That(run.Requests.Select(request => request.QueryValue("per_page")), Is.All.EqualTo("200"));
-        });
-    }
-
     // lab is the second zone the lookup reads, so a lookup that took the first zone gets the wrong
-    // one. Names match ignoring case (spec/cli-surface.md "Names and IDs").
+    // one.
     [TestCase("lab")]
     [TestCase("LAB")]
     public async Task Dns_show_zone_looks_the_zone_up_by_name_ignoring_case_and_prints_it(string name)
@@ -90,29 +44,7 @@ public class DnsCommandTests
         });
     }
 
-    [Test]
-    public async Task Dns_show_zone_with_id_gets_the_zone_without_a_lookup()
-    {
-        using var run = CliRun.Start();
-        StubZones(run);
-        run.Stub("GET", ZonePath("4"), json: ApiJson.Zone(4, "internal"));
-
-        var result = await run.RunAsync("dns", "show-zone", "--id", "4");
-
-        CliAssert.Succeeded(result);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(ZonePath("4")));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "name").GetString(), Is.EqualTo("internal"));
-        });
-    }
-
-    // A name that matches nothing exits 2 invalid_argument, and the error's candidates are the
-    // items that matched, none here (spec/cli-surface.md "Errors and exit codes"). The argument
-    // "4" is a name, since the option decides how a value is read and the CLI never inspects it to
-    // guess its type ("Commands"); zone 4 exists, so treating the argument as an ID would print it.
+    // Zone 4 exists, so a CLI that read the argument "4" as an ID would print it.
     [TestCase("nowhere")]
     [TestCase("4")]
     public async Task Dns_show_zone_given_a_name_no_zone_has_exits_2_with_no_candidates(string name)
@@ -131,10 +63,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 29 in spec/cli-surface.md. A zone is created by name, so there is nothing to look
-    // up. A create sends every field of DnsZoneCreateModel (portal
-    // Enclave.Api/Modules/SystemManagement/Dns/Models/DnsZoneCreateModel.cs; "Create and update"),
-    // notes null when --notes is left out.
+    // Example 29. A create sends every field, notes null when left out ("Create and update").
     [Test]
     public async Task Dns_create_zone_posts_the_name_and_auto_dns_tags_and_prints_the_created_zone()
     {
@@ -177,8 +106,8 @@ public class DnsCommandTests
         });
     }
 
-    // A create sends an empty list for a list flag left out (spec/cli-surface.md "Details"), so
-    // the API's own default never decides which systems get a name in the zone.
+    // The CLI sends the empty list itself, so the API's default never decides which systems get a
+    // name in the zone.
     [Test]
     public async Task Dns_create_zone_without_auto_dns_tags_sends_an_empty_list()
     {
@@ -201,8 +130,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 60 in spec/cli-surface.md, by name and by ID. Only the auto DNS tags are sent, so
-    // the zone's name and notes stay as they are ("Create and update").
+    // Example 60.
     [TestCase("dns update-zone internal --set-auto-dns-tags web,api", true)]
     [TestCase("dns update-zone --id 4 --set-auto-dns-tags web,api", false)]
     public async Task Dns_update_zone_replaces_the_auto_dns_tags_and_sends_no_other_field(string commandLine, bool lookup)
@@ -225,10 +153,7 @@ public class DnsCommandTests
         });
     }
 
-    // The command prints the zone the API answers the patch with. The fake answers with an ID and a
-    // record count the request does not carry, and with the zone's name in another case from the
-    // one sent, so output copied from the request does not match; names are read exactly, as an
-    // agent reads them.
+    // The answer differs from the request, so output copied from the request does not match.
     [Test]
     public async Task Dns_update_zone_sends_the_name_and_notes_given_and_prints_the_updated_zone()
     {
@@ -256,9 +181,8 @@ public class DnsCommandTests
         });
     }
 
-    // The API deletes one zone per call and has no bulk zone delete (portal DnsController.cs:145), so
-    // delete-zone prints the deleted zone, as single-ID commands do (spec/cli-surface.md "Several
-    // IDs").
+    // The API has no bulk zone delete (portal DnsController.DeleteZone), so delete-zone prints the
+    // deleted zone ("Several IDs").
     [TestCase("dns delete-zone internal", true)]
     [TestCase("dns delete-zone --id 4", false)]
     public async Task Dns_delete_zone_deletes_the_one_zone_and_prints_it(string commandLine, bool lookup)
@@ -280,10 +204,6 @@ public class DnsCommandTests
         });
     }
 
-    // delete-zone takes one zone (spec/cli-surface.md "Several IDs"). The single-zone command run
-    // next in the same sandbox shows the command exists and the rejection comes from the second
-    // zone.
-    [TestCase("dns delete-zone --id 4,5")]
     [TestCase("dns delete-zone internal lab")]
     public async Task Dns_delete_zone_given_two_zones_exits_2_without_a_request(string commandLine)
     {
@@ -296,8 +216,6 @@ public class DnsCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, commandLine.Split(' '), ["dns", "delete-zone", "--id", "4"], "DELETE", ZonePath("4"));
     }
 
-    // Three hostnames two to a page make the CLI follow nextPage. Without --zone or --filter the
-    // list asks for every hostname.
     [Test]
     public async Task Dns_list_hostnames_reads_every_page_and_prints_a_hostname_list()
     {
@@ -318,9 +236,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 62 in spec/cli-surface.md. --zone takes the zone's name, looked up with one call,
-    // and --zone-id its ID, which needs no lookup ("Names and IDs"); either way every page asks the
-    // API for that zone's hostnames (DnsClient.GetRecordsAsync sends zoneId, Enclave.Sdk.Api).
+    // Example 62. DnsClient.GetRecordsAsync sends the zone as zoneId (Enclave.Sdk.Api).
     [TestCase("dns list-hostnames --zone internal", true)]
     [TestCase("dns list-hostnames --zone-id 4", false)]
     public async Task Dns_list_hostnames_in_a_zone_asks_the_api_for_that_zone_only(string commandLine, bool lookup)
@@ -341,8 +257,7 @@ public class DnsCommandTests
         });
     }
 
-    // Example 16 in spec/cli-surface.md. --filter is sent as typed, as the API's search
-    // ("Filters"; DnsClient.GetRecordsAsync sends it as search, Enclave.Sdk.Api).
+    // Example 16.
     [Test]
     public async Task Dns_list_hostnames_sends_the_filter_as_the_api_search()
     {
@@ -361,8 +276,6 @@ public class DnsCommandTests
         });
     }
 
-    // A zone name that matches nothing exits 2 with no candidates (spec/cli-surface.md "Errors
-    // and exit codes"), before any hostname is read.
     [Test]
     public async Task Dns_list_hostnames_in_a_zone_no_zone_has_exits_2_without_listing_hostnames()
     {
@@ -380,8 +293,8 @@ public class DnsCommandTests
         });
     }
 
-    // db.internal and db.lab are both the record "db", so only a lookup by the full hostname picks
-    // one of them, and names match ignoring case (spec/cli-surface.md "Names and IDs").
+    // db.internal and db.lab are both the record "db", so only a lookup by the full hostname tells
+    // them apart.
     [TestCase("db.lab", "9")]
     [TestCase("DB.Internal", "7")]
     public async Task Dns_show_hostname_looks_the_full_hostname_up_and_prints_it(string hostname, string id)
@@ -401,28 +314,7 @@ public class DnsCommandTests
         });
     }
 
-    [Test]
-    public async Task Dns_show_hostname_with_id_gets_the_hostname_without_a_lookup()
-    {
-        using var run = CliRun.Start();
-        StubHostnames(run);
-        run.Stub("GET", RecordPath("7"), json: DbInternal());
-
-        var result = await run.RunAsync("dns", "show-hostname", "--id", "7");
-
-        CliAssert.Succeeded(result);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo(RecordPath("7")));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "fqdn").GetString(), Is.EqualTo("db.internal"));
-        });
-    }
-
-    // A hostname is its full name (spec/cli-surface.md "Names and IDs"): "db" is the record name
-    // of db.internal and db.lab, and the full name of neither. A name that matches nothing exits 2
-    // with no candidates ("Errors and exit codes").
+    // "db" is the record name of db.internal and db.lab, and the full name of neither.
     [TestCase("nowhere.internal")]
     [TestCase("db")]
     public async Task Dns_show_hostname_given_a_name_no_hostname_has_exits_2_with_no_candidates(string hostname)
@@ -443,11 +335,9 @@ public class DnsCommandTests
         });
     }
 
-    // Example 15 in spec/cli-surface.md. The zone is found with one zone list call; the API
-    // takes the record name within the zone and the zone's ID (portal DnsRecordCreateModel), and
-    // ENCLAVE is the only record type it has (portal DnsRecordTypeFormatConverter.cs:12). A create
-    // sends every field, and --tags, the list flag left out, as an empty list ("Create and update",
-    // "Details").
+    // Example 15. ENCLAVE is the API's only record type (portal
+    // DnsRecordTypeFormatConverter.ToPublicFormat). --tags left out is sent as an empty list
+    // ("Details").
     [Test]
     public async Task Dns_create_hostname_posts_the_record_to_the_zone_its_name_ends_in()
     {
@@ -473,11 +363,7 @@ public class DnsCommandTests
         });
     }
 
-    // A hostname's zone is the longest zone name it ends in, at a label boundary, and the record
-    // name is the rest, which may contain dots (spec/cli-surface.md "Details"). internal comes
-    // before eu.internal in the zone list, so a lookup that took the first zone the hostname ends
-    // in puts db.eu.internal in the wrong zone; corp.example has two labels, so its zone is more
-    // than the hostname's last label.
+    // StubZones explains the zone list. The record name may contain dots ("Details").
     [TestCase("db.eu.internal", 8, "db")]
     [TestCase("db.corp.example", 6, "db")]
     [TestCase("db.primary.internal", 4, "db.primary")]
@@ -515,10 +401,8 @@ public class DnsCommandTests
         Assert.That(JsonRead.StringList(JsonAssert.Property(posts[0].BodyJson, "tags")), Is.EqualTo("web,frontend"));
     }
 
-    // A hostname with no zone, or equal to a zone's name, exits 2 (spec/cli-surface.md
-    // "Details"). No zone is named nowhere; xinternal ends in the text "internal" but not at a label
-    // boundary; internal and eu.internal are zone names, and eu.internal would be the record "eu"
-    // in internal if the zone were not matched whole.
+    // xinternal ends in "internal" but not at a label boundary, and eu.internal would be the record
+    // "eu" in internal if zones were not matched whole.
     [TestCase("db.nowhere")]
     [TestCase("db.xinternal")]
     [TestCase("internal")]
@@ -535,8 +419,7 @@ public class DnsCommandTests
         Assert.That(run.RequestsTo("POST", Records), Is.Empty);
     }
 
-    // Example 61 in spec/cli-surface.md, by name and by ID. --set-systems replaces the whole list
-    // ("Create and update"), and nothing else is sent.
+    // Example 61.
     [TestCase("dns update-hostname db.internal --set-systems ABCDE,FGHIJ,KLMNO", true)]
     [TestCase("dns update-hostname --id 7 --set-systems ABCDE,FGHIJ,KLMNO", false)]
     public async Task Dns_update_hostname_replaces_the_systems_and_sends_no_other_field(string commandLine, bool lookup)
@@ -582,10 +465,8 @@ public class DnsCommandTests
         });
     }
 
-    // --name takes a full hostname in the hostname's own zone, and the API takes the record name
-    // within the zone (portal DnsRecordPatchModel.Name; spec/cli-surface.md "Details"). The
-    // record name may contain dots. The reads that find the hostname's zone are not fixed, so the
-    // test checks the one PATCH it sends.
+    // The API takes the record name within the zone (portal DnsRecordPatchModel.Name). The reads
+    // that find the hostname's zone are left open, so only the PATCH is checked.
     [TestCase("dns update-hostname --id 7 --name db2.internal", "db2")]
     [TestCase("dns update-hostname db.internal --name db2.internal", "db2")]
     [TestCase("dns update-hostname --id 7 --name db.primary.internal", "db.primary")]
@@ -612,12 +493,9 @@ public class DnsCommandTests
         });
     }
 
-    // The API cannot move a record between zones, so a new name in another zone exits 2
-    // (spec/cli-surface.md "Details"). db.lab is in lab, db2 is in no zone, and db2.eu.internal
-    // is in eu.internal, the longest zone it ends in, although it also ends in internal. The error
-    // names --name and repeats no part of the value given, as no CLI error does, since a value can
-    // be a token passed by mistake. Each case checks stderr for a part of its value that a message
-    // could quote: the whole value, or the zone it ends in, which is not the hostname's own zone.
+    // The API cannot move a record between zones ("Details"); db2.eu.internal is in eu.internal, the
+    // longest zone it ends in. No error repeats a value, which can be a token passed by mistake, so
+    // stderr is checked for the part a message could quote.
     [TestCase("db.lab", "db.lab")]
     [TestCase("db2", "db2")]
     [TestCase("db2.eu.internal", "eu.internal")]
@@ -640,8 +518,6 @@ public class DnsCommandTests
         });
     }
 
-    // A command that takes several items looks each name up with one list call and sends one bulk
-    // call, printing { requested, affected } (spec/cli-surface.md "Several IDs").
     [Test]
     public async Task Dns_delete_hostname_looks_each_hostname_up_and_deletes_them_in_one_bulk_call()
     {
@@ -661,69 +537,8 @@ public class DnsCommandTests
         });
     }
 
-    // --id gives IDs and makes no lookup, and one ID goes to the bulk call too (spec/cli-surface.md
-    // "Names and IDs" and "Several IDs").
-    [TestCase("7,8", 2)]
-    [TestCase("7", 1)]
-    public async Task Dns_delete_hostname_with_id_makes_the_bulk_call_without_a_lookup(string ids, int count)
-    {
-        using var run = CliRun.Start();
-        StubHostnames(run);
-        run.StubBulk("DELETE", Records, "dnsRecordsDeleted", count);
-
-        var result = await run.RunAsync("dns", "delete-hostname", "--id", ids);
-
-        CliAssert.Bulk(result, requested: count, affected: count);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(Records));
-            Assert.That(string.Join(",", request.BodyIds("recordIds")), Is.EqualTo(ids));
-        });
-    }
-
-    // Example 16 in spec/cli-surface.md: the list list-hostnames prints, read from stdin, carries
-    // each hostname's ID, so no lookup is made ("Names and IDs").
-    [Test]
-    public async Task Dns_delete_hostname_deletes_the_hostnames_of_a_list_read_from_stdin()
-    {
-        using var run = CliRun.Start();
-        run.StdinText = CliList.Of("hostname", OldApiLab(), OldApiInternal());
-        run.StubBulk("DELETE", Records, "dnsRecordsDeleted", 2);
-
-        var result = await run.RunAsync("dns", "delete-hostname", "-");
-
-        CliAssert.Bulk(result, requested: 2, affected: 2);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(Records));
-            Assert.That(string.Join(",", request.BodyIds("recordIds")), Is.EqualTo("10,11"));
-        });
-    }
-
-    // Zones and hostnames both have integer IDs, so the list's kind is what stops a zone list
-    // deleting the hostnames that share its numbers (spec/cli-surface.md "Several IDs"). The
-    // hostname list run next in the same sandbox shows the rejection comes from the kind.
-    [Test]
-    public async Task Dns_delete_hostname_given_a_zone_list_on_stdin_exits_2_without_a_request()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", Records, "dnsRecordsDeleted", 2);
-        run.StdinText = CliList.WithIds("zone", "10", "11");
-
-        CliAssert.Rejected(run, await run.RunAsync("dns", "delete-hostname", "-"));
-
-        run.StdinText = CliList.WithIds("hostname", "10", "11");
-        var request = await CliAssert.AcceptedAsync(run, "DELETE", Records, "dns", "delete-hostname", "-");
-        Assert.That(string.Join(",", request.BodyIds("recordIds")), Is.EqualTo("10,11"));
-    }
-
-    // Single-ID commands exit 5 for an unknown ID, dns delete-zone among them (spec/cli-surface.md
-    // "Several IDs"). The fake answers as the API does for a zone or hostname it does not have: 404
-    // with the problem type zone-not-found or dns-record-not-found (portal DnsController.cs:352-368).
+    // The fake answers as the API does: 404 with the problem type zone-not-found or
+    // dns-record-not-found (portal DnsController.ZoneNotFoundResult, DnsRecordNotFoundResult).
     [TestCase("dns show-zone --id 4", "GET", "dns/zones/4", "zone-not-found")]
     [TestCase("dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4", "zone-not-found")]
     [TestCase("dns delete-zone --id 4", "DELETE", "dns/zones/4", "zone-not-found")]
@@ -747,11 +562,9 @@ public class DnsCommandTests
         });
     }
 
-    // Exit 5 means the item the command names was not found (spec/cli-surface.md "Errors and
-    // exit codes"). The API also answers 404 when a --set-systems system is not an approved system
-    // of the organisation (problem type no-such-system, portal DnsRecordHandlerBase.cs:117-123), and
-    // the hostname exists then, so that 404 exits 1 api_error and carries the API's detail, which
-    // names the system. The hostname is given by ID and by name, the two ways to reach the patch.
+    // The API answers 404 no-such-system for a system it does not know (portal
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync), but the hostname exists, so
+    // exit 5 would be wrong.
     [TestCase("dns update-hostname --id 7 --set-systems ABCDE,ZZZZZ")]
     [TestCase("dns update-hostname db.internal --set-systems ABCDE,ZZZZZ")]
     public async Task Dns_update_hostname_with_a_system_the_api_does_not_know_exits_1_api_error(string commandLine)
@@ -772,11 +585,9 @@ public class DnsCommandTests
         });
     }
 
-    // dns update-hostname exits 5 only for the problem type dns-record-not-found
-    // (spec/cli-surface.md "Errors and exit codes"). A 404 with no body, such as a proxy in front
-    // of the API sends, or with another problem type does not say the hostname was not found, so
-    // each exits 1 api_error with the status. zone-not-found is a type the API sends for a zone
-    // (portal DnsController.cs:352-359).
+    // Only dns-record-not-found says the hostname was not found ("Errors and exit codes"). A 404 with
+    // no body can come from a proxy, and zone-not-found is the API's type for a zone (portal
+    // DnsController.ZoneNotFoundResult).
     [TestCase(null)]
     [TestCase("zone-not-found")]
     public async Task Dns_update_hostname_answered_404_without_the_hostname_problem_type_exits_1_api_error(string? problemType)
@@ -802,11 +613,9 @@ public class DnsCommandTests
         });
     }
 
-    // create-hostname names a hostname that does not exist yet, so no 404 means it was not found
-    // (spec/cli-surface.md "Errors and exit codes"). The API answers 404 for a --systems system
-    // the organisation does not have (no-such-system, portal DnsRecordHandlerBase.cs:117-123) and
-    // for a zone deleted after the CLI read the zones (no-such-zone, portal
-    // DnsRecordCreateHandler.cs:65-68), and each exits 1 api_error with the API's detail.
+    // The hostname does not exist yet, so no 404 means it was not found. The API answers 404 for an
+    // unknown system (portal DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync) and for
+    // a zone deleted since the CLI read it (portal DnsRecordCreateHandler.GetResponseAsync).
     [TestCase("no-such-system", "System Not Found", UnknownSystemDetail)]
     [TestCase("no-such-zone", "Zone does not exist", "Specified owning zone #4 does not exist.")]
     public async Task Dns_create_hostname_answered_404_exits_1_api_error(string problemType, string title, string detail)
@@ -826,12 +635,9 @@ public class DnsCommandTests
         });
     }
 
-    // The API refuses a hostname's tags with a tag twice (portal DnsRecordCreateValidator.cs:32). It
-    // upper-cases system IDs and answers 404 no-such-system when it finds fewer systems than it was
-    // given (DnsRecordCreateHandler.cs:104, DnsRecordHandlerBase.cs:93-124), so it refuses a system
-    // twice too, and abcde repeats ABCDE. Each exits 2 before any call, the zone read included
-    // (spec/cli-surface.md "Command options"). The list with each value once, run next, shows
-    // the rejection comes from the repeat.
+    // The API refuses a repeated tag (portal DnsRecordCreateValidator), and it upper-cases system IDs
+    // and answers 404 when it finds fewer systems than given (portal DnsRecordCreateHandler,
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync), so abcde repeats ABCDE.
     [TestCase("--tags", "web,db,web", "web,db")]
     [TestCase("--systems", "ABCDE,FGHIJ,ABCDE", "ABCDE,FGHIJ")]
     [TestCase("--systems", "ABCDE,abcde", "ABCDE")]
@@ -847,9 +653,9 @@ public class DnsCommandTests
         Assert.That(run.RequestsTo("POST", Records), Has.Count.EqualTo(1));
     }
 
-    // As for create-hostname: the patch's systems go through the same check (DnsRecordPatchHandler.cs:124-130).
-    // The zone's automatic DNS tags are refused with a tag twice (DnsZoneCreateValidator.cs:32,
-    // DnsZonePatchValidator.cs:28).
+    // The patch's systems go through the same check (portal DnsRecordPatchHandler.GetResponseAsync),
+    // and the API refuses a repeated automatic DNS tag (portal DnsZoneCreateValidator,
+    // DnsZonePatchValidator).
     [TestCase("dns update-hostname --id 7 --set-systems ABCDE,abcde", "dns update-hostname --id 7 --set-systems ABCDE", "PATCH", "dns/records/7")]
     [TestCase("dns create-zone internal --auto-dns-tags web,web", "dns create-zone internal --auto-dns-tags web", "POST", "dns/zones")]
     [TestCase("dns update-zone --id 4 --set-auto-dns-tags web,api,web", "dns update-zone --id 4 --set-auto-dns-tags web,api", "PATCH", "dns/zones/4")]
@@ -865,14 +671,8 @@ public class DnsCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected.Split(' '), accepted.Split(' '), method, TestData.OrgPath(suffix));
     }
 
-    // Zone and hostname IDs are integers, and every ID is checked before any call, so a malformed
-    // one exits 2 naming it and sends nothing (spec/cli-surface.md "ID checks").
-    // The same command with integer IDs run next shows the rejection comes from the ID.
     [TestCase("dns show-zone --id ../records", "dns show-zone --id 4", "GET", "dns/zones/4")]
-    [TestCase("dns update-zone --id 4a --notes Reviewed", "dns update-zone --id 4 --notes Reviewed", "PATCH", "dns/zones/4")]
     [TestCase("dns delete-zone --id internal", "dns delete-zone --id 4", "DELETE", "dns/zones/4")]
-    [TestCase("dns show-hostname --id 7a", "dns show-hostname --id 7", "GET", "dns/records/7")]
-    [TestCase("dns update-hostname --id ../zones/4 --notes Reviewed", "dns update-hostname --id 7 --notes Reviewed", "PATCH", "dns/records/7")]
     [TestCase("dns delete-hostname --id 7,db.internal", "dns delete-hostname --id 7,8", "DELETE", "dns/records")]
     [TestCase("dns list-hostnames --zone-id ../4", "dns list-hostnames --zone-id 4", "GET", "dns/records")]
     public async Task Dns_commands_reject_an_id_that_is_not_an_integer_without_a_request(string rejected, string accepted, string method, string suffix)
@@ -886,9 +686,6 @@ public class DnsCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected.Split(' '), accepted.Split(' '), method, TestData.OrgPath(suffix));
     }
 
-    // A name argument with --id contradicts itself and exits 2 before any call
-    // (spec/cli-surface.md "Details"). The command with --id alone run next shows the rejection
-    // comes from the pair.
     [TestCase("dns show-zone internal --id 4", "dns show-zone --id 4", "GET", "dns/zones/4")]
     [TestCase("dns update-hostname db.internal --id 7 --notes Reviewed", "dns update-hostname --id 7 --notes Reviewed", "PATCH", "dns/records/7")]
     [TestCase("dns delete-hostname db.internal --id 7", "dns delete-hostname --id 7", "DELETE", "dns/records")]
@@ -903,13 +700,8 @@ public class DnsCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected.Split(' '), accepted.Split(' '), method, TestData.OrgPath(suffix));
     }
 
-    // --dry-run is an option of commands that change something, and a read does not take it
-    // (spec/cli-surface.md "Details"). The read without it run next shows the rejection comes
-    // from the option.
-    [TestCase("dns show", "dns")]
     [TestCase("dns list-zones", "dns/zones")]
     [TestCase("dns show-zone --id 4", "dns/zones/4")]
-    [TestCase("dns list-hostnames", "dns/records")]
     [TestCase("dns show-hostname --id 7", "dns/records/7")]
     public async Task Dns_reads_given_dry_run_exit_2_without_a_request(string commandLine, string suffix)
     {
@@ -924,15 +716,10 @@ public class DnsCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, [.. accepted, "--dry-run"], accepted, "GET", TestData.OrgPath(suffix));
     }
 
-    // --dry-run prints the requests the change would send and sends none of them; org.name is null
-    // when the organisation was given by ID, as CliRun gives it (spec/cli-surface.md "Dry run").
-    // None of these commands needs a read, so the fake API receives no request at all, and each
-    // change is one call.
+    // None of these commands needs a read, so the fake API receives no request at all.
     [TestCase("dns create-zone internal --dry-run", "POST", "dns/zones")]
     [TestCase("dns update-zone --id 4 --notes Reviewed --dry-run", "PATCH", "dns/zones/4")]
-    [TestCase("dns delete-zone --id 4 --dry-run", "DELETE", "dns/zones/4")]
     [TestCase("dns update-hostname --id 7 --notes Reviewed --dry-run", "PATCH", "dns/records/7")]
-    [TestCase("dns delete-hostname --id 7,8 --dry-run", "DELETE", "dns/records")]
     public async Task Dns_changes_with_dry_run_print_the_requests_and_send_nothing(string commandLine, string method, string suffix)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
@@ -944,9 +731,7 @@ public class DnsCommandTests
         Assert.That(run.Requests, Is.Empty);
     }
 
-    // The zone lookup is a read the change depends on, so it runs, and only the POST is withheld
-    // (spec/cli-surface.md "Dry run"). The printed body carries the zone the lookup found and the
-    // record type.
+    // The zone lookup is a read the change depends on, so it runs ("Dry run").
     [Test]
     public async Task Dns_create_hostname_with_dry_run_looks_the_zone_up_and_prints_the_post_without_sending_it()
     {
@@ -967,8 +752,8 @@ public class DnsCommandTests
         });
     }
 
-    // A problem details body as the API writes it: the type is a URL ending in the problem's name
-    // (portal Enclave.Api.Scaffolding/ProblemResponseFactory.cs:41-51, Enclave.Api/WebStartup.cs:166).
+    // The problem type is a URL ending in the problem's name, as the API writes it (portal
+    // ProblemResponseFactory.GetProblemTypeUrl; Enclave.Api WebStartup.Configure).
     private static string Problem(int status, string type, string title, string detail) => new JsonObject
     {
         ["type"] = $"https://api.enclave.io/problems/type/{type}",

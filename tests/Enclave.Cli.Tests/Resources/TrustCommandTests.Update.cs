@@ -6,20 +6,17 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// trust update (spec/cli-surface.md "Command options"). The API's patch replaces the whole
-// settings object, configuration and conditions together (portal TrustRequirementPatchModel), so a
-// --set- flag reads the requirement first and replaces only the conditions or setting of its own
-// kind: the rest, and the labels of entries that stay, go back as they were ("Calls per command").
-// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set).
+// The API's patch replaces the whole settings object (portal TrustRequirementPatchModel), so a
+// --set- flag reads the requirement and sends the rest back as it was. Enclave.Sdk.Api keys a PATCH
+// body by the C# property name (PatchClient.Set).
 
 /// <summary>
 /// Tests for trust update.
 /// </summary>
 public partial class TrustCommandTests
 {
-    // Example 58. GB stays with its label, IE is new, FR is an allowed country not given, so it
-    // goes; the allowed and blocked ranges and the blocked country are other kinds, so they stay
-    // with their labels. A description costs one lookup and an ID none ("Calls per command").
+    // Example 58. FR is not given, so it goes; the ranges and the blocked country are other kinds and
+    // stay.
     [TestCase(true)]
     [TestCase(false)]
     public async Task Trust_update_set_allow_country_replaces_only_the_allowed_countries(bool byDescription)
@@ -56,8 +53,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // Country codes are matched ignoring case ("Command options"), so gb is the GB the requirement
-    // has, and it keeps its label.
     [Test]
     public async Task Trust_update_matches_a_country_ignoring_case_and_keeps_its_label()
     {
@@ -74,8 +69,6 @@ public partial class TrustCommandTests
         Assert.That(PatchedConditions(patch[0]), Is.EqualTo(Set("country|GB|false|UK offices", "country|IE|false|(none)")));
     }
 
-    // An empty label removes the label and is sent as a null description ("Command options",
-    // "Details").
     [Test]
     public async Task Trust_update_with_an_empty_label_removes_the_label_as_a_null_description()
     {
@@ -99,8 +92,7 @@ public partial class TrustCommandTests
         });
     }
 
-    // Example 84. RU is a blocked country not given, so it goes; the allowed countries and the
-    // blocked range keep their labels.
+    // Example 84. RU is not given, so it goes; the other kinds keep their labels.
     [TestCase(true)]
     [TestCase(false)]
     public async Task Trust_update_set_block_country_replaces_only_the_blocked_countries(bool byDescription)
@@ -127,8 +119,6 @@ public partial class TrustCommandTests
             Is.EqualTo(Set("country|GB|false|UK offices", "country|IE|false|Dublin office", "country|US|true|No US access", "ip|198.51.100.0/24|true|Shared hosting")));
     }
 
-    // 203.0.113.0/24 is given without a label, so it keeps "Office"; 192.0.2.0/24 is an allowed
-    // range not given, so it goes; the blocked range and the country are other kinds.
     [Test]
     public async Task Trust_update_set_allow_ip_replaces_only_the_allowed_ranges_and_keeps_the_labels_of_those_that_stay()
     {
@@ -177,8 +167,6 @@ public partial class TrustCommandTests
             Is.EqualTo(Set("ip|203.0.113.0/24|false|Office", "ip|203.0.113.66/32|true|Guest Wi-Fi NAT", "ip|203.0.113.67/32|true|(none)", "country|RU|true|No RU access")));
     }
 
-    // The claims are the conditions of a sign-in requirement; the authority and tenant are its
-    // configuration, which --set-claim leaves as it is.
     [Test]
     public async Task Trust_update_set_claim_replaces_the_claims_and_keeps_the_configuration()
     {
@@ -226,8 +214,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // --set-client-id replaces the client ID of a generic authority and leaves its address,
-    // audience and claims as they are.
     [Test]
     public async Task Trust_update_set_client_id_replaces_the_client_id_and_keeps_the_rest()
     {
@@ -255,17 +241,10 @@ public partial class TrustCommandTests
         });
     }
 
-    // A sign-in setting given only white space carries no value. The API refuses a client ID or
-    // audience that is empty or white space and an authority address that is not https (portal
-    // TrustRequirementSettingsUserAuthValidator.cs:47-49; MustHaveKeyWithValue and KeyNotEmptyIfSet
-    // test string.IsNullOrWhiteSpace, DictionaryValidationExtensions.cs:45,82), and stores a blank
-    // tenant (TrustRequirementSettingsUserAuthValidator.cs:35-38), so each exits 2 as it does on
-    // trust create ("Command options"). okta, jumpcloud, duo and oidc require an https address and a
-    // client ID (same validator, 47-48), so --set-authority-uri "" and --set-client-id "" exit 2 as
-    // well. Arguments are checked before the token and any call ("Errors and exit codes"): the run
-    // with a token answers the read and the patch, so a CLI that went on shows a request, and the
-    // run without a token shows the check comes before the token. The update with a value, run
-    // next, shows the rejection comes from the blank one.
+    // The API refuses a blank client ID or audience and an address that is not https, and stores a
+    // blank tenant (portal TrustRequirementSettingsUserAuthValidator; DictionaryValidationExtensions
+    // MustHaveKeyWithValue, KeyNotEmptyIfSet). A generic authority requires an address and a client
+    // ID, so "" cannot clear them. The run without a token shows the check comes first.
     [TestCase("oidc", "--set-client-id", "")]
     [TestCase("oidc", "--set-client-id", " ")]
     [TestCase("oidc", "--set-authority-uri", "")]
@@ -298,10 +277,7 @@ public partial class TrustCommandTests
         Assert.That(run.RequestsTo("PATCH", TrustPath(5)), Has.Count.EqualTo(1));
     }
 
-    // Any --set- list flag given "" clears its list ("Details"). The list of a trust update flag is
-    // the conditions of its own kind ("Command options"), so "" removes those, and the conditions of
-    // other kinds stay with their labels; the read is what keeps them ("Calls per command"). Each
-    // kind has one condition here, so the patch holds the other three.
+    // Each kind has one condition here, so the patch holds the other three.
     [TestCase("--set-allow-ip", "ip|203.0.113.0/24|false|Office")]
     [TestCase("--set-block-ip", "ip|203.0.113.66/32|true|Guest Wi-Fi NAT")]
     [TestCase("--set-allow-country", "country|GB|false|UK offices")]
@@ -332,8 +308,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // As above for --set-claim, the list of a sign-in requirement's claims: "" removes every claim,
-    // and the authority and tenant, which are the configuration, stay.
     [Test]
     public async Task Trust_update_set_claim_given_an_empty_value_removes_every_claim_and_keeps_the_configuration()
     {
@@ -359,10 +333,8 @@ public partial class TrustCommandTests
         });
     }
 
-    // trust update prints the requirement the API answers the patch with ("Several IDs": a
-    // single-ID command prints the model). The answer differs from the read in usedInPolicies,
-    // modified and conditions, and the patch body holds only Settings, so output built from the
-    // read or the request does not match. Names are read exactly, as an agent reads them.
+    // The answer differs from the read and from the request, so output built from either does not
+    // match.
     [Test]
     public async Task Trust_update_prints_the_requirement_the_api_answers_the_patch_with()
     {
@@ -388,8 +360,7 @@ public partial class TrustCommandTests
         });
     }
 
-    // Without a --set- flag there are no conditions to keep, so there is no read ("Calls per
-    // command"), and the patch holds only the fields given ("Create and update").
+    // Without a --set- flag there are no conditions to keep, so there is no read.
     [Test]
     public async Task Trust_update_patches_only_the_description_and_notes_given_without_a_read()
     {
@@ -406,7 +377,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // An update with no change flag exits 2 ("Details"): it has nothing to send.
     [Test]
     public async Task Trust_update_without_a_change_flag_exits_2()
     {
@@ -416,9 +386,7 @@ public partial class TrustCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["trust", "update", "--id", "5"], ["trust", "update", "--id", "5", "--notes", "Reviewed"], "PATCH", TrustPath(5));
     }
 
-    // trust update does not change a requirement's authority: a new requirement replaces it
-    // ("Command options"). --set-authority is unknown to the command, so it exits 2 before any call,
-    // and `commands trust update` does not list it.
+    // A new requirement replaces one whose authority changes ("Command options").
     [Test]
     public async Task Trust_update_takes_no_option_that_changes_the_authority()
     {
@@ -436,9 +404,7 @@ public partial class TrustCommandTests
         Assert.That(options, Has.Member("--set-authority-uri").And.No.Member("--set-authority"));
     }
 
-    // trust update takes the create flags of the requirement's own type ("Command options"), and
-    // each authority takes only its own settings: claims belong to sign-in requirements, and a
-    // tenant to azure. The type and authority are known once the requirement is read.
+    // The type and authority are known only once the requirement is read.
     [TestCase("public-ip", "--set-claim", "groups=engineering")]
     [TestCase("oidc", "--set-tenant", Tenant)]
     [TestCase("azure", "--set-client-id", "enclave-cli")]
@@ -460,8 +426,7 @@ public partial class TrustCommandTests
         Assert.That(run.RequestsTo("PATCH", TrustPath(5)), Is.Empty);
     }
 
-    // A requirement is either a sign-in or a public IP one, so flags of both kinds cannot apply to
-    // it, whichever type it has.
+    // Flags of both types cannot apply to one requirement, whichever type it has.
     [Test]
     public async Task Trust_update_rejects_sign_in_and_public_ip_flags_together()
     {
@@ -473,7 +438,7 @@ public partial class TrustCommandTests
         CliAssert.Rejected(run, result, "invalid_argument");
     }
 
-    // The read is a single-item call, which exits 5 for an unknown ID ("Several IDs").
+    // The read is a single-item call ("Several IDs").
     [Test]
     public async Task Trust_update_with_an_unknown_id_exits_5_without_a_change()
     {

@@ -3,10 +3,6 @@ using Enclave.Configuration.Data.Modules.Policies.Enums;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// `policy list`: every policy, reading every page (spec/cli-surface.md "Command options",
-/// "Filters").
-/// </summary>
 internal static class PolicyListCommand
 {
     private const string Disabled = "disabled";
@@ -30,8 +26,7 @@ internal static class PolicyListCommand
                 .ToSearchTerm();
 
             // Without include_disabled the API leaves disabled policies out before the search
-            // applies (portal PolicyRepository.cs:381), so --state disabled asks for them too, and
-            // lists them without --include-disabled ("Filters").
+            // applies (portal PolicyRepository.BuildFilterAsync).
             bool? withDisabled = context.Get(includeDisabled) || context.Get(state) == Disabled ? true : null;
 
             var policies = await Paging.ReadAllAsync(

@@ -3,9 +3,7 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-// The class is partial so that tests for one area can add their data in their own file,
-// Support/TestData.<Area>.cs, without editing a file other tests share. StyleCop SA1601 requires a
-// <summary> on every part.
+// StyleCop SA1601 requires a <summary> on every part of this partial class.
 
 /// <summary>
 /// Fixed identities shared by the tests and the fake API responses.
@@ -24,25 +22,15 @@ internal static partial class TestData
 
     public static readonly Guid PartnerId = new("9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48");
 
-    // Enclave.Sdk.Api builds the path from OrganisationGuid.ToString(), which writes the GUID as 32
-    // hex digits without hyphens (OrganisationScopedClient constructor, Enclave.Sdk.Api, with
-    // Enclave.Sdk.Api.Data).
-
-    /// <summary>
-    /// The API path of the test organisation, with an optional suffix.
-    /// </summary>
+    // Enclave.Sdk.Api writes the organisation ID into the path as 32 hex digits
+    // (OrganisationScopedClient constructor).
     public static string OrgPath(string suffix = "") => OrgPathOf(OrgId, suffix);
 
-    /// <summary>
-    /// The API path of the other test organisation, <see cref="OtherOrgId"/>, with an optional suffix.
-    /// </summary>
     public static string OtherOrgPath(string suffix = "") => OrgPathOf(OtherOrgId, suffix);
 
     /// <summary>
-    /// <paramref name="count"/> distinct IDs of one kind of item (a <see cref="CliList.Kinds"/> value
-    /// other than log), each valid by the proposal's "ID checks": letters and digits for systems,
-    /// integers from 1 for keys, policies, zones, hostnames and trust requirements, tag names for
-    /// tags, GUIDs for organisations, users, customers and admins, and email addresses for invites.
+    /// <paramref name="count"/> distinct IDs of a <see cref="CliList.Kinds"/> kind other than log,
+    /// each valid by spec/cli-surface.md "ID checks".
     /// </summary>
     public static string[] Ids(string kind, int count)
     {

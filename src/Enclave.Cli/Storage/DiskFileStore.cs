@@ -1,8 +1,5 @@
 namespace Enclave.Cli.Storage;
 
-/// <summary>
-/// The file store the CLI uses outside tests: files on disk.
-/// </summary>
 internal sealed class DiskFileStore : IFileStore
 {
     private const UnixFileMode PrivateDirectoryMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
@@ -27,18 +24,14 @@ internal sealed class DiskFileStore : IFileStore
         }
     }
 
-    // The text goes to a new file beside the target, which is flushed to the disk and then renamed
-    // over the target. A crash, a power loss or a full disk part-way through leaves the old file or
-    // the new one, never a partial file, and the credentials file holds the token. The flush comes
-    // before the rename because some filesystems can otherwise commit the rename before the data,
-    // leaving an empty file after a power loss. File.Move with overwrite renames in place on the
-    // same volume (rename(2) on Linux and macOS, MoveFileEx with MOVEFILE_REPLACE_EXISTING on
-    // Windows).
+    // Written beside the target, flushed to the disk, then renamed over it (File.Move with
+    // overwrite: rename(2), or MoveFileEx with MOVEFILE_REPLACE_EXISTING), so a crash, power loss or
+    // full disk leaves the old file or the new one, never a partial file. Without the flush some
+    // filesystems commit the rename before the data, leaving an empty file after a power loss.
     //
-    // On Linux and macOS the new file is created with mode 0600, so a replaced file ends up private
-    // even when the old one was readable by others. .NET's default would be 0666 less the umask,
-    // usually 0644 (FileStreamOptions.UnixCreateMode). Windows has no mode bits: a file under the
-    // user profile inherits the profile's access list, which other users cannot read.
+    // A private file is created with mode 0600, so a replaced file ends up private even when the old
+    // one was not; .NET's default is 0666 less the umask (FileStreamOptions.UnixCreateMode). Windows
+    // has no mode bits: a file under the user profile inherits the profile's access list.
     public void WriteText(string path, string text, bool privateToUser)
     {
         RequireFullyQualified(path);
@@ -46,11 +39,9 @@ internal sealed class DiskFileStore : IFileStore
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath)!;
 
-        // A directory the CLI creates gets mode 0700 whichever file it is created for: ~/.enclave
-        // holds credentials.json, and `org use` before `login` creates it for cli.json, which holds
-        // no secret, with the token written into it later. An existing directory keeps its mode:
-        // ~/.enclave is shared with other Enclave tools, so the CLI sets the mode only on a directory
-        // it creates.
+        // A new directory gets 0700 whichever file it is for: `org use` before `login` creates
+        // ~/.enclave for cli.json, and credentials.json goes there later. An existing directory keeps
+        // its mode, since ~/.enclave is shared with other Enclave tools.
         if (OperatingSystem.IsWindows())
         {
             Directory.CreateDirectory(directory);
@@ -103,10 +94,10 @@ internal sealed class DiskFileStore : IFileStore
         return true;
     }
 
-    // The CLI's files live under the home directory, and a path that is not fully qualified
-    // resolves against the current directory: the CLI would read a credentials.json from wherever
-    // it is run and send the token to that file's baseUrl, or write the token there.
-    // EnclaveDirectory.HomeFrom gives no path then; this refuses one whatever the caller.
+    // A path that is not fully qualified resolves against the current directory: the CLI would read
+    // whatever credentials.json is there and send the token to its baseUrl, or write the token
+    // there. EnclaveDirectory.HomeFrom refuses such a home directory; this refuses such a path
+    // whatever the caller.
     private static void RequireFullyQualified(string path)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);

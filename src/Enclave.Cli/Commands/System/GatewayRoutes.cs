@@ -3,27 +3,16 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Systems;
 
-/// <summary>
-/// Works out the gateway routes `system update --enable-gateway-for` sends.
-/// </summary>
 internal static class GatewayRoutes
 {
     /// <summary>
-    /// The routes to send: the subnets given replace the routes a user entered, and the routes the
-    /// system found itself stay.
+    /// The subnets given replace the routes a user entered; the routes the system found itself stay.
     /// </summary>
-    /// <param name="given">The --enable-gateway-for values, each a subnet with an optional label.</param>
-    /// <param name="current">The system's routes, read first.</param>
-    // As in the portal, the routes the system found itself (userEntered false) stay, and the routes
-    // a user entered are replaced by the subnets given (portal-spa
-    // redux/reducers/app/detailTab/systems.ts:44-83). New routes have userEntered true and weight 0.
-    // A route that stays keeps its weight, the preference the API gives it over other gateways'
-    // routes to the same subnet (SystemGatewayRouteModel.Weight), and its label unless one is given
-    // (spec/cli-surface.md "Command options").
-    //
-    // A subnet given that the system also found stays one found route, with the label given: sending
-    // it as a user-entered route as well would repeat the subnet, which the portal refuses as a
-    // duplicate (portal-spa src/utils/systems.ts:25-40, findSystemSubnetDuplicates).
+    // As the portal does (portal-spa detailTab/systems.ts, setSystemDetailsKnownRoutes). A route that
+    // stays keeps its weight, the API's preference for it over other gateways' routes to the same
+    // subnet. A subnet given that the system also found stays one found route, with the label given:
+    // sending it as user-entered too would repeat the subnet, which the portal refuses (portal-spa
+    // utils/systems.ts, findSystemSubnetDuplicates).
     public static IReadOnlyList<SystemGatewayRouteModel> Replace(IReadOnlyList<LabelledValue> given, IReadOnlyList<SystemGatewayRouteModel>? current)
     {
         ArgumentNullException.ThrowIfNull(given);
@@ -62,13 +51,9 @@ internal static class GatewayRoutes
         return result;
     }
 
-    /// <summary>
-    /// Whether a subnet is given more than once, with a label or without.
-    /// </summary>
     // The API refuses a route list that holds a subnet twice, comparing the strings exactly (portal
-    // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:37,
-    // MustNotHaveDuplicates on Subnet, a HashSet with the default comparer), so the CLI refuses it
-    // before any call.
+    // SystemPatchModelValidator, MustNotHaveDuplicates on Subnet), so the CLI refuses it before any
+    // call.
     public static bool RepeatsASubnet(IReadOnlyList<LabelledValue> given)
     {
         ArgumentNullException.ThrowIfNull(given);

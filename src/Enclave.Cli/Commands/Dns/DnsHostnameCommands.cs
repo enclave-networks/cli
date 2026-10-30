@@ -7,13 +7,8 @@ using Enclave.Sdk.Api.Exceptions;
 
 namespace Enclave.Cli.Commands.Dns;
 
-/// <summary>
-/// The hostname verbs of `dns`: list-hostnames, show-hostname, create-hostname, update-hostname and
-/// delete-hostname. A hostname is written in full, db.internal, which the API keeps as the record
-/// "db" in the zone "internal" (portal DnsRecordModel: name, zoneId, fqdn); it is given by that full
-/// name, looked up with one list call, or by --id, which makes no lookup (spec/cli-surface.md
-/// "Names and IDs").
-/// </summary>
+// A hostname is written in full, db.internal, which the API keeps as the record "db" in the zone
+// "internal" (portal DnsRecordModel: name, zoneId, fqdn).
 internal static class DnsHostnameCommands
 {
     public static CliVerb List()
@@ -70,7 +65,7 @@ internal static class DnsHostnameCommands
         var systems = verb.Add(CliOptions.IdList("--systems", "The hostname answers with these systems.", IdFormats.System, "id,id", needsEntries: true));
         var notes = verb.Add(CliOptions.Text("--notes", "The hostname's notes."));
 
-        // The API refuses tags that hold a tag twice (portal DnsRecordCreateValidator.cs:32).
+        // The API refuses tags that hold a tag twice (portal DnsRecordCreateValidator).
         verb.Check(context => ListValues.CheckNoRepeats(tags.Name, context.Get(tags), StringComparer.Ordinal));
         verb.Check(context => CheckSystems(systems.Name, context.Get(systems)));
 
@@ -80,11 +75,10 @@ internal static class DnsHostnameCommands
             var zones = await DnsLookup.ReadZonesAsync(context, org);
             var (zone, recordName) = DnsLookup.Place(context.Get(hostname)!, zones, hostname.Name);
 
-            // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter.cs:12),
-            // and a create sends an empty list for a list flag left out (spec/cli-surface.md
-            // "Details"). The hostname does not exist yet, so a 404 here is about another item, a
-            // zone or a system (portal DnsRecordCreateHandler.cs:65-68, DnsRecordHandlerBase.cs:117-123),
-            // and exits 1 as any API error does ("Errors and exit codes").
+            // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter). The
+            // hostname does not exist yet, so a 404 here is about the zone or a system and exits 1
+            // as any API error does (portal DnsRecordCreateHandler.GetResponseAsync,
+            // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync).
             var record = await org.Client.Dns.CreateRecordAsync(new DnsRecordCreateModel
             {
                 Name = recordName,
@@ -122,8 +116,6 @@ internal static class DnsHostnameCommands
             var org = await context.GetOrganisationAsync();
             var current = await CurrentAsync(context, org, context.Get(hostname), hostname.Name, context.Get(id), newName is not null || TagEdits.NeedsCurrentTags(set, add, remove));
 
-            // An update sends only the fields given, so the hostname keeps the rest ("Create and
-            // update").
             var patch = org.Client.Dns.UpdateRecord(current.Id);
 
             if (newName is not null)
@@ -131,10 +123,9 @@ internal static class DnsHostnameCommands
                 var zones = await DnsLookup.ReadZonesAsync(context, org);
                 var (zone, recordName) = DnsLookup.Place(newName, zones, name.Name);
 
-                // The API cannot move a record between zones: the patch takes a record name within
-                // the record's own zone (portal DnsRecordPatchModel.Name; "Details"). The message
-                // names the option only, and neither the value nor the zone it ends in, as no
-                // message repeats a value (CliOptions).
+                // The patch takes a record name within the record's own zone, so it cannot move a
+                // record (portal DnsRecordPatchModel.Name). The message leaves the value out, as
+                // option errors do (CliOptions).
                 if (zone.Id != current.ZoneId)
                 {
                     throw CliErrors.InvalidArgument(name.Name, $"{name.Name} takes a full hostname in the hostname's own zone, and the hostname given is in another zone; the API cannot move a hostname to another zone.");
@@ -178,13 +169,8 @@ internal static class DnsHostnameCommands
         {
             var selection = await Items.ReadAsync(context, hostnames, ids, ListKind.Hostname, IdFormats.Int32);
 
-            // An empty list makes no call and exits 0, so a pipeline fed by an empty list succeeds
-            // (spec/cli-surface.md "Several IDs"). Its dry run prints the dry run output, which
-            // names the organisation, with no request ("Dry run"), so it goes on to resolve the
-            // organisation.
-            if (selection.Ids.Count == 0 && selection.Names.Count == 0 && !context.IsDryRun)
+            if (await Bulk.WroteEmptyAsync(context, selection.Count))
             {
-                await context.Output.WriteBulkAsync(new BulkResult(0, 0), context.CancellationToken);
                 return;
             }
 
@@ -201,9 +187,8 @@ internal static class DnsHostnameCommands
         return verb;
     }
 
-    // A hostname given by name comes with its zone and tags from the lookup. One given by --id is
-    // read first only when --name, --add-tags or --remove-tags needs it, since --name must stay in
-    // the hostname's zone and the tag flags patch the whole list ("Calls per command").
+    // The name lookup brings the zone and tags. A hostname given by --id is read only when --name
+    // needs its zone or a tag edit needs its tags ("Calls per command").
     private static async Task<CurrentHostname> CurrentAsync(CliContext context, OrganisationInUse org, string? hostname, string key, int? id, bool needsRead)
     {
         if (hostname is not null)
@@ -219,23 +204,20 @@ internal static class DnsHostnameCommands
             return new CurrentHostname(recordId, null, null);
         }
 
-        // One hostname named by ID: a 404 means it does not exist, exit 5 ("Several IDs").
         var record = await SingleItem.CallAsync(() => org.Client.Dns.GetRecordAsync(recordId));
         return new CurrentHostname(record.Id, record.ZoneId, record.Tags.Select(tag => tag.Tag));
     }
 
     // The API upper-cases system IDs and answers 404 no-such-system when it finds fewer systems than
-    // it was given (portal DnsRecordCreateHandler.cs:104, DnsRecordPatchHandler.cs:128,
-    // DnsRecordHandlerBase.cs:93-124), so it refuses a system given twice, in either case.
+    // it was given, so it refuses a system given twice, in either case (portal
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync).
     private static void CheckSystems(string option, IReadOnlyList<string>? systems) =>
         ListValues.CheckNoRepeats(option, systems, StringComparer.OrdinalIgnoreCase);
 
-    // The API answers update-hostname's patch 404 for the hostname itself (dns-record-not-found,
-    // portal DnsController.cs:361-368) and for a --set-systems system that is not an approved system
-    // of the organisation (no-such-system, portal
-    // DnsRecordHandlerBase.cs:117-123), whose detail names the system. Only the first means the
-    // hostname the command names was not found, exit 5 ("Errors and exit codes"); any other 404,
-    // one without that problem type included, exits 1 and carries the API's detail.
+    // The patch answers 404 for the hostname (dns-record-not-found, portal
+    // DnsController.DnsRecordNotFoundResult) and for a --set-systems system it does not find
+    // (no-such-system, DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync). Only the
+    // first exits 5; any other 404 exits 1 with the API's detail.
     private static async Task<T> PatchAsync<T>(Func<Task<T>> patch)
     {
         try
@@ -249,7 +231,8 @@ internal static class DnsHostnameCommands
     }
 
     // The API writes a problem type as a URL that ends in the type's name (portal
-    // Enclave.Api.Scaffolding/ProblemResponseFactory.cs:41-51, Enclave.Api/WebStartup.cs:166).
+    // ProblemResponseFactory.GetProblemTypeUrl; Enclave.Api/WebStartup.cs, Configure, the
+    // "problem-type" route).
     private static bool IsHostnameNotFound(Exception exception) =>
         exception is EnclaveApiException { ProblemDetails.Type: { } type }
         && string.Equals(type[(type.LastIndexOf('/') + 1)..], "dns-record-not-found", StringComparison.Ordinal);

@@ -5,45 +5,28 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Partner customer commands call the partner API through Enclave.Sdk.Api's partner client
-// (IPartnerClient.Customers), one call per command. A customer given by name, an admin given by
-// email address and an invite given by email address each add one read: the customer list, the
-// customer's admins and the customer's invites (spec/cli-surface.md "Calls per command", "Names
-// and IDs"). CliRun serves the partner API from a fake at its own address, and each test checks the
-// requests the fakes received as well as what the command printed.
+// Every test chooses a valid partner through ENCLAVE_PARTNER_ID, so a bad argument is the only
+// error a case can have. An argument case runs the corrected command after the rejected one,
+// since an unknown command is rejected the same way (CliAssert.RejectedThenAcceptedAsync).
 //
-// Every test here chooses a valid partner through ENCLAVE_PARTNER_ID, so a bad argument is the only
-// error a case can have.
-//
-// A rejection alone does not show that a command checked its input, since an unknown command is
-// rejected the same way. Each argument case therefore runs the corrected command in the same
-// sandbox and expects it to succeed with its calls sent to the partner API, which only a command
-// that exists and accepted its arguments does (the reason CliAssert.RejectedThenAcceptedAsync gives
-// for the main API's commands).
-//
-// This class also holds the table of partner customer commands, which PartnerContextTests and
-// PartnerSafetyTests draw on, so the three fixtures cannot drift apart on which commands exist or
-// what they send. The fake partner API they run against is Support/PartnerApiFake.cs.
+// PartnerContextTests and PartnerSafetyTests share Commands, so the three cannot disagree on which
+// commands exist or what they send.
 public class PartnerCommandTests
 {
     private const string FileToken = "file-token-4c7d21";
 
     private static readonly string[] InvalidBillingMonths = ["0", "2", "6", "13", "48", "twelve"];
 
-    // Every field of the API's CustomerCreateModel (Enclave.Sdk.Api, which writes it in
-    // camelCase; the partner API schema). A create sends each one ("Command options").
+    // CustomerCreateModel's fields, which a create always sends ("Command options").
     private static readonly string[] CreateFields =
     [
         "name", "ownerEmail", "domain", "industryDiscount", "initialSystemsCount", "initialGatewaysCount", "contactName", "hardLimit", "adminAutoSyncIsEnabled",
     ];
 
-    // One valid command line for each partner customer verb in the commands tree
-    // (spec/cli-surface.md "Commands"), the customer given by name, with the call it makes for
-    // the test customer and the read it makes first, if any. Changes marks the verbs that change
-    // something through the API, which take --dry-run ("Options on every command"). list-invites
-    // only reads, although the API asks for WriteCustomers to read invites (portal
-    // CustomersController.cs, GET {customerId}/invites). The routes and methods are the partner
-    // API's (https://partner-api.enclave.io/swagger/v1/swagger.json).
+    // One valid command line per partner customer verb ("Commands"). Changes marks the verbs that
+    // take --dry-run. list-invites only reads, although the API asks for WriteCustomers to read
+    // invites (portal CustomersController.GetPendingCustomerAdminInvites). Routes and methods are
+    // the partner API's (https://partner-api.enclave.io/swagger/v1/swagger.json).
     internal static IReadOnlyList<CustomerCommand> Commands { get; } =
     [
         new("list", TakesCustomer: false, Changes: false, [], "GET", TestData.PartnerPath("customers")),
@@ -61,23 +44,8 @@ public class PartnerCommandTests
         new("disable-auto-sync", TakesCustomer: true, Changes: true, [], "PUT", TestData.CustomerPath(TestData.CustomerOrgId, "disable-auto-sync")),
     ];
 
-    // A customer given by name is looked up in the partner's customer list, and an admin or invite
-    // given by email address in the customer's admins or invites, then the command makes its call
-    // ("Names and IDs", "Calls per command").
-    [TestCaseSource(nameof(CommandsByNameWithCalls))]
-    public async Task Every_partner_customer_command_given_the_customer_by_name_looks_it_up_then_makes_its_call(string[] args, string[] calls)
-    {
-        using var run = PartnerApiFake.StartWithPartner();
-
-        var result = await run.RunAsync(args);
-
-        CliAssert.Succeeded(result);
-        Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
-    }
-
-    // A customer is given by its name or by --org-id, its organisation ID, which is the only ID a
-    // customer has and needs no lookup (spec/cli-surface.md "Commands", "Names and IDs"; portal
-    // CustomersController.cs:69 reads the route's customer ID as an OrganisationGuid).
+    // A customer's only ID is its organisation ID (portal CustomersController parses the route's
+    // customer ID as an OrganisationGuid).
     [TestCaseSource(nameof(CommandsByOrgIdWithCalls))]
     public async Task Every_partner_customer_command_given_org_id_makes_its_call_without_a_customer_lookup(string[] args, string[] calls)
     {
@@ -89,10 +57,10 @@ public class PartnerCommandTests
         Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
     }
 
-    // The partner API runs on its own host, beside the main API (spec/cli-surface.md "Partner
-    // API"), and partner calls go to the partner API's address: the host's default here, which is
-    // the run's fake partner API. The main API's fake answers partner routes 421, so a call sent
-    // there would fail the command as well as show in its requests.
+    // Given by name, a command looks the customer up, then makes its call; an admin or invite given
+    // by email address adds a read of the customer's admins or invites ("Calls per command"). The
+    // main API's fake answers partner routes 421, so a call sent there would also fail the command
+    // ("Partner API").
     [TestCaseSource(nameof(CommandsByNameWithCalls))]
     public async Task Every_partner_customer_command_sends_its_calls_to_the_partner_api_address_and_none_to_the_api_address(string[] args, string[] calls)
     {
@@ -108,11 +76,9 @@ public class PartnerCommandTests
         });
     }
 
-    // credentials.json's partnerApiBaseUrl is the partner API address, read beside baseUrl, and
-    // ENCLAVE_TOKEN keeps it as it keeps baseUrl (spec/cli-surface.md "Partner API", "Login,
-    // logout and status"). A third fake at another address shows where the command's call went with
-    // which token. The run's own fakes, at the default addresses, serve the partner API too, so a
-    // CLI that ignored the file would succeed there and show only in their requests.
+    // ENCLAVE_TOKEN keeps the file's partnerApiBaseUrl as it keeps baseUrl ("Partner API"). The
+    // run's own fakes serve the partner API too, so a CLI that ignored the file would succeed and
+    // show only in their requests.
     [TestCase(false)]
     [TestCase(true)]
     public async Task A_partner_customer_command_calls_the_partner_api_address_in_credentials_json_whichever_source_supplies_the_token(bool tokenFromEnvironment)
@@ -141,11 +107,8 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 20. A list reads every page, 200 items at a time, the most the API returns, and
-    // prints once all are read (spec/cli-surface.md "Output", "Calls per command"). The fake
-    // serves two customers to a page, so five customers take three pages, and a CLI that stopped
-    // after the first page would print two. The list takes no filter options, so it sends nothing
-    // else.
+    // Example 20. The fake serves two customers a page, so five take three pages. The list takes no
+    // filter options, so page and per_page are its whole query ("Output").
     [Test]
     public async Task Partner_customer_list_reads_every_page_and_prints_the_customers_as_a_customer_list()
     {
@@ -169,8 +132,7 @@ public class PartnerCommandTests
         });
     }
 
-    // Partner customer commands print the Enclave.Sdk.Api model unchanged, so field names match the
-    // API (AGENTS.md "CLI contract"); the body carries every CustomerModel field.
+    // The body carries every CustomerModel field, so one the CLI drops or renames shows.
     [Test]
     public async Task Partner_customer_show_prints_the_customer_as_the_api_returns_it()
     {
@@ -189,8 +151,7 @@ public class PartnerCommandTests
         });
     }
 
-    // Names match whole, ignoring case ("Names and IDs"). The customer named is the second in the
-    // list, so a lookup that took the first customer shows Initech.
+    // The customer named is second in the list, so a lookup that took the first shows Initech.
     [TestCase(TestData.CustomerName)]
     [TestCase("GLOBEX LTD")]
     [TestCase("globex ltd")]
@@ -204,8 +165,7 @@ public class PartnerCommandTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.PartnerPath("customers")}", $"GET {TestData.CustomerPath(TestData.CustomerOrgId)}" }));
     }
 
-    // A name that matches no customer exits 2 invalid_argument with an empty candidates list, and a
-    // part of a name is no match ("Names and IDs", "Errors and exit codes"). Only the lookup is sent.
+    // A part of a name is no match ("Names and IDs").
     [TestCase("Globex")]
     [TestCase("Globex Ltd.")]
     [TestCase("Umbrella Corp")]
@@ -223,9 +183,8 @@ public class PartnerCommandTests
         });
     }
 
-    // A name that matches several customers exits 2 with the matches as { id, name }, so the caller
-    // can choose one by --org-id without another call ("Errors and exit codes"). The customer that
-    // does not match is not a candidate.
+    // The candidates let the caller choose by --org-id without another call ("Errors and exit
+    // codes"). The customer that does not match is not one.
     [Test]
     public async Task A_customer_name_that_matches_several_customers_exits_2_with_them_as_candidates()
     {
@@ -250,8 +209,7 @@ public class PartnerCommandTests
         });
     }
 
-    // The lookup reads the whole customer list, every page of it ("Names and IDs"). The customer
-    // named is the last of five, on the third page the fake serves.
+    // The customer named is the last of five, on the third page the fake serves.
     [Test]
     public async Task The_customer_lookup_reads_every_page_of_the_customer_list()
     {
@@ -270,12 +228,8 @@ public class PartnerCommandTests
         });
     }
 
-    // A create sends every field of the API's CustomerCreateModel, with the partner portal's values
-    // for the flags left out: 50 systems, 0 gateways, and no discount request, hard limit or
-    // auto-sync; the owner, domain and contact go as null (spec/cli-surface.md "Command
-    // options", the create table). The body holds exactly the model's fields, so a field left out
-    // of the body fails the check as well as a field the model does not have, and null is told
-    // apart from an empty text.
+    // The values for flags left out are the create table's ("Command options"). Raw JSON is
+    // compared so null is told apart from an empty string.
     [Test]
     public async Task Partner_customer_create_sends_every_field_with_the_portal_values_for_the_flags_left_out()
     {
@@ -304,9 +258,8 @@ public class PartnerCommandTests
         });
     }
 
-    // Each create flag of spec/cli-surface.md "Command options" is given alone, and sets its
-    // field of the create table. 2 systems and 0 gateways are the smallest counts the API accepts
-    // (portal CustomerCreateModelValidator.cs).
+    // 2 systems and 0 gateways are the smallest counts the API accepts (portal
+    // CustomerCreateModelValidator).
     [TestCase("--owner", "it@initech.example", "ownerEmail", "\"it@initech.example\"")]
     [TestCase("--domain", "initech.example", "domain", "\"initech.example\"")]
     [TestCase("--contact", "Peter Gibbons", "contactName", "\"Peter Gibbons\"")]
@@ -331,8 +284,7 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 85: a customer for about 20 systems and a gateway, owned by its IT lead, with the
-    // partner's staff kept as admins.
+    // Example 85.
     [Test]
     public async Task Partner_customer_create_example_sends_the_owner_domain_counts_and_auto_sync()
     {
@@ -356,11 +308,8 @@ public class PartnerCommandTests
         });
     }
 
-    // An update sends only the fields given (spec/cli-surface.md "Create and update"). --systems
-    // sets LicensedAgentsCount and --gateways LicensedGatewaysCount (portal
-    // CustomerPatchModelValidator.cs:14-16), and each --no- flag sends false. Enclave.Sdk.Api keys a
-    // PATCH body by the model's property names (PatchClient.Set), and the API reads names
-    // ignoring case, so the names are compared ignoring case.
+    // Enclave.Sdk.Api keys a PATCH body by the model's property names (PatchClient.Set) and the API
+    // reads them ignoring case, so names are compared ignoring case.
     [TestCase("--name", "Globex Limited", "Name", "\"Globex Limited\"")]
     [TestCase("--contact", "Jo Bloggs", "ContactName", "\"Jo Bloggs\"")]
     [TestCase("--systems", "2", "LicensedAgentsCount", "2")]
@@ -411,9 +360,7 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 86. convert puts the billing period it is given, one of the periods the API accepts
-    // (spec/cli-surface.md "Command options"; portal ConvertCustomerModelValidator.cs:13-17), as
-    // ConvertCustomerModel.BillingPeriodMonths.
+    // Example 86. The cases are the periods the API accepts (portal ConvertCustomerModelValidator).
     [TestCase("1")]
     [TestCase("12")]
     [TestCase("24")]
@@ -437,8 +384,8 @@ public class PartnerCommandTests
         });
     }
 
-    // The API returns the owners and admins in one body, with no pages (CustomersClient.GetAdminsAsync,
-    // Enclave.Sdk.Api), and the CLI prints them as an admin list ("Output").
+    // The API returns the owners and admins in one body, with no pages (Enclave.Sdk.Api
+    // CustomersClient.GetAdminsAsync).
     [Test]
     public async Task Partner_customer_list_admins_prints_the_admins_as_an_admin_list()
     {
@@ -454,9 +401,8 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 65. add-admin takes the partner user's account ID (spec/cli-surface.md "Names and
-    // IDs") and puts it in the route, with no body (portal CustomersController.cs,
-    // AddCustomerAdmins). It prints the admin the API returns.
+    // Example 65. The account goes in the route, with no body (portal
+    // CustomersController.AddCustomerAdmins).
     [Test]
     public async Task Partner_customer_add_admin_puts_the_account_and_prints_the_admin()
     {
@@ -475,9 +421,8 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 34. remove-admin takes the admin's email address, looked up in the customer's admins,
-    // matching whole and ignoring case ("Names and IDs"). The admin is the second the lookup reads,
-    // after the owner, so a lookup that took the first removes the owner.
+    // Example 34. The match ignores case ("Names and IDs"). The admin comes after the owner, so a
+    // lookup that took the first admin removes the owner.
     [TestCase(TestData.CustomerAdminEmail)]
     [TestCase("ALEX@Example.COM")]
     public async Task Partner_customer_remove_admin_looks_the_email_up_in_the_customer_admins(string email)
@@ -498,7 +443,6 @@ public class PartnerCommandTests
         });
     }
 
-    // --user-id gives the account ID and makes no lookup ("Names and IDs").
     [Test]
     public async Task Partner_customer_remove_admin_with_user_id_removes_the_account_without_a_lookup()
     {
@@ -514,8 +458,6 @@ public class PartnerCommandTests
         });
     }
 
-    // An email address no admin has matches nothing, which exits 2 invalid_argument with no
-    // candidates ("Errors and exit codes"), and nothing is removed.
     [Test]
     public async Task Partner_customer_remove_admin_given_an_email_no_admin_has_exits_2_with_no_candidates()
     {
@@ -531,9 +473,8 @@ public class PartnerCommandTests
         });
     }
 
-    // The API returns the pending invites in one body, with no pages
-    // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api), and the CLI prints them as an
-    // invite list ("Output").
+    // The API returns the pending invites in one body, with no pages (Enclave.Sdk.Api
+    // CustomersClient.GetPendingInvitesAsync).
     [Test]
     public async Task Partner_customer_list_invites_prints_the_pending_invites_as_an_invite_list()
     {
@@ -549,8 +490,7 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 66. The API takes the invite as { emailAddress } (CreateCustomerAdminInviteModel), and
-    // the CLI prints the invite it returns.
+    // Example 66. The body is CreateCustomerAdminInviteModel.
     [Test]
     public async Task Partner_customer_invite_posts_the_email_address_and_prints_the_invite()
     {
@@ -571,11 +511,9 @@ public class PartnerCommandTests
         });
     }
 
-    // The partner API cancels an invite by its ID, so the CLI looks the email address up in the
-    // customer's invites, matching whole and ignoring case (spec/cli-surface.md "Partner API",
-    // "Names and IDs"). Sam's invite is the second the lookup reads, so a lookup that took the first
-    // cancels Kim's. The API answers with the invite's email address and a null ID, and
-    // Enclave.Sdk.Api gives the cancelled invite the ID it sent (CustomersClient.CancelInviteAsync).
+    // The partner API cancels an invite by its ID ("Partner API"). Sam's invite comes second, so a
+    // lookup that took the first cancels Kim's. The API answers with a null ID, and Enclave.Sdk.Api
+    // fills in the ID it sent (CustomersClient.CancelInviteAsync).
     [TestCase(TestData.CustomerInviteEmail)]
     [TestCase("SAM@GLOBEX.example")]
     public async Task Partner_customer_cancel_invite_looks_the_email_up_and_deletes_that_invite(string email)
@@ -596,8 +534,6 @@ public class PartnerCommandTests
         });
     }
 
-    // An address with no pending invite matches nothing, which exits 2 invalid_argument with no
-    // candidates, and nothing is cancelled.
     [Test]
     public async Task Partner_customer_cancel_invite_for_an_address_with_no_pending_invite_exits_2_with_no_candidates()
     {
@@ -613,9 +549,8 @@ public class PartnerCommandTests
         });
     }
 
-    // Example 65. Auto-sync changes through a route of its own for each direction, with no body
-    // (spec/cli-surface.md "Command options"; portal CustomersController.cs, EnableAutoSync and
-    // DisableAutoSync), and the CLI prints the customer the API returns.
+    // Example 65. Each route takes no body (portal CustomersController.EnableAutoSync and
+    // DisableAutoSync).
     [TestCase("enable-auto-sync")]
     [TestCase("disable-auto-sync")]
     public async Task Partner_customer_auto_sync_commands_put_to_their_own_route_and_print_the_customer(string verb)
@@ -635,10 +570,9 @@ public class PartnerCommandTests
         });
     }
 
-    // Partner customer commands exit 5 for an unknown customer ("Several IDs"). For a customer the
-    // partner does not have, the auto-sync routes answer 204 with no body (portal
-    // CustomersController.cs, EnableAutoSync and DisableAutoSync; CustomersClient.SetAutoSyncAsync,
-    // Enclave.Sdk.Api), where the other routes answer 404.
+    // For a customer the partner does not have, the auto-sync routes answer 204 with no body where
+    // the other routes answer 404 (portal CustomersController.EnableAutoSync; Enclave.Sdk.Api
+    // CustomersClient.SetAutoSyncAsync).
     [TestCase("enable-auto-sync")]
     [TestCase("disable-auto-sync")]
     public async Task Partner_customer_auto_sync_for_a_customer_the_partner_does_not_have_exits_5(string verb)
@@ -654,9 +588,8 @@ public class PartnerCommandTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { $"PUT {path}" }));
     }
 
-    // Every partner customer command that acts on a customer is a single-ID command, which exits 5
-    // when the API answers 404 for its customer ("Several IDs"). The customer's first call is the
-    // one that fails, and nothing follows it.
+    // A command that acts on a customer is a single-ID command ("Several IDs"). Its first call
+    // fails, and nothing follows.
     [TestCaseSource(nameof(CommandsForAnUnknownCustomer))]
     public async Task A_partner_customer_command_exits_5_when_the_partner_api_does_not_know_the_customer(string[] args, string firstCall)
     {
@@ -671,8 +604,7 @@ public class PartnerCommandTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { firstCall }));
     }
 
-    // The partner examples of spec/cli-surface.md ("Examples" 20, 34, 65, 66, 85 and 86), each
-    // command written as the specification writes it, with the call it ends with.
+    // spec/cli-surface.md "Examples" 20, 34, 65, 66, 85 and 86, written as the spec writes them.
     [TestCaseSource(nameof(Examples))]
     public async Task The_partner_examples_in_the_specification_send_their_calls(string[] args, string lastCall)
     {
@@ -688,12 +620,6 @@ public class PartnerCommandTests
         });
     }
 
-    // Nouns are singular, and a plural name is a hidden alias for one (spec/cli-surface.md
-    // "Shape and naming"), so an agent that guesses the plural reaches the same command: the same
-    // calls and the same output.
-    [TestCase("partners", "customer", "list")]
-    [TestCase("partner", "customers", "list")]
-    [TestCase("partners", "customers", "list")]
     [TestCase("partner", "customers", "show", TestData.CustomerName)]
     [TestCase("partner", "customers", "add-admin", TestData.CustomerName, "--user-id", TestData.PartnerStaffAccountId)]
     public async Task Plural_nouns_run_the_singular_partner_customer_command(params string[] args)
@@ -716,8 +642,7 @@ public class PartnerCommandTests
         });
     }
 
-    // A CLI that answered any words after "partner" the same way would pass the test above. The alias
-    // runs the singular command, so it applies that command's argument checks as well.
+    // A CLI that answered any words after "partner" the same way would pass the test above.
     [Test]
     public async Task A_plural_noun_applies_the_argument_checks_of_the_singular_command()
     {
@@ -740,12 +665,10 @@ public class PartnerCommandTests
         CliAssert.Rejected(run, result);
     }
 
-    // The partner's own properties, users and invites, and listing partners, need scopes a personal
-    // access token cannot carry, and the partner API's countries, referlink and customer
-    // oldest-version routes serve the partner portal's screens; the CLI has no commands for them
-    // (spec/cli-surface.md "Left out", "Partner API"). A noun's own parts take hyphenated verbs
-    // in place of another level ("Shape and naming"), so the customer admin, invite and auto-sync
-    // sub-nouns do not exist either. Each of these is an unknown command.
+    // Personal access tokens cannot carry the scopes for the partner's own properties, users and
+    // invites, and countries, referlink and oldest-version serve the partner portal's screens
+    // (spec/cli-surface.md "Left out", "Partner API"). A noun's parts take hyphenated verbs, so
+    // there are no sub-nouns ("Shape and naming").
     [TestCase("partner", "list")]
     [TestCase("partner", "show")]
     [TestCase("partner", "update", "--name", "Acme Partners")]
@@ -782,12 +705,8 @@ public class PartnerCommandTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
     }
 
-    // An empty or blank address names no admin and no invite, so --user and --email given one exit 2
-    // invalid_argument with the other argument checks, keyed by the option, before the token is
-    // read and before any call, the customer lookup included ("Errors and exit codes": arguments,
-    // then the token, then the call). The run has no token, so a CLI that checked the token first
-    // would exit 3; the customer is given by name, so a CLI that looked it up first would show the
-    // call.
+    // The run has no token, so a CLI that checked the token first exits 3, and the customer is given
+    // by name, so a CLI that looked it up first shows the call ("Errors and exit codes").
     [TestCase("remove-admin", "--user", "")]
     [TestCase("remove-admin", "--user", "   ")]
     [TestCase("invite", "--email", "")]
@@ -805,15 +724,9 @@ public class PartnerCommandTests
         Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(option), result.ToString());
     }
 
-    // An empty or blank name names no customer. Given for the customer a command acts on, it would
-    // cost the customer lookup and match nothing; given to create or to update --name, it would
-    // reach the API, which refuses a blank name (portal
-    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:19
-    // and CustomerPatchModelValidator.cs:10, NotEmpty, which FluentValidation fails for a string
-    // that is empty or white space). Each exits 2 invalid_argument with the other argument checks,
-    // keyed by the argument or option, before the token is read and before any call ("Errors and
-    // exit codes": arguments, then the token, then the call). The run has no token, so a CLI that
-    // checked the token first would exit 3.
+    // A blank name would cost the customer lookup and match nothing, or reach the API, which refuses
+    // it (portal CustomerCreateModelValidator and CustomerPatchModelValidator, NotEmpty). The run
+    // has no token, so a CLI that checked the token first exits 3.
     [TestCase("customer", "show", "")]
     [TestCase("customer", "show", "   ")]
     [TestCase("customer", "convert", " \t ", "--billing-months", "12")]
@@ -832,17 +745,10 @@ public class PartnerCommandTests
         Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(key), result.ToString());
     }
 
-    // An empty or blank --owner, --domain or --contact names no owner, domain or contact. Sent as
-    // given, the API refuses a blank owner (portal
-    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:20,
-    // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
-    // 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid) and stores a blank domain or contact as
-    // the customer's (same file, 23 and 48, and Handlers/CreateCustomerHandler.cs:71 and 76), where
-    // the create table gives null for a flag left out ("Command options"). Each exits 2
-    // invalid_argument with the other argument checks, keyed by the option, before the token is
-    // read and before any call, so the run with a token and the run without one give the same error
-    // ("Errors and exit codes"). A CLI that sent the value makes the create call in the run with a
-    // token, and one that checked the token first exits 3 in the run without.
+    // Sent as given, a blank owner is refused (portal CustomerCreateModelValidator, EmailAddress;
+    // FluentValidation 11.9.0 AspNetCoreCompatibleEmailValidator) and a blank domain or contact is
+    // stored (CreateCustomerHandler), where a flag left out sends null. A CLI that sent the value
+    // makes the call in the run with a token; one that checked the token first exits 3 without.
     [TestCase("--owner", "")]
     [TestCase("--owner", "   ")]
     [TestCase("--domain", "")]
@@ -868,10 +774,7 @@ public class PartnerCommandTests
         });
     }
 
-    // A command that acts on a customer needs one, by name or by --org-id (spec/cli-surface.md
-    // "Commands"). CliRun sets ENCLAVE_ORG_ID, which chooses the organisation that organisation
-    // commands act within; partner commands use the partner ("Context"), so it does not stand in
-    // for the customer.
+    // CliRun sets ENCLAVE_ORG_ID, which must not stand in for the customer ("Context").
     [TestCaseSource(nameof(CommandsWithoutTheCustomer))]
     public async Task A_customer_command_without_a_customer_exits_2_invalid_argument(string[] rejected, string[] corrected)
     {
@@ -881,8 +784,7 @@ public class PartnerCommandTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
     }
 
-    // A name with its ID option contradict each other and exit 2 (spec/cli-surface.md
-    // "Details"): the command cannot tell which customer is meant.
+    // The command cannot tell which customer is meant ("Details").
     [TestCaseSource(nameof(CommandsWithNameAndOrgId))]
     public async Task A_customer_name_with_org_id_exits_2_invalid_argument(string[] rejected, string[] corrected)
     {
@@ -892,9 +794,6 @@ public class PartnerCommandTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
     }
 
-    // --dry-run applies to commands that change something through the API, and an option a command
-    // does not take is unknown to it and exits 2 (spec/cli-surface.md "Options on every
-    // command", "Details").
     [TestCaseSource(nameof(ReadsWithDryRun))]
     public async Task Dry_run_is_an_unknown_option_on_a_partner_customer_command_that_only_reads(string[] rejected, string[] corrected)
     {
@@ -926,8 +825,8 @@ public class PartnerCommandTests
         Commands.Where(command => command.TakesCustomer)
             .Select(command => new TestCaseData(command.ByOrgId(TestData.CustomerOrgId), command.Calls(byName: false)).SetArgDisplayNames(Display(command.ByOrgId(TestData.CustomerOrgId))));
 
-    // The first call each command makes for a customer given by --org-id: the admins or invites
-    // read for a command that looks one up, and the command's own call for the rest.
+    // The first call for a customer given by --org-id is the admins or invites read where the
+    // command looks one up.
     private static IEnumerable<TestCaseData> CommandsForAnUnknownCustomer() =>
         Commands.Where(command => command.TakesCustomer)
             .Select(command => new TestCaseData(command.ByOrgId(TestData.CustomerOrgId), command.Calls(byName: false)[0]).SetArgDisplayNames(Display(command.ByOrgId(TestData.CustomerOrgId))));
@@ -960,8 +859,7 @@ public class PartnerCommandTests
 
     private static IEnumerable<TestCaseData> BadArguments()
     {
-        // convert requires --billing-months, one of the periods the API accepts, so the command
-        // states the billing period it commits to (spec/cli-surface.md "Command options").
+        // convert requires --billing-months, so the command states the period it commits to.
         yield return Pair(ForCustomer("convert"), ForCustomer("convert", "--billing-months", "12"));
 
         foreach (var months in InvalidBillingMonths)
@@ -969,40 +867,34 @@ public class PartnerCommandTests
             yield return Pair(ForCustomer("convert", "--billing-months", months), ForCustomer("convert", "--billing-months", "12"));
         }
 
-        // create requires the new customer's name, and --systems is at least 2 (the create table of
-        // "Command options"). Counts are whole numbers.
+        // --systems is at least 2, and counts are whole numbers ("Command options").
         yield return Pair(Line("create"), Line("create", TestData.NewCustomerName));
         yield return Pair(Line("create", TestData.NewCustomerName, "--systems", "1"), Line("create", TestData.NewCustomerName, "--systems", "2"));
         yield return Pair(Line("create", TestData.NewCustomerName, "--systems", "0"), Line("create", TestData.NewCustomerName, "--systems", "2"));
         yield return Pair(Line("create", TestData.NewCustomerName, "--systems", "two"), Line("create", TestData.NewCustomerName, "--systems", "2"));
         yield return Pair(Line("create", TestData.NewCustomerName, "--gateways", "one"), Line("create", TestData.NewCustomerName, "--gateways", "1"));
 
-        // update --systems is at least 2 ("Command options"). Auto-sync changes only through
-        // enable-auto-sync and disable-auto-sync, which have their own API routes, and the owner is
-        // set at create only, so neither is an update flag.
+        // Auto-sync has its own routes and the owner is set at create only, so neither is an update
+        // flag.
         yield return Pair(ForCustomer("update", "--systems", "1"), ForCustomer("update", "--systems", "2"));
         yield return Pair(ForCustomer("update", "--systems", "30", "--auto-sync"), ForCustomer("update", "--systems", "30"));
         yield return Pair(ForCustomer("update", "--systems", "30", "--owner", "it@initech.example"), ForCustomer("update", "--systems", "30"));
 
-        // An update with no change flag, and flags that contradict each other, exit 2 ("Details").
+        // No change, and options that contradict each other ("Details").
         yield return Pair(ForCustomer("update"), ForCustomer("update", "--systems", "30"));
         yield return Pair(ForCustomer("update", "--industry-discount", "--no-industry-discount"), ForCustomer("update", "--industry-discount"));
         yield return Pair(ForCustomer("update", "--hard-limit", "--no-hard-limit"), ForCustomer("update", "--hard-limit"));
         yield return Pair(ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail, "--user-id", TestData.PartnerStaffAccountId), ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail));
 
-        // add-admin takes the account by --user-id only: the account is a partner user, and listing
-        // partner users needs a scope personal access tokens cannot carry ("Names and IDs").
+        // add-admin takes --user-id only: looking up a partner user needs a scope personal access
+        // tokens cannot carry ("Names and IDs").
         yield return Pair(ForCustomer("add-admin", "--user", TestData.CustomerAdminEmail), ForCustomer("add-admin", "--user-id", TestData.PartnerStaffAccountId));
         yield return Pair(ForCustomer("add-admin"), ForCustomer("add-admin", "--user-id", TestData.PartnerStaffAccountId));
 
-        // The admin to remove and the address to invite or cancel are part of each command
-        // ("Commands"); without them the command has nothing to act on.
         yield return Pair(ForCustomer("remove-admin"), ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail));
         yield return Pair(ForCustomer("invite"), ForCustomer("invite", "--email", TestData.CustomerInviteEmail));
         yield return Pair(ForCustomer("cancel-invite"), ForCustomer("cancel-invite", "--email", TestData.CustomerInviteEmail));
 
-        // An empty or blank address names nobody, so it is no address at all, and an empty or blank
-        // domain or contact name is no domain or name.
         foreach (var blank in new[] { string.Empty, " " })
         {
             yield return Pair(ForCustomer("remove-admin", "--user", blank), ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail));
@@ -1013,16 +905,14 @@ public class PartnerCommandTests
             yield return Pair(Line("create", TestData.NewCustomerName, "--contact", blank), Line("create", TestData.NewCustomerName, "--contact", "Peter Gibbons"));
         }
 
-        // Anything a partner customer command needs besides the customer is a named option
-        // ("Commands"), so a second positional argument is an error.
+        // Anything besides the customer is a named option ("Commands").
         yield return Pair(ForCustomer("add-admin", TestData.PartnerStaffAccountId), ForCustomer("add-admin", "--user-id", TestData.PartnerStaffAccountId));
         yield return Pair(ForCustomer("remove-admin", TestData.CustomerAdminEmail), ForCustomer("remove-admin", "--user", TestData.CustomerAdminEmail));
         yield return Pair(ForCustomer("invite", TestData.CustomerInviteEmail), ForCustomer("invite", "--email", TestData.CustomerInviteEmail));
         yield return Pair(ForCustomer("cancel-invite", TestData.CustomerInviteEmail), ForCustomer("cancel-invite", "--email", TestData.CustomerInviteEmail));
 
-        // The CLI has no --yes, --from-file, --template, -o, --all or --token (AGENTS.md "CLI contract"),
-        // --limit is on log only, and partner customer list takes no filter options ("Command
-        // options").
+        // Options the CLI does not have (AGENTS.md "CLI contract"); --limit is on log only, and the
+        // list takes no filters.
         yield return Pair(ForCustomer("convert", "--billing-months", "12", "--yes"), ForCustomer("convert", "--billing-months", "12"));
         yield return Pair(Line("create", TestData.NewCustomerName, "--from-file", "customer.json"), Line("create", TestData.NewCustomerName));
         yield return Pair(Line("create", TestData.NewCustomerName, "--template"), Line("create", TestData.NewCustomerName));
@@ -1035,9 +925,8 @@ public class PartnerCommandTests
         yield return Pair(ForCustomer("show", "--no-such-option"), ForCustomer("show"));
     }
 
-    // The JSON of a printed model and of the body the fake served are compared as values, so the
-    // check holds whatever the indentation, and a field the model does not read, or reads into the
-    // wrong type, shows as a difference.
+    // Compared as values, so indentation does not matter and a field the model drops or retypes
+    // shows.
     private static bool Unchanged(JsonElement printed, string body) =>
         JsonElement.DeepEquals(printed, JsonRead.Parse(body));
 
@@ -1061,9 +950,7 @@ public class PartnerCommandTests
     };
 
     /// <summary>
-    /// One partner customer command: its verb, whether it acts on a customer, whether it changes
-    /// something, its options, and the call it makes for the test customer, with the admins or
-    /// invites read it makes first when it looks one up.
+    /// One partner customer command. LookupPath is the admins or invites read made before its call.
     /// </summary>
     internal sealed record CustomerCommand(string Verb, bool TakesCustomer, bool Changes, IReadOnlyList<string> Options, string Method, string Path, string? LookupPath = null)
     {
@@ -1074,8 +961,7 @@ public class PartnerCommandTests
         public string[] WithoutCustomer() => Build();
 
         /// <summary>
-        /// The calls the command makes, as "METHOD path": the customer list first when the customer
-        /// is given by name, then the lookup read, then its own call.
+        /// The calls the command makes, as "METHOD path".
         /// </summary>
         public string[] Calls(bool byName)
         {

@@ -5,11 +5,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// An agent decides what to do next from the exit code and the "code" of the one JSON error on
-// stderr, so each API failure maps to a fixed exit code and code (spec/cli-surface.md "Errors
-// and exit codes"). On every error stdout is empty and stderr holds exactly one line, a JSON object
-// with an "error" object (CliAssert.Failed checks both), so a caller never parses a partial result
-// and nothing but the error reaches stderr without --verbose.
+// An agent decides what to do next from the exit code and the error's "code", so each API failure
+// maps to fixed ones (spec/cli-surface.md "Errors and exit codes"). CliAssert.Failed also checks
+// that stdout is empty and stderr holds one JSON error.
 public class ErrorTests
 {
     private const string ValidationError = "The search term must be 100 characters or fewer.";
@@ -28,15 +26,9 @@ public class ErrorTests
 
     private static readonly string[] IdOptionOnly = ["--id"];
 
-    // An --until that has passed exits 2 too ("Details"), so the bad arguments run on a clock fixed
-    // before the --until they give, which keeps "--for with --until" a contradiction whatever the
-    // date.
-    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2030, 3, 14, 20, 0, 0, TimeSpan.Zero), TestData.LocalZone);
-
-    // The items are given by ID, or are an invite's email address, which the API cancels by
-    // (OrganisationScopedClient.CancelInviteAync, Enclave.Sdk.Api), so no lookup comes first
-    // and the request that fails is the command's own ("Several IDs": single-ID commands are show, update,
-    // --for and --until, dns delete-zone, org remove-user and org cancel-invite).
+    // Each item is an ID, or an invite's email address, which the API cancels by (Enclave.Sdk.Api
+    // OrganisationScopedClient.CancelInviteAync), so no lookup comes first and the failing request
+    // is the command's own ("Several IDs").
     public static IEnumerable<TestCaseData> SingleIdCommands()
     {
         yield return SingleId("system show ABCDE", "GET", "systems/ABCDE");
@@ -63,21 +55,15 @@ public class ErrorTests
         yield return CommandCases.Described("--id with no IDs", "policy", "delete", "--id", ",");
     }
 
-    // Each bulk command whose IDs go after --id, given an empty value, a lone comma, and commas
-    // around spaces: none holds an ID.
+    // None of these values holds an ID.
     public static IEnumerable<TestCaseData> EmptyIdOptions() =>
         BulkCommand.All
             .Where(command => command.TakesIdOption)
             .SelectMany(command => new[] { string.Empty, ",", " , " }
                 .Select(value => new TestCaseData(command, value).SetArgDisplayNames(command.Name, $"--id \"{value}\"")));
 
-    // Enclave.Sdk.Api throws EnclaveApiException for application/problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29). The error carries the
-    // problem's status, title and detail through, so the caller sees what the API said. A list is
-    // not a single-ID command, so a 404 on one is an API error like any other status the table does
-    // not name. The error object holds exactly code, status, title, detail and errors (AGENTS.md
-    // "CLI contract"), and errors is an object when the problem has no field errors, as here, so a
-    // caller reads every error in one shape.
+    // A list is not a single-ID command, so its 404 is api_error. errors is an object even when the
+    // problem has none, so a caller reads every error in one shape (AGENTS.md "CLI contract").
     [TestCase(401, "token_invalid")]
     [TestCase(403, "forbidden")]
     [TestCase(429, "transient")]
@@ -110,8 +96,7 @@ public class ErrorTests
         });
     }
 
-    // not_found tells the caller the item it named does not exist, so a 404 on a command given one
-    // ID exits 5 ("Several IDs": single-ID commands exit 5 for an unknown ID).
+    // not_found tells the caller the item it named does not exist ("Several IDs").
     [TestCaseSource(nameof(SingleIdCommands))]
     public async Task A_problem_404_on_a_single_id_command_exits_5_with_not_found(string command, string method, string path)
     {
@@ -131,9 +116,8 @@ public class ErrorTests
         });
     }
 
-    // Validation failures list the offending fields in the problem's "errors" (an RFC 9457
-    // extension member, which Enclave.Sdk.Api reads into ProblemDetails.Errors). The CLI
-    // passes them through with their keys unchanged, so an agent can fix the named field.
+    // "errors" is an RFC 9457 extension member that Enclave.Sdk.Api reads into
+    // ProblemDetails.Errors. Its keys pass through unchanged, so an agent can fix the named field.
     [Test]
     public async Task A_validation_problem_exits_1_with_api_error_carrying_the_errors_through()
     {
@@ -164,10 +148,9 @@ public class ErrorTests
         });
     }
 
-    // A response that is not problem+json reaches the CLI as HttpRequestException with the status
-    // code (Enclave.Sdk.Api throws EnclaveApiException only for problem+json,
-    // ProblemDetailsHttpMessageHandler.cs:29). A proxy in front of the API answers this way, and the
-    // CLI maps these statuses to the same codes ("Errors and exit codes").
+    // A proxy in front of the API answers this way. Enclave.Sdk.Api throws EnclaveApiException
+    // only for problem+json (ProblemDetailsHttpMessageHandler), so these reach the CLI as
+    // HttpRequestException.
     [TestCase(401, "text/plain", "Unauthorized", "token_invalid")]
     [TestCase(401, "application/json", """{ "message": "Unauthorized" }""", "token_invalid")]
     [TestCase(403, "text/plain", "Forbidden", "forbidden")]
@@ -215,13 +198,10 @@ public class ErrorTests
         CliAssert.Failed(result, "transient");
     }
 
-    // A timeout is transient: the API may answer the next request in time ("Errors and exit
-    // codes"). When HttpClient.Timeout elapses, HttpClient throws a TaskCanceledException whose
-    // inner exception is a TimeoutException (.NET 5 and later,
-    // https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.timeout). A fake API on
-    // loopback cannot keep HttpClient waiting 100 seconds, so the network beneath the CLI's handler
-    // throws that exception for the request, and the fake API receives nothing. detail is the
-    // timeout's own, which sets this failure apart from the other transient ones.
+    // HttpClient.Timeout throws TaskCanceledException with an inner TimeoutException (.NET 5 and
+    // later, https://learn.microsoft.com/dotnet/api/system.net.http.httpclient.timeout). A loopback
+    // fake cannot keep HttpClient waiting 100 seconds, so the network beneath the CLI's handler
+    // throws it. detail sets a timeout apart from the other transient failures.
     [Test]
     public async Task A_request_that_times_out_exits_6_with_transient()
     {
@@ -242,15 +222,11 @@ public class ErrorTests
         });
     }
 
-    // A connection that fails while the response body is read is a network failure as much as one
-    // refused before any response, and retrying can succeed, so it is transient ("Errors and exit
-    // codes"). The fake answers with headers that promise 1000 bytes of body and sends 10, then
-    // ends the connection: with a FIN, as a server or proxy that stops part-way through does, or
-    // with a RST, as a dropped connection does. Enclave.Sdk.Api reads a page with
-    // HttpClient.GetFromJsonAsync, which returns from SendAsync once the headers arrive and reads
-    // the body after (HttpCompletionOption.ResponseHeadersRead), so the failure comes from the body
-    // read, outside the HttpRequestException that SendAsync throws for a connection that fails
-    // first.
+    // The fake promises 1000 bytes of body, sends 10, then ends the connection with a FIN (a server
+    // that stops part-way) or a RST (a dropped connection). Enclave.Sdk.Api reads a page with
+    // HttpClient.GetFromJsonAsync, which reads the body after the headers arrive
+    // (HttpCompletionOption.ResponseHeadersRead), so this failure escapes the HttpRequestException
+    // that SendAsync throws.
     [TestCase("ends early")]
     [TestCase("is reset")]
     public async Task A_connection_that_fails_while_the_response_body_is_read_exits_6_with_transient(string connection)
@@ -265,11 +241,8 @@ public class ErrorTests
         Assert.That(api.Requests, Is.EqualTo(new[] { $"GET {SystemsPath}" }));
     }
 
-    // "Several IDs": a command that takes several items is given them as arguments, after --id, or
-    // as a list on stdin, and only "-" with an empty list succeeds with nothing to do, so a pipeline
-    // fed by an empty list succeeds. An --id that holds no ID names nothing, as a command given no
-    // items does, so it exits 2 before any call. The corrected run proves the command and option
-    // exist and that the rejection withheld the bulk call.
+    // Only "-" with an empty list succeeds with nothing to do ("Several IDs"). The corrected run
+    // shows the command and option exist and the rejection withheld the bulk call.
     [TestCaseSource(nameof(EmptyIdOptions))]
     public async Task A_bulk_command_given_an_id_option_with_no_ids_exits_2_and_sends_nothing(BulkCommand command, string value)
     {
@@ -288,17 +261,14 @@ public class ErrorTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
-    // Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2),
-    // then the call ("Errors and exit codes"). Bad arguments fail the same way with or without a
-    // token and an organisation, so the second run has neither, and with neither the CLI makes no
-    // organisation lookup.
+    // Arguments are checked before the token and the organisation ("Errors and exit codes").
     [TestCaseSource(nameof(BadArguments))]
     public async Task Bad_arguments_fail_the_same_way_with_or_without_a_token_and_organisation(string[] args)
     {
         using var withContext = CliRun.Start();
         using var withoutContext = CliRun.Start();
-        withContext.Time = Clock;
-        withoutContext.Time = Clock;
+        withContext.Time = TestData.Clock;
+        withoutContext.Time = TestData.Clock;
         withoutContext.Environment.Remove("ENCLAVE_TOKEN");
         withoutContext.Environment.Remove("ENCLAVE_ORG_ID");
 
@@ -324,8 +294,7 @@ public class ErrorTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // A partner customer command calls the partner API once its checks pass ("Errors and exit
-    // codes"), so token_missing and no_partner with no request sent show those checks ran first.
+    // Checks run in the order arguments, token, partner, call ("Errors and exit codes").
     [Test]
     public async Task A_missing_token_is_reported_before_the_partner_is_chosen()
     {
@@ -347,8 +316,7 @@ public class ErrorTests
         CliAssert.Rejected(run, result, "no_partner");
     }
 
-    // The token sees two organisations and none is chosen ("Context"), so the lookup is the only
-    // call and the command's own is never sent.
+    // The token sees two organisations and none is chosen ("Context").
     [Test]
     public async Task An_organisation_that_was_not_chosen_is_reported_before_the_call()
     {

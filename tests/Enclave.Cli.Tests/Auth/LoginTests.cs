@@ -5,9 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// login checks a personal access token with one GetOrganisationsAsync call, saves it in
-// credentials.json, prints the organisations the token can see, and never prompts
-// (spec/cli-surface.md "Login, logout and status").
+// spec/cli-surface.md "Login, logout and status".
 public class LoginTests
 {
     private const string StdinToken = "stdin-token-51c2e8";
@@ -20,16 +18,14 @@ public class LoginTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile), which the
-    // CLI must not change (AGENTS.md "CLI contract"). The file can also hold partnerApiBaseUrl, which
-    // login keeps when it is there and never adds.
+    // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile). login keeps a
+    // partnerApiBaseUrl already there and never adds one.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
 
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
-    // Example 1 reads the token from a file, which ends in a newline, and a Windows pipe ends it
-    // with \r\n. login reads the token without the trailing newline, so neither the Authorization
-    // header nor the saved token carries it.
+    // Example 1 reads the token from a file, which ends in a newline; a Windows pipe ends it with
+    // \r\n.
     [Test]
     public async Task Login_token_stdin_checks_the_token_read_from_stdin_without_its_trailing_newline_and_saves_it()
     {
@@ -47,15 +43,10 @@ public class LoginTests
         });
     }
 
-    // A text file saved with a UTF-8 byte order mark starts with the bytes EF BB BF; Windows
-    // PowerShell 5.1 writes one with Out-File -Encoding utf8 (Microsoft Learn,
-    // about_Character_Encoding, PowerShell 5.1). A reader that decodes UTF-8 without looking for the
-    // mark passes it on as the character U+FEFF ahead of the token: Console.In does so for
-    // redirected stdin on Linux and macOS, where it reads with Console.InputEncoding, which has no
-    // preamble, and detectEncodingFromByteOrderMarks: false (dotnet/runtime release/10.0,
-    // src/libraries/System.Console/src/System/ConsolePal.Unix.cs, GetOrCreateReader and
-    // GetConsoleEncoding). StdinText is stdin as the CLI's reader gives it, so the test gives that
-    // character. The mark is no part of the token: login checks and saves the token without it.
+    // Windows PowerShell 5.1's Out-File -Encoding utf8 writes a byte order mark (Microsoft Learn,
+    // about_Character_Encoding), and on Linux and macOS Console.In passes it on as U+FEFF
+    // (dotnet/runtime release/10.0, ConsolePal.Unix.cs, GetOrCreateReader). StdinText is stdin as
+    // that reader gives it.
     [Test]
     public async Task Login_token_stdin_checks_and_saves_the_token_without_the_byte_order_mark_before_it()
     {
@@ -73,8 +64,7 @@ public class LoginTests
         });
     }
 
-    // With ENCLAVE_TOKEN set, login saves that token after one check, so a mistyped token is
-    // reported at login and never saved.
+    // The check reports a mistyped token at login, before it is saved.
     [Test]
     public async Task Login_checks_the_token_from_ENCLAVE_TOKEN_with_one_request_and_saves_it()
     {
@@ -90,8 +80,6 @@ public class LoginTests
         });
     }
 
-    // --token-stdin wins over ENCLAVE_TOKEN ("Login, logout and status"), so the token on stdin is
-    // the one checked and saved when ENCLAVE_TOKEN holds another.
     [Test]
     public async Task Login_token_stdin_takes_the_token_from_stdin_when_ENCLAVE_TOKEN_is_also_set()
     {
@@ -108,8 +96,7 @@ public class LoginTests
         });
     }
 
-    // credentials.json holds personalAccessToken and baseUrl, the file Enclave.Sdk.Api reads. With
-    // no file to keep a base URL from, login records the API address that accepted the token.
+    // With no file to keep a base URL from, login records the API address that accepted the token.
     [Test]
     public async Task Login_writes_credentials_json_holding_the_token_and_the_api_base_url()
     {
@@ -128,10 +115,8 @@ public class LoginTests
         });
     }
 
-    // login keeps an existing baseUrl, and ENCLAVE_TOKEN keeps the file's baseUrl ("Login, logout
-    // and status"), so a credentials.json pointing at another API address (a staging or self-hosted
-    // API) points there after login too. The second fake API proves the check went to the saved
-    // address, and the file proves the address was kept while the token was replaced.
+    // A credentials.json pointing at a staging or self-hosted API keeps pointing there after login
+    // ("Login, logout and status").
     [Test]
     public async Task Login_keeps_the_base_url_already_in_credentials_json_and_checks_the_token_there()
     {
@@ -156,10 +141,8 @@ public class LoginTests
         });
     }
 
-    // credentials.json can hold partnerApiBaseUrl beside baseUrl, and staging means setting both
-    // there (spec/cli-surface.md "Partner API"), so login keeps it as it keeps baseUrl: a login
-    // that rewrote the file without it would send the next partner command to production. The
-    // address is staging's, which no test calls.
+    // A login that dropped it would send the next partner command to production ("Partner API").
+    // No test calls the staging address.
     [Test]
     public async Task Login_keeps_the_partner_api_base_url_already_in_credentials_json()
     {
@@ -181,11 +164,9 @@ public class LoginTests
         });
     }
 
-    // The file holds a token that does not expire (portal
-    // Enclave.Accounts/Controllers/Api/TokensApiController.cs:105 issues personal access tokens with
-    // TimeSpan.MaxValue), so other local users must not read it. login asks the file store for a
-    // private write (AGENTS.md "Code"), the same request on every OS; Storage/DiskFileStoreTests.cs
-    // proves that a private write makes ~/.enclave 0700 and the file 0600 on Linux and macOS.
+    // The token does not expire (portal TokensApiController.Create issues it with TimeSpan.MaxValue),
+    // so other local users must not read it. Storage/DiskFileStoreTests proves what a private write
+    // does on disk.
     [Test]
     public async Task Login_writes_credentials_json_private_to_the_user()
     {
@@ -198,10 +179,9 @@ public class LoginTests
         Assert.That(run.Files.IsPrivate(run.CredentialsPath), Is.True);
     }
 
-    // login prints the organisations the token can see as an org list ("Login, logout and status",
-    // "Output"), so the caller learns which organisations the token reaches without a second call.
-    // The items are AccountOrganisationModel unchanged, and Enclave.Sdk.Api writes orgId as 32 hex
-    // digits (OrganisationGuid JSON converter, Enclave.Sdk.Api.Data).
+    // The caller learns which organisations the token reaches without a second call.
+    // Enclave.Sdk.Api writes orgId as 32 hex digits (Enclave.Sdk.Api.Data OrganisationGuid JSON
+    // converter).
     [Test]
     public async Task Login_prints_the_organisations_the_token_can_see_as_an_org_list()
     {
@@ -219,12 +199,8 @@ public class LoginTests
         });
     }
 
-    // login saves the default when the token sees exactly one organisation, from the response to its
-    // one check, as { "org": { "id", "name" } } in cli.json ("Login, logout and status"). A later
-    // command with no organisation chosen then builds the organisation client from the saved ID
-    // with no lookup ("Context"). The one organisation is Globex, so a command that used the test
-    // organisation acts on Acme, and one that looked the organisation up shows a GET /account/orgs
-    // before its own request.
+    // The one organisation is Globex, so a later command that used the test organisation acts on
+    // Acme, and one that looked the organisation up shows GET /account/orgs ("Context").
     [Test]
     public async Task Login_saves_the_organisation_as_the_default_when_the_token_sees_exactly_one()
     {
@@ -251,8 +227,7 @@ public class LoginTests
         Assert.That(run.Calls(before), Is.EqualTo(new[] { $"GET {OtherOrgSystems}" }));
     }
 
-    // With several organisations there is no single default, so login saves none, and a later
-    // command with no organisation chosen looks them up and asks the caller to choose ("Context").
+    // A later command with no organisation chosen shows whether a default was saved ("Context").
     [Test]
     public async Task Login_saves_no_default_organisation_when_the_token_sees_several()
     {
@@ -271,10 +246,8 @@ public class LoginTests
         Assert.That(run.Calls(before), Is.EqualTo(OrgLookupOnly));
     }
 
-    // When the token sees several organisations login leaves the saved default as it is ("Login,
-    // logout and status"), so a default chosen with org use survives a new login. The default is
-    // Globex and the token also sees Acme, so a login that rewrote the default changes cli.json,
-    // and one that cleared it leaves the later command to look the organisations up and exit 2.
+    // A default chosen with org use survives a new login ("Login, logout and status"). A login that
+    // cleared it would leave the later command to look the organisations up and exit 2.
     [Test]
     public async Task Login_leaves_the_saved_default_as_it_is_when_the_token_sees_several()
     {
@@ -299,13 +272,9 @@ public class LoginTests
         });
     }
 
-    // login writes credentials.json after its check passes, so a token the API refuses is never
-    // saved: a saved bad token makes every later command fail. Enclave.Sdk.Api raises
-    // EnclaveApiException only for problem+json responses
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29), so the plain cases, a proxy
-    // or server answering without problem details, reach the CLI as HttpRequestException, which
-    // the CLI maps to the same codes ("Errors and exit codes"). 403 means the token lacks
-    // ReadOrgList, which the check needs.
+    // A saved bad token would fail every later command. Enclave.Sdk.Api raises EnclaveApiException
+    // only for problem+json (ProblemDetailsHttpMessageHandler.SendAsync), so the plain cases, a
+    // proxy answering without problem details, reach the CLI as HttpRequestException.
     [TestCase(401, true, "token_invalid")]
     [TestCase(401, false, "token_invalid")]
     [TestCase(403, true, "forbidden")]
@@ -353,10 +322,8 @@ public class LoginTests
         });
     }
 
-    // login never prompts, and with no token it exits 3 token_missing; an empty ENCLAVE_TOKEN counts
-    // as unset ("Login, logout and status"). Without --token-stdin, stdin is not a token source:
-    // redirected, stdin holds a valid token, so a CLI that read it logs in, and as a terminal any
-    // read of it fails the run (CliRun.StdinIsTerminal).
+    // Without --token-stdin, stdin is no token source: redirected, it holds a valid token, so a CLI
+    // that read it logs in; as a terminal, any read fails the run (CliRun.StdinIsTerminal).
     [TestCase(true, false)]
     [TestCase(false, false)]
     [TestCase(false, true)]
@@ -383,10 +350,8 @@ public class LoginTests
         Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // Reading a terminal waits for someone to type, and login never prompts: --token-stdin with
-    // stdin a terminal exits 2 ("Login, logout and status"). While stdin is a terminal, any read of
-    // it fails the run (CliRun.StdinIsTerminal), so the rejection shows login refused without
-    // reading.
+    // Reading a terminal waits for someone to type, and login never prompts. Any read of a terminal
+    // stdin fails the run (CliRun.StdinIsTerminal).
     [Test]
     public async Task Login_token_stdin_exits_2_without_reading_stdin_when_stdin_is_a_terminal()
     {
@@ -402,10 +367,8 @@ public class LoginTests
         Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // Empty stdin (an unset variable in `echo "$TOKEN" | enclave-cli login --token-stdin`) gives no
-    // token and exits 3 token_missing ("Login, logout and status"); a newline alone is the empty
-    // token with its trailing newline. Sending "Bearer " would turn the caller's mistake into a 401
-    // and a misleading token_invalid.
+    // Empty stdin comes from an unset variable in `echo "$TOKEN" | enclave-cli login --token-stdin`.
+    // Sending "Bearer " would turn that into a 401 and a misleading token_invalid.
     [TestCase("")]
     [TestCase("\n")]
     [TestCase("\r\n")]
@@ -422,8 +385,7 @@ public class LoginTests
         Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // login changes only local files, so it does not take --dry-run ("Dry run"), and an option a
-    // command does not take exits 2 ("Details"). The corrected run proves the rejection withheld the
+    // login changes only local files ("Dry run"). The corrected run shows the rejection withheld the
     // check.
     [Test]
     public async Task Login_does_not_take_dry_run()

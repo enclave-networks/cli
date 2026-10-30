@@ -5,10 +5,6 @@ using Enclave.Sdk.Network.Abstractions.NetworkPolicy;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// `trust create &lt;description&gt;`: a sign-in requirement with --authority, or a public IP
-/// requirement with --allow-* and --block-* (spec/cli-surface.md "Command options").
-/// </summary>
 internal static class TrustCreateCommand
 {
     public static CliVerb Create()
@@ -43,8 +39,7 @@ internal static class TrustCreateCommand
             (blockCountry, TrustSettings.BlockedCountry),
         ];
 
-        // The type comes from the flags, and a trust requirement is one type or the other
-        // ("Command options"); the API requires a type (portal TrustRequirementCreateModel.Type).
+        // The flags decide the type, which the API requires (portal TrustRequirementCreateModel.Type).
         verb.Check(context =>
         {
             var signInGiven = signIn.FirstOrDefault(context.IsGiven);
@@ -66,13 +61,9 @@ internal static class TrustCreateCommand
             verb.Requires(option, authority);
         }
 
-        // A setting given "" or only white space carries no value. The API refuses an authority
-        // address that is not https, and a client ID or audience that is empty or white space
-        // (portal TrustRequirementSettingsUserAuthValidator.cs:47-49, whose MustHaveKeyWithValue and
-        // KeyNotEmptyIfSet test string.IsNullOrWhiteSpace, DictionaryValidationExtensions.cs:45,82),
-        // and stores a blank tenant, since for azure it checks only which keys the configuration
-        // holds (TrustRequirementSettingsUserAuthValidator.cs:35-38). Each exits 2, as
-        // --set-client-id "" does on trust update.
+        // A blank setting carries no value: the API refuses a blank client ID or audience and
+        // stores a blank tenant (portal TrustRequirementSettingsUserAuthValidator;
+        // DictionaryValidationExtensions.MustHaveKeyWithValue, KeyNotEmptyIfSet).
         verb.Check(context =>
         {
             foreach (var (option, _) in settings)

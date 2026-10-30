@@ -3,9 +3,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Checks on a CLI run's outcome that many tests share.
-/// </summary>
 internal static class CliAssert
 {
     private static readonly string[] ListFields = ["kind", "items", "total"];
@@ -13,8 +10,8 @@ internal static class CliAssert
     private static readonly string[] BulkFields = ["requested", "affected"];
 
     /// <summary>
-    /// Every error code the CLI reports, with the exit code it exits with (AGENTS.md "CLI contract",
-    /// spec/cli-surface.md "Errors and exit codes").
+    /// Every error code the CLI reports, with its exit code (spec/cli-surface.md "Errors and exit
+    /// codes").
     /// </summary>
     public static IReadOnlyDictionary<string, int> ExitCodes { get; } = new Dictionary<string, int>(StringComparer.Ordinal)
     {
@@ -37,14 +34,14 @@ internal static class CliAssert
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
 
     /// <summary>
-    /// Asserts the run failed with this error code and the exit code <see cref="ExitCodes"/> gives
-    /// it, and printed nothing on stdout, and returns the error object.
+    /// Asserts the run failed with this error code and its exit code, with nothing on stdout, and
+    /// returns the error object.
     /// </summary>
     public static JsonElement Failed(CliResult result, string code) => Failed(result, ExitCode(code), code);
 
     /// <summary>
-    /// Asserts the run failed with this exit code and error code and printed nothing on stdout, and
-    /// returns the error object. Throws when the pair is not one <see cref="ExitCodes"/> holds.
+    /// Asserts the run failed with this exit code and error code, with nothing on stdout, and
+    /// returns the error object.
     /// </summary>
     public static JsonElement Failed(CliResult result, int exitCode, string code)
     {
@@ -62,15 +59,14 @@ internal static class CliAssert
     }
 
     /// <summary>
-    /// Asserts the CLI refused the command with this error code and the exit code
-    /// <see cref="ExitCodes"/> gives it, printed nothing on stdout, and sent no request to the fake
-    /// API.
+    /// Asserts the CLI refused the command with this error code and its exit code, with nothing on
+    /// stdout and no request sent.
     /// </summary>
     public static void Rejected(CliRun run, CliResult result, string code) => Rejected(run, result, ExitCode(code), code);
 
     /// <summary>
-    /// Asserts the CLI refused the command: this exit code and error code, nothing on stdout, and
-    /// no request to the fake API. Throws when the pair is not one <see cref="ExitCodes"/> holds.
+    /// Asserts the CLI refused the command with this exit code and error code, with nothing on
+    /// stdout and no request sent.
     /// </summary>
     public static void Rejected(CliRun run, CliResult result, int exitCode = 2, string code = "invalid_argument")
     {
@@ -86,12 +82,11 @@ internal static class CliAssert
     }
 
     /// <summary>
-    /// Asserts the run exited 0 and printed a list of this kind, exactly { "kind", "items", "total" }
-    /// with total equal to the number of items, and returns the items array.
+    /// Asserts the run exited 0 and printed exactly { "kind", "items", "total" } with this kind and
+    /// total equal to the number of items, and returns the items.
     /// </summary>
-    // Every list command reads every page before printing (spec/cli-surface.md "Output"), and
-    // total counts the items it prints, the matches when the CLI filters them ("Filters"). A command
-    // reading the list from stdin checks the kind, so the kind is compared exactly.
+    // total counts the items printed, the matches when the CLI filters them (spec/cli-surface.md
+    // "Filters").
     public static JsonElement List(CliResult result, string kind)
     {
         if (!CliList.Kinds.Contains(kind))
@@ -119,7 +114,7 @@ internal static class CliAssert
 
     /// <summary>
     /// Asserts the run exited 0 and printed exactly { "requested": <paramref name="requested"/>,
-    /// "affected": <paramref name="affected"/> }, the output of a command that takes several items.
+    /// "affected": <paramref name="affected"/> }.
     /// </summary>
     public static void Bulk(CliResult result, int requested, int affected)
     {
@@ -155,12 +150,10 @@ internal static class CliAssert
 
     /// <summary>
     /// Asserts the rejected command exits 2 with invalid_argument and sends nothing, then that the
-    /// corrected command, run in the same sandbox, succeeds with one request with this method and
-    /// path.
+    /// corrected command succeeds with one request with this method and path.
     /// </summary>
-    // A parse error also exits 2 with invalid_argument and sends nothing, and an unknown command is
-    // a parse error, so a rejection alone does not show that the command checked the input. The
-    // corrected run proves the command exists and that the rejection withheld its request.
+    // A parse error, such as an unknown command, also exits 2 with invalid_argument and sends
+    // nothing, so the corrected run is what proves the command checked the input.
     public static async Task<RecordedRequest> RejectedThenAcceptedAsync(CliRun run, string[] rejected, string[] corrected, string method, string path)
     {
         Rejected(run, await run.RunAsync(rejected));
@@ -168,8 +161,8 @@ internal static class CliAssert
         return await AcceptedAsync(run, method, path, corrected);
     }
 
-    // A code outside the contract's set, or an exit code the contract does not give that code, is a
-    // mistake in the test, which no CLI behaviour could satisfy, so it is reported as one.
+    // A code or exit code outside the contract is a mistake in the test, which no CLI behaviour
+    // could satisfy, so it throws ArgumentException.
     private static int ExitCode(string code) =>
         ExitCodes.TryGetValue(code, out var exitCode)
             ? exitCode
@@ -183,9 +176,8 @@ internal static class CliAssert
         }
     }
 
-    // The error contract names the property "code" (AGENTS.md "CLI contract"), and agents read it
-    // by that exact name, so the lookup is exact. JsonAssert.Property also matches names ignoring
-    // case, which suits PATCH bodies and would let a "Code" key pass here.
+    // Agents read "code" by its exact name. JsonAssert.Property also matches names ignoring case,
+    // which would let "Code" pass.
     private static string? ErrorCode(JsonElement error) => Text(error, "code");
 
     private static string? Text(JsonElement obj, string name) =>

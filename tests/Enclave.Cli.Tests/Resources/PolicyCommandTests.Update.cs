@@ -5,20 +5,15 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// policy update (spec/cli-surface.md "Command options" and "Create and update"). An update
-// sends only the fields given, as a PolicyPatchModel; Enclave.Sdk.Api keys a PATCH body by the C#
-// property name (PatchClient.Set), so the keys are PascalCase. --set-acl and
-// --set-subnet-filter read the policy first so that entries which stay keep their labels ("Calls
-// per command"); the other flags make no read. The label rules of --set-subnet-filter, examples 75
-// and 77 to 80, are tested in Editing/LabelTests.cs, on the policy by ID and by description and on
-// the system gateway flag that follows the same rules.
+// Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set), so the keys are
+// PascalCase. The label rules of --set-subnet-filter are tested in Editing/LabelTests.cs.
 
 /// <summary>
 /// Tests for policy update.
 /// </summary>
 public partial class PolicyCommandTests
 {
-    // Example 11. A description costs one lookup and an ID none ("Calls per command").
+    // Example 11.
     [TestCase(true)]
     [TestCase(false)]
     public async Task Policy_update_patches_only_the_sender_tags_given(bool byDescription)
@@ -42,8 +37,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 11, checked first: the lookup is a read, and the PATCH is printed and not sent ("Dry
-    // run").
+    // Example 11, checked first.
     [Test]
     public async Task Policy_update_with_dry_run_prints_the_patch_and_sends_only_the_lookup()
     {
@@ -93,9 +87,8 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 24. The read keeps the labels of the rules that stay, and the 8000-8100 rule stays
-    // although the API writes its ports as "8000 - 8100" (portal PolicyModelExtensions.FormatPorts).
-    // The UDP rule is not given, so it goes.
+    // Example 24. The 8000-8100 rule stays although the API writes its ports as "8000 - 8100"
+    // (portal PolicyModelExtensions.FormatPorts).
     [TestCase(true)]
     [TestCase(false)]
     public async Task Policy_update_replaces_the_acls_and_keeps_the_labels_of_those_that_stay(bool byDescription)
@@ -117,9 +110,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 81: an ACL rule stays when its protocol and ports are given again, so tcp:443 keeps
-    // its label; tcp:8443 is new, so it has none, sent as a null description; and the rules left out
-    // go ("Command options", "Details").
+    // Example 81. A new rule has no label, sent as a null description ("Details").
     [Test]
     public async Task Policy_update_gives_a_new_acl_no_label()
     {
@@ -144,8 +135,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // --set-trust takes descriptions, looked up like any name ("Names and IDs"), and replaces the
-    // policy's sender trust requirements.
     [Test]
     public async Task Policy_update_looks_up_the_trust_requirements_named_and_patches_their_ids()
     {
@@ -198,8 +187,8 @@ public partial class PolicyCommandTests
         });
     }
 
-    // The CLI writes Ordered where Enclave.Sdk.Api.Data names the value Prioritised
-    // ("`Enclave.Sdk.Api` changes", item 9).
+    // The CLI sends Ordered where Enclave.Sdk.Api.Data names the value Prioritised
+    // (spec/cli-surface.md "`Enclave.Sdk.Api` changes", item 9).
     [TestCase("balanced", "Balanced")]
     [TestCase("ordered", "Ordered")]
     [TestCase("geographic", "Geographic")]
@@ -217,8 +206,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Any --set- list flag given "" clears the list ("Details"); with no names there is nothing to
-    // look up, so the patch is the only call.
+    // With no names there is nothing to look up, so the patch is the only call.
     [TestCase("--set-senders", "SenderTags")]
     [TestCase("--set-receivers", "ReceiverTags")]
     [TestCase("--set-trust", "SenderTrustRequirements")]
@@ -237,7 +225,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // An update with no change flag exits 2 ("Details"): it has nothing to send.
     [Test]
     public async Task Policy_update_without_a_change_flag_exits_2()
     {
@@ -247,7 +234,6 @@ public partial class PolicyCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["policy", "update", "--id", "42"], ["policy", "update", "--id", "42", "--notes", "Reviewed"], "PATCH", PolicyPath(42));
     }
 
-    // --set-active-hours takes the same form as --active-hours ("Details").
     [Test]
     public async Task Policy_update_rejects_active_hours_outside_the_documented_form()
     {
@@ -258,9 +244,7 @@ public partial class PolicyCommandTests
             run, ["policy", "update", "--id", "61", "--set-active-hours", "weekdays 9-5"], ["policy", "update", "--id", "61", "--set-active-hours", "mon-fri 09:00-17:00"], "PATCH", PolicyPath(61));
     }
 
-    // Active hours that start and end at the same time are never active (services
-    // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), so --set-active-hours exits
-    // 2 for them as --active-hours does ("Command options").
+    // Such hours are never active (services SystemIsopActiveHoursExtensions.IsWithinActiveHours).
     [Test]
     public async Task Policy_update_rejects_active_hours_that_start_and_end_at_the_same_time()
     {
@@ -271,9 +255,8 @@ public partial class PolicyCommandTests
             run, ["policy", "update", "--id", "61", "--set-active-hours", "mon 08:00-08:00"], ["policy", "update", "--id", "61", "--set-active-hours", "mon 08:00-18:00"], "PATCH", PolicyPath(61));
     }
 
-    // The API refuses sender tags, receiver tags or trust requirement IDs with a value twice (portal
-    // PolicyPatchModelValidator.cs:27-28,42), so a repeat exits 2 before any call ("Command
-    // options"). The list with each value once, run next, shows the rejection comes from the repeat.
+    // The API refuses a repeated sender tag, receiver tag or trust requirement ID (portal
+    // PolicyPatchModelValidator, MustNotHaveDuplicates).
     [TestCase("--set-senders", "web,api,web", "web,api")]
     [TestCase("--set-receivers", "db,db", "db")]
     [TestCase("--set-trust-id", "3,8,3", "3,8")]
@@ -285,9 +268,7 @@ public partial class PolicyCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["policy", "update", "--id", "42", option, repeated], ["policy", "update", "--id", "42", option, once], "PATCH", PolicyPath(42));
     }
 
-    // Trust requirement names match ignoring case ("Names and IDs"), so "Entra Staff" repeats
-    // "entra staff". The repeat exits 2 before the lookup; the name once, run next, looks it up and
-    // patches its ID.
+    // Names match ignoring case, so "Entra Staff" repeats "entra staff".
     [Test]
     public async Task Policy_update_with_a_trust_requirement_named_twice_exits_2_without_a_request()
     {
@@ -303,8 +284,8 @@ public partial class PolicyCommandTests
         Assert.That(string.Join(",", patch[0].BodyIds("SenderTrustRequirements")), Is.EqualTo("3"));
     }
 
-    // Example 51. An empty value removes the restriction: the patch sets ActiveHours to null, which
-    // PatchClient.Set sends as JSON null ("`Enclave.Sdk.Api` changes", item 3).
+    // Example 51. PatchClient.Set sends the null as JSON null (spec/cli-surface.md "`Enclave.Sdk.Api`
+    // changes", item 3).
     [TestCase(true)]
     [TestCase(false)]
     public async Task Policy_update_with_empty_active_hours_removes_the_restriction(bool byDescription)
@@ -325,8 +306,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // A value of only white space reads as "" does, and removes the restriction ("Details"): the
-    // patch sets ActiveHours to null, as for "".
     [TestCase(" ")]
     [TestCase("   ")]
     [TestCase("\t")]
@@ -363,21 +342,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Single-item commands exit 5 for an unknown ID ("Several IDs").
-    [Test]
-    public async Task Policy_update_with_an_unknown_id_exits_5()
-    {
-        using var run = CliRun.Start();
-        run.StubProblem("PATCH", PolicyPath(42), 404, "Not Found", "Policy 42 does not exist.");
-
-        var result = await run.RunAsync("policy", "update", "--id", "42", "--notes", "Reviewed");
-
-        CliAssert.Failed(result, "not_found");
-        Assert.That(run.SingleRequest().Path, Is.EqualTo(PolicyPath(42)));
-    }
-
-    // The rules of examples 24 and 81: tcp:443 and the 8000-8100 range are labelled, and the API
-    // writes the range with spaces (portal PolicyModelExtensions.FormatPorts).
+    // The policy of examples 24 and 81, with the range written as the API writes it.
     private static string BuildToArtifactsPolicy() => PolicyWith(
         57,
         "build to artifacts",

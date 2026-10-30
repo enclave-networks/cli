@@ -2,10 +2,6 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Systems;
 
-/// <summary>
-/// `system show`: one system, or with --pending one waiting for approval, printed as the API
-/// returned it.
-/// </summary>
 internal static class SystemShowCommand
 {
     public static CliVerb Create()
@@ -19,7 +15,6 @@ internal static class SystemShowCommand
             var id = context.Get(systemId)!;
             var org = await context.GetOrganisationAsync();
 
-            // One system named by ID: a 404 means it does not exist, exit 5 ("Several IDs").
             if (context.Get(pending))
             {
                 var waiting = await SingleItem.CallAsync(() => org.Client.UnapprovedSystems.GetAsync(id));

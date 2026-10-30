@@ -16,12 +16,9 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// A list prints { "kind", "items", "total" }, where kind names what the items are and total is the
-// number of items printed (spec/cli-surface.md "Output"). It reads every page, one call per
-// page of 200, the most the API returns (portal PaginationDefaults.cs:11), until the response's
-// metadata.nextPage is null ("Calls per command"), and prints once every page is read, so stdout
-// never holds part of a list. log reads only the pages it needs ("Command options"), so it takes
-// part in the envelope rules here and not in the paging rules.
+// spec/cli-surface.md "Output" and "Calls per command". A page holds 200 items, the most the API
+// returns (portal PaginationDefaults.MaxPageSize). log reads only the pages it needs ("Command
+// options"), so the paging tests leave it out.
 public class ListTests
 {
     private const string PageSize = "200";
@@ -58,11 +55,9 @@ public class ListTests
         }
     }
 
-    // The organisation lists come back whole from the API (EnclaveClient.GetOrganisationsAsync, and
-    // OrganisationScopedClient GetOrganisationUsersAsync and GetPendingInvitesAsync, in
-    // Enclave.Sdk.Api), and log reads only the pages it needs; every list prints the same envelope ("Output":
-    // `log` included), with the kinds "Output" names: org for `org list`, user for `org list-users`
-    // and invite for `org list-invites`.
+    // The organisation lists come back whole (Enclave.Sdk.Api EnclaveClient.GetOrganisationsAsync,
+    // OrganisationScopedClient.GetOrganisationUsersAsync and GetPendingInvitesAsync) and log reads
+    // only the pages it needs, but each prints the same envelope ("Output").
     public static IEnumerable<TestCaseData> WholeLists()
     {
         yield return WholeList(
@@ -99,9 +94,7 @@ public class ListTests
             ApiJson.Log("Policy 7 enabled"));
     }
 
-    // A failed page read exits with that page's error, mapped as any API error is ("Errors and exit
-    // codes"). A list is not a single-ID command, so a 404 on a page is api_error. The pages after
-    // the failed one are never asked for.
+    // A list is not a single-ID command, so a 404 on a page is api_error ("Errors and exit codes").
     public static IEnumerable<TestCaseData> PageFailures()
     {
         yield return new TestCaseData(0, 403, "forbidden", "0");
@@ -112,9 +105,8 @@ public class ListTests
         yield return new TestCaseData(1, 404, "api_error", "0,1");
     }
 
-    // Agents read list items by the API's field names, so each item is the Enclave.Sdk.Api model
-    // unchanged, and the envelope adds only kind and total ("Output"). The kind is what a command
-    // reading the list from stdin checks ("Several IDs").
+    // Agents read items by the API's field names ("Output"), and a command reading the list from
+    // stdin checks its kind ("Several IDs").
     [TestCaseSource(nameof(PagedListCommands))]
     public async Task A_paged_list_prints_every_api_item_unchanged_in_an_envelope_of_its_kind(string command)
     {
@@ -158,9 +150,8 @@ public class ListTests
         await AssertItemsUnchangedAsync(printed, items, model);
     }
 
-    // StubPages serves each page only to the request for its page number and answers whatever
-    // per_page a request asks for, so the page numbers and per_page of every request are checked
-    // here. The items printed show every page was read, in order, and none twice.
+    // StubPages answers whatever per_page a request asks for, so per_page is checked here. The items
+    // printed show every page was read, in order, and none twice.
     [TestCaseSource(nameof(PageCounts))]
     public async Task A_list_reads_every_page_of_200_until_nextPage_is_null_and_prints_every_item(string command, int count, string pages)
     {
@@ -183,8 +174,8 @@ public class ListTests
         });
     }
 
-    // A list printed from the pages read before a failure would look complete to a caller, so a
-    // failed page read prints nothing and exits with that page's error ("Output").
+    // A list printed from the pages read before a failure would look complete to a caller
+    // ("Output").
     [TestCaseSource(nameof(PagedListCommands))]
     public async Task A_list_whose_page_read_fails_prints_nothing_and_exits_with_that_pages_error(string command)
     {
@@ -222,9 +213,7 @@ public class ListTests
         });
     }
 
-    // Example 38. The CLI takes the lower-case, hyphenated name and sends the API's own,
-    // RecentlyConnected, which Enclave.Sdk.Api writes into the sort parameter
-    // (SystemsClient.BuildQueryString). Each page is a separate request, so each carries the sort.
+    // Example 38. Each page is a separate request, so each carries the sort.
     [Test]
     public async Task System_list_sort_recently_connected_asks_for_every_page_sorted_by_RecentlyConnected()
     {
@@ -244,8 +233,7 @@ public class ListTests
         });
     }
 
-    // Example 39. --filter is sent as typed, so it takes the API's search syntax as well as plain
-    // words ("Filters"), and every page is read with the same search.
+    // Example 39. Sent as typed, --filter takes the API's search syntax ("Filters").
     [Test]
     public async Task System_list_filter_sends_the_text_as_typed_with_every_page_request()
     {
@@ -263,13 +251,10 @@ public class ListTests
         });
     }
 
-    // Example 40. --os and --state are search keys the API defines for systems (portal
-    // SystemSearchKeyService.cs, GetSearchKeys: "os", "state"), which the CLI adds to the search
-    // text as the API's search values ("Filters"): `state:disconnected`, and `os:Windows`, since
-    // the API matches the os value exactly against the platform name it stores (UseExactMatch,
-    // which BaseSearchKeyService.GetBasicSearchFilter turns into an equality filter). The order of
-    // the terms does not change the search, so they are compared as a set. The fake API does not
-    // filter, so every item it serves is a match, and total counts the items printed.
+    // Example 40. The API matches the os value exactly against the platform name it stores, so
+    // windows is sent as os:Windows (portal SystemSearchKeyService, the "os" key, UseExactMatch).
+    // Term order does not change the search, so the terms are compared as a set. The fake API does
+    // not filter, so every item it serves is printed.
     [Test]
     public async Task System_list_os_windows_state_disconnected_searches_by_both_keys_on_every_page_and_totals_the_items_printed()
     {

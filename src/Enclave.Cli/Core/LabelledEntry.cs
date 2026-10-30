@@ -1,21 +1,12 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// An entry of a labelled list as a command sends it: the value (a range, country, ACL or subnet)
-/// and its label, or null for none.
-/// </summary>
 internal sealed record LabelledEntry(string Value, string? Label)
 {
     /// <summary>
-    /// The entries a --set- flag of labelled values sends: each value given, in order, with the label
-    /// given after "=", an empty label as none, and a value given without "=" keeping the label of the
-    /// entry the item has with the same value. A new value without a label has none
-    /// (spec/cli-surface.md "Command options": a flag that replaces a list keeps the label of every
-    /// entry that stays).
+    /// A value given without "=" keeps the label of the existing entry with the same value
+    /// (spec/cli-surface.md "Command options"). Values compare ordinally when comparer is null;
+    /// countries compare ignoring case.
     /// </summary>
-    /// <param name="given">The flag's values.</param>
-    /// <param name="existing">The item's entries, read first.</param>
-    /// <param name="comparer">How values compare; ordinal when null. Countries compare ignoring case.</param>
     public static IReadOnlyList<LabelledEntry> Keep(
         IReadOnlyList<LabelledValue> given,
         IEnumerable<LabelledEntry> existing,
@@ -34,9 +25,6 @@ internal sealed record LabelledEntry(string Value, string? Label)
             .ToArray();
     }
 
-    /// <summary>
-    /// The entries a create sends: each value with the label given, or none.
-    /// </summary>
     public static IReadOnlyList<LabelledEntry> FromGiven(IReadOnlyList<LabelledValue>? given) =>
         given?.Select(value => new LabelledEntry(value.Value, value.Label)).ToArray() ?? [];
 }

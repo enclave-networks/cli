@@ -6,15 +6,9 @@ using System.Reflection;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// The enclave-cli command, which holds the nouns and the top-level commands and carries the
-/// <see cref="CliHost"/> every command action reads.
-/// </summary>
 internal sealed class CliRootCommand : RootCommand
 {
-    /// <summary>
-    /// The CLI's name in help and messages, whatever the name of the process that runs it.
-    /// </summary>
+    // Used in help and messages, whatever the name of the process that runs the CLI.
     public const string ProgramName = "enclave-cli";
 
     public CliRootCommand(CliHost host)
@@ -24,33 +18,24 @@ internal sealed class CliRootCommand : RootCommand
 
         Host = host;
 
-        // A directive such as [suggest] prints text that is not JSON, and the CLI has no use for one,
-        // so [suggest] is refused as an invalid argument. The directive stays registered: with no
-        // directives the parser drops a word in brackets before the command without a word, and with
-        // one it reports any other as unmatched (ParseOperation.ParseDirectives, System.CommandLine
-        // 2.0.12), which the CLI then reports as a parse error.
+        // [suggest] prints text that is not JSON, so it is refused. It stays registered: with no
+        // directives the parser drops a bracketed word before the command without a word, and with one
+        // it reports any other as unmatched (System.CommandLine 2.0.12, ParseOperation.ParseDirectives).
         Directives.OfType<SuggestDirective>().Single().Action = new RefuseDirectiveAction();
 
         Options.OfType<HelpOption>().Single().Action = new HelpAction();
 
-        // The built-in --version prints the entry assembly's version, which is the host's version
-        // when the CLI runs inside another process, as it does in tests (System.CommandLine 2.0,
-        // VersionOption.GetExecutableVersion:
-        // https://github.com/dotnet/command-line-api/blob/main/src/System.CommandLine/VersionOption.cs).
-        // Replacing the action keeps the option's validator, which rejects --version combined with
-        // other arguments.
+        // The built-in --version prints the entry assembly's version, which in tests is the test
+        // host's (System.CommandLine 2.0.12, VersionOption.GetExecutableVersion). Replacing only the
+        // action keeps the validator that rejects --version with other arguments.
         Options.OfType<VersionOption>().Single().Action = new VersionAction();
 
-        // enclave-cli with no arguments prints the help (spec/cli-surface.md "Errors and exit
-        // codes"); anything it cannot parse is reported by the action before this runs.
+        // No arguments prints the help (spec/cli-surface.md "Errors and exit codes").
         Action = new CliAction(async context => await context.Output.WriteTextAsync(HelpWriter.Write(context.ParseResult.CommandResult)));
     }
 
     public CliHost Host { get; }
 
-    /// <summary>
-    /// The host of the command line's root command.
-    /// </summary>
     public static CliHost HostOf(ParseResult parseResult)
     {
         ArgumentNullException.ThrowIfNull(parseResult);
@@ -58,23 +43,14 @@ internal sealed class CliRootCommand : RootCommand
         return ((CliRootCommand)parseResult.RootCommandResult.Command).Host;
     }
 
-    /// <summary>
-    /// Parses a command line with the CLI's parser settings.
-    /// </summary>
-    // System.CommandLine expands an argument starting with "@" into the lines of the file it names
-    // (ParserConfiguration.ResponseFileTokenReplacer, on by default in version 2.0.12). That would
-    // read the disk outside CliHost.Files, and "@" can begin an ordinary value, so it is turned off.
-    // Command.Parse is not virtual. A call with the arguments alone binds to this overload, which C#
-    // prefers over the base class's Parse(args, configuration = null) (C# specification, "Method
-    // invocations": methods of a base type are removed when a derived type has an applicable one),
-    // so callers reach it through the CliRootCommand type that Program.CreateRootCommand returns.
+    // Response files are off: System.CommandLine 2.0.12 expands an argument starting with "@" into
+    // the lines of the file it names (ParserConfiguration.ResponseFileTokenReplacer), which reads the
+    // disk outside CliHost.Files, and "@" can begin an ordinary value. Command.Parse is not virtual;
+    // C# prefers this overload over the base Parse(args, configuration = null) (C# specification,
+    // "Method invocations"), so callers reach it through the CliRootCommand type.
     public ParseResult Parse(IReadOnlyList<string> args) =>
         Parse(args, new ParserConfiguration { ResponseFileTokenReplacer = null });
 
-    /// <summary>
-    /// Adds a noun or a top-level command and returns it.
-    /// </summary>
-    /// <typeparam name="TCommand">The command's type, kept for the caller.</typeparam>
     public TCommand Add<TCommand>(TCommand command)
         where TCommand : Command
     {
@@ -87,7 +63,7 @@ internal sealed class CliRootCommand : RootCommand
     private sealed class HelpAction : SynchronousCommandLineAction
     {
         // Help is shown whatever else is on the command line, as System.CommandLine's own help is
-        // (HelpAction.ClearsParseErrors, version 2.0.12).
+        // (System.CommandLine 2.0.12, HelpAction.ClearsParseErrors).
         public override bool ClearsParseErrors => true;
 
         public override int Invoke(ParseResult parseResult)

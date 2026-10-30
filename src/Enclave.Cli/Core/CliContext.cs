@@ -6,8 +6,7 @@ using Enclave.Sdk.Api;
 namespace Enclave.Cli.Core;
 
 /// <summary>
-/// What a command's handler works with: its parsed command line, the host, the output, and the
-/// token, organisation and partner, each resolved when the handler first asks for it.
+/// Resolves the token, organisation and partner when the handler first asks for each.
 /// </summary>
 internal sealed class CliContext : IDisposable
 {
@@ -39,33 +38,18 @@ internal sealed class CliContext : IDisposable
     public CliVerb? Verb { get; }
 
     /// <summary>
-    /// Under --dry-run, the changes the command would send, which its clients capture in place of
-    /// sending; null without --dry-run.
+    /// Null without --dry-run.
     /// </summary>
     public DryRun? DryRun { get; }
 
     public CancellationToken CancellationToken { get; }
 
-    /// <summary>
-    /// Whether --dry-run was given.
-    /// </summary>
     public bool IsDryRun => DryRun is not null;
 
-    /// <summary>
-    /// The option's value, or its default (null, or false for a flag) when not given.
-    /// </summary>
-    /// <typeparam name="T">The option's value type.</typeparam>
     public T? Get<T>(Option<T> option) => ParseResult.GetValue(option);
 
-    /// <summary>
-    /// The argument's value, or its default (null) when not given.
-    /// </summary>
-    /// <typeparam name="T">The argument's value type.</typeparam>
     public T? Get<T>(Argument<T> argument) => ParseResult.GetValue(argument);
 
-    /// <summary>
-    /// Whether the command line gives this option, or at least one value for this argument.
-    /// </summary>
     public bool IsGiven(Symbol symbol) => ParseResult.GetResult(symbol) switch
     {
         System.CommandLine.Parsing.OptionResult option => !option.Implicit,
@@ -75,12 +59,12 @@ internal sealed class CliContext : IDisposable
     };
 
     /// <summary>
-    /// Writes a diagnostic line on stderr when --verbose is given. Never pass the token.
+    /// Never pass the token.
     /// </summary>
     public void Verbose(string message) => Output.Verbose(message);
 
     /// <summary>
-    /// The token and API address. Exits 3 with token_missing when there is no token.
+    /// Exits 3 with token_missing when there is no token.
     /// </summary>
     public ApiAccess Access
     {
@@ -97,16 +81,14 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The Enclave.Sdk.Api client for calls outside an organisation, such as GetOrganisationsAsync.
-    /// Exits 3 with token_missing when there is no token. It makes no call.
+    /// For calls outside an organisation. Exits 3 with token_missing when there is no token; makes no
+    /// call.
     /// </summary>
     public EnclaveClient GetClient() => _client ??= CreateClient(Access);
 
     /// <summary>
-    /// An Enclave.Sdk.Api client for <paramref name="access"/> whose requests go through the CLI's
-    /// handler: logged under --verbose, and under --dry-run each change captured and not sent. login
-    /// uses it for the token it checks; every other command uses <see cref="GetClient"/>. It makes
-    /// no call.
+    /// For login, which checks a token of its own; every other command uses <see cref="GetClient"/>.
+    /// Makes no call.
     /// </summary>
     public EnclaveClient CreateClient(ApiAccess access)
     {
@@ -116,11 +98,9 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The organisation the command acts in, with its client (spec/cli-surface.md "Context").
-    /// Call it after checking the command's own arguments: checks run in the order arguments, the
-    /// token, the organisation, then the call ("Errors and exit codes"). It makes one lookup call
-    /// when the organisation is named or not chosen, and none when it is given by ID. Under
-    /// --dry-run the organisation goes into the report.
+    /// Call it after checking the command's own arguments, which come before the token
+    /// (spec/cli-surface.md "Errors and exit codes"). Makes one lookup call unless the organisation is
+    /// given by ID.
     /// </summary>
     public async Task<OrganisationInUse> GetOrganisationAsync()
     {
@@ -135,10 +115,8 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The partner a partner command acts for, with its partner API client. Like
-    /// <see cref="GetOrganisationAsync"/>, call it after checking the command's own arguments; it
-    /// checks the token first, then the partner, and makes no call. Under --dry-run the partner goes
-    /// into the report.
+    /// Call it after checking the command's own arguments, as <see cref="GetOrganisationAsync"/>.
+    /// Makes no call.
     /// </summary>
     public Task<PartnerInUse> GetPartnerAsync()
     {
@@ -157,9 +135,7 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The instant a time given to <paramref name="option"/> names, read forwards from now (a
-    /// duration counts from now, a clock time is its next occurrence), as UTC. A time that has
-    /// passed, does not exist in the local time zone, or lies beyond the times the CLI holds exits 2
+    /// As <see cref="TimeInput.Forwards"/>, and exits 2 for a time that has passed
     /// (spec/cli-surface.md "Details").
     /// </summary>
     public DateTimeOffset FutureInstant(TimeInput input, Option option)
@@ -175,8 +151,7 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The instant <paramref name="duration"/> after now, as UTC: --for. A duration that reaches
-    /// past the end of year 9999 exits 2 naming <paramref name="option"/>.
+    /// Exits 2 naming <paramref name="option"/> when the result passes the end of year 9999.
     /// </summary>
     public DateTimeOffset FutureInstant(TimeSpan duration, Option option)
     {
@@ -186,9 +161,7 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The expiry --for or --until gives, as a UTC instant, or null when neither is given. --for
-    /// counts from now; --until is read as <see cref="FutureInstant(TimeInput, Option)"/> reads it,
-    /// so a time that has passed exits 2. Declare the two options exclusive, and --then as requiring
+    /// Null when neither option is given. Declare the two options exclusive, and --then as requiring
     /// one of them.
     /// </summary>
     public DateTimeOffset? ExpiryFrom(Option<TimeSpan?> forOption, Option<TimeInput?> untilOption)
@@ -204,12 +177,6 @@ internal sealed class CliContext : IDisposable
         return Get(untilOption) is { } until ? FutureInstant(until, untilOption) : null;
     }
 
-    /// <summary>
-    /// The instant a time given to <paramref name="option"/> names, read backwards from now (a
-    /// duration counts back from now, a clock time is its latest occurrence), as UTC: log's --since.
-    /// A time that does not exist in the local time zone, or lies beyond the times the CLI holds,
-    /// exits 2.
-    /// </summary>
     public DateTimeOffset PastInstant(TimeInput input, Option option)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -219,13 +186,9 @@ internal sealed class CliContext : IDisposable
     }
 
     /// <summary>
-    /// The instant <paramref name="duration"/> before now, as UTC: the cut-off of a filter such as
-    /// --not-seen-for or --waiting-for. A duration that reaches back before the start of year 1
-    /// exits 2 naming <paramref name="option"/>.
+    /// Exits 2 naming <paramref name="option"/> when the result is before year 1. Call it before
+    /// GetOrganisationAsync, as a check of the arguments (spec/cli-surface.md "Errors and exit codes").
     /// </summary>
-    // A duration's range is checked against the clock, so this is a check of the arguments: call it
-    // before GetOrganisationAsync, so a duration out of range exits 2 before the token is checked
-    // ("Errors and exit codes").
     public DateTimeOffset PastInstant(TimeSpan duration, Option option)
     {
         ArgumentNullException.ThrowIfNull(option);
@@ -233,8 +196,7 @@ internal sealed class CliContext : IDisposable
         return TimeInput.Before(Host.Time.GetUtcNow(), duration, option.Name);
     }
 
-    // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions; the caller owns it
-    // (EnclaveClientOptions.HttpMessageHandler, Enclave.Sdk.Api). The clients built here live
-    // for one command, so the handler goes with the context.
+    // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions.HttpMessageHandler, and
+    // the clients built here live for one command.
     public void Dispose() => _handler?.Dispose();
 }

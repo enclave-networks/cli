@@ -3,16 +3,10 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// A value given "" or only white space is set only where an empty value means something: clearing
-// an optional field, setting or list. Where it means nothing, the command exits 2 invalid_argument
-// with the other argument checks, before the token is read and before any call, and the value is
-// never read as the flag left out (spec/cli-surface.md "Details"). An empty value usually comes
-// from an unset shell variable.
-//
-// Each case that exits 2 runs twice. The run with a token answers every read the command could go
-// on to make (the name lookups, and the reads --add-tags and --remove-tags make), so a CLI that went
-// on sends a request, and exits 0 or exits 2 only after that call. The run without a token gives
-// the same error, so a CLI that read the token first exits 3.
+// An empty value usually comes from an unset shell variable, so where it means nothing it exits 2
+// before the token and any call, and is never read as the flag left out (spec/cli-surface.md
+// "Details"). The run with a token answers every read the command could make, so a CLI that went on
+// sends a request; the run without a token shows the check comes before the token.
 public class EmptyValueTests
 {
     private const string Blank = " ";
@@ -31,10 +25,7 @@ public class EmptyValueTests
     public Task A_list_flag_of_a_create_given_no_entries_exits_2_before_the_token_and_any_call(string[] arguments, string key) =>
         RejectedBeforeTheTokenAsync(arguments, key);
 
-    // tag set --trust and --trust-id replace the tag's trust requirements ("Details"), so "" clears
-    // them, as a --set- flag clears its list: the patch sends the field as an empty list, and there
-    // is no name to look up. The trust requirement list is answered, so a CLI that looked a name up
-    // shows a second request.
+    // The trust requirement list is answered, so a CLI that looked a name up shows a second request.
     [TestCase("--trust")]
     [TestCase("--trust-id")]
     public async Task Tag_set_trust_given_an_empty_value_patches_no_trust_requirements_without_a_lookup(string option)
@@ -57,10 +48,8 @@ public class EmptyValueTests
     public Task An_update_given_a_blank_value_the_api_refuses_exits_2_before_the_token_and_any_call(string[] arguments, string key) =>
         RejectedBeforeTheTokenAsync(arguments, key);
 
-    // A system's description and every item's notes are optional text: the API takes an empty one
-    // (portal Enclave.Api/Modules/SystemManagement: SystemPatchModelValidator.cs:15 and 23,
-    // UnapprovedSystemPatchModelValidator.cs:13, EnrolmentKeyPatchModelValidator.cs:25, each
-    // MaximumLength only), so "" clears it, and the patch sends the field as given.
+    // The API takes an empty description or notes here (portal SystemPatchModelValidator,
+    // UnapprovedSystemPatchModelValidator, EnrolmentKeyPatchModelValidator: MaximumLength only).
     [TestCase("system update ABCDE --description", "systems/ABCDE", "Description")]
     [TestCase("system update XYZ12 --pending --description", "unapproved-systems/XYZ12", "Description")]
     [TestCase("key update --id 12 --notes", "enrolment-keys/12", "Notes")]
@@ -88,9 +77,8 @@ public class EmptyValueTests
     public Task A_set_flag_given_a_blank_value_among_others_exits_2_before_the_token_and_any_call(string[] arguments, string key) =>
         RejectedBeforeTheTokenAsync(arguments, key);
 
-    // A --set- flag given "" or only white space clears its list ("Details"): the patch sends the
-    // field as an empty list, and makes no read, since a list cleared has no labels to keep ("Calls
-    // per command"). The fake answers the read, so a CLI that read the item shows a second request.
+    // A cleared list has no labels to keep, so there is no read. The fake answers the read, so a CLI
+    // that read the item shows a second request.
     [TestCase("key update --id 12 --set-allow-ip", "enrolment-keys/12", "IpConstraints")]
     [TestCase("policy update --id 64 --set-subnet-filter", "policies/64", "GatewayAllowedIpRanges")]
     [TestCase("policy update --id 64 --set-gateway", "policies/64", "Gateways")]
@@ -111,18 +99,11 @@ public class EmptyValueTests
         });
     }
 
-    // The API refuses an empty or white-space description or name for keys, policies, trust
-    // requirements, zones and hostname records, on create and on update (portal
-    // Enclave.Api/Modules/SystemManagement: EnrolmentKeyCreateValidator.cs:22,
-    // EnrolmentKeyPatchModelValidator.cs:14, PolicyCreateModelValidator.cs:23,
-    // PolicyPatchModelValidator.cs:21, TrustRequirementCreateModelValidator.cs:17,
-    // TrustRequirementPatchBasicValidator.cs:15, DnsZoneCreateValidator.cs:22-23,
-    // DnsRecordCreateValidator.cs:19-21, each NotEmpty, which fails a string that is empty or white
-    // space: FluentValidation 11.9.0, NotEmptyValidator.IsValid). So no item has a blank name, and a
-    // blank name given to a lookup names nothing, a blank name for a create is one the API refuses,
-    // and a blank full hostname is in no zone. A blank among several names is refused as one alone
-    // is: dropped, the command would act on the others alone. The keyed argument is the one the
-    // blank was given to.
+    // The API refuses a blank description or name (portal EnrolmentKeyCreateValidator,
+    // EnrolmentKeyPatchModelValidator, PolicyCreateModelValidator, PolicyPatchModelValidator,
+    // TrustRequirementCreateModelValidator, TrustRequirementPatchBasicValidator,
+    // DnsZoneCreateValidator, DnsRecordCreateValidator: NotEmpty), so no item has one. Dropped, a
+    // blank among several names would leave the command acting on the others.
     private static IEnumerable<TestCaseData> BlankNames()
     {
         yield return Case(["key", "show", Empty], "key");
@@ -158,9 +139,8 @@ public class EmptyValueTests
         yield return Case(["dns", "update-hostname", "--id", "7", "--name", Blank], "--name");
     }
 
-    // Adding or removing no tag changes nothing. Accepted, the update reads the item and patches
-    // its tag list back unchanged, and read as the flag left out, an update given no other flag
-    // would have nothing to send. "", white space and "," each hold no tag.
+    // Accepted, the update would read the item and patch its tag list back unchanged. "", white
+    // space and "," each hold no tag.
     private static IEnumerable<TestCaseData> TagEditsOfNothing()
     {
         yield return Case(["system", "update", "ABCDE", "--add-tags", Empty], "--add-tags");
@@ -173,10 +153,8 @@ public class EmptyValueTests
         yield return Case(["dns", "update-hostname", "--id", "7", "--remove-tags", Empty], "--remove-tags");
     }
 
-    // A create sends an empty list for a list flag left out ("Details"), so on a create a list flag
-    // given no entries sets nothing and clears nothing: taken, it would be the flag left out. Left
-    // out, --trust, --allow-ip or --block-ip makes a policy, key or trust requirement that lets in
-    // more than the one meant.
+    // On a create a list flag with no entries would be the flag left out, and left out, --trust,
+    // --allow-ip or --block-ip lets in more than was meant.
     private static IEnumerable<TestCaseData> CreateListsOfNothing()
     {
         yield return Case(["key", "create", "ci runners", "--tags", Empty], "--tags");
@@ -200,16 +178,10 @@ public class EmptyValueTests
         yield return Case(["system", "update", "ABCDE", "--enable-gateway-for", Empty], "--enable-gateway-for");
     }
 
-    // The API refuses each of these when it is set blank (portal Enclave.Api/Modules:
-    // SystemManagement/EnrolmentKeys/Validators/EnrolmentKeyPatchModelValidator.cs:14,
-    // SystemManagement/Policies/Validators/PolicyPatchModelValidator.cs:21,
-    // SystemManagement/TrustRequirements/Validators/TrustRequirementPatchBasicValidator.cs:15 and
-    // SystemManagement/Dns/Validators/DnsZonePatchValidator.cs:16-22, NotEmpty when set;
-    // SystemManagement/Tags/Validators/TagPatchModelValidator.cs:12 and 14, a tag name and a hex
-    // colour, which "" is not). An organisation's name must be at least one character long
-    // (OrganisationManagement/Organisation/Validators/OrganisationPatchModelValidator.cs:11), so
-    // white space passes the API, and it names nothing: --org refuses a blank name, so an
-    // organisation named so could not be chosen by name.
+    // The API refuses each of these when set blank (portal EnrolmentKeyPatchModelValidator,
+    // PolicyPatchModelValidator, TrustRequirementPatchBasicValidator, DnsZonePatchValidator,
+    // TagPatchModelValidator), except an organisation name of white space
+    // (OrganisationPatchModelValidator), which --org could then not choose by name.
     private static IEnumerable<TestCaseData> BlankUpdateTexts()
     {
         yield return Case(["key", "update", "--id", "12", "--description", Empty], "--description");
@@ -224,11 +196,8 @@ public class EmptyValueTests
         yield return Case(["tag", "set", "prod", "--colour", Blank], "--colour");
     }
 
-    // An empty entry among others names nothing. Dropped, it would shorten the list, and an empty
-    // entry usually comes from an unset shell variable: `--trust "uk only,$EXTRA"`. "" alone keeps
-    // its own meaning, which the cases above and the clearing tests cover; "," is two empty entries.
-    // Each kind of comma list is here: a filter, a tag list, a name list, an ID list, a list of
-    // fixed values, --id, and an entry in a value given apart from the others (--id 1 --id "").
+    // Dropped, an empty entry would shorten the list; it usually comes from an unset shell variable,
+    // as in `--trust "uk only,$EXTRA"`. Each kind of comma list is here.
     private static IEnumerable<TestCaseData> EmptyEntriesAmongOthers()
     {
         yield return Case(["system", "list", "--tag", "web,"], "--tag");
@@ -255,11 +224,8 @@ public class EmptyValueTests
         yield return Case(["policy", "create", "web to db", "--acl", "any", "--gateway", "GW001:10.0.0.0/16,"], "--gateway");
     }
 
-    // A --set- flag given "" alone clears its list ("Details"), and a blank value among others names
-    // no range, country, rule or subnet: dropped, it would shorten the list, and sent, the API
-    // refuses it (portal Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Validators/
-    // EnrolmentKeyIpConstraintInputValidator.cs:12, NotEmpty). A value with a label and nothing
-    // before it is blank too.
+    // Dropped, a blank value would shorten the list, and sent, the API refuses it (portal
+    // EnrolmentKeyIpConstraintInputValidator, the rule on Range). "=office" is blank too.
     private static IEnumerable<TestCaseData> BlankLabelledValuesAmongOthers()
     {
         yield return Case(["key", "update", "--id", "12", "--set-allow-ip", "10.0.0.0/8", "--set-allow-ip", Empty], "--set-allow-ip");

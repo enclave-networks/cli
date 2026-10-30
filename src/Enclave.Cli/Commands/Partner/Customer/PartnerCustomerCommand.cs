@@ -6,20 +6,11 @@ using Enclave.Sdk.Api.Partner.Models;
 
 namespace Enclave.Cli.Commands.Partner.Customer;
 
-/// <summary>
-/// The `partner customer` noun: the partner's customers, their admins, invites and auto-sync
-/// (spec/cli-surface.md "Commands", "Partner API"). A customer is an organisation, given by
-/// name or by --org-id, its organisation ID.
-/// </summary>
-// Every call goes through Enclave.Sdk.Api's partner client (IPartnerClient.Customers), one
-// call per command. A customer given by name, an admin given by email address and an invite given
-// by email address each add one read (spec/cli-surface.md "Calls per command").
 internal static class PartnerCustomerCommand
 {
-    // The partner portal's values for a new customer's counts when the form is left as it opens
-    // (portal Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor:315-345), which the CLI sends
-    // for a flag left out, so a change to the API's own defaults does not change what create does
-    // (spec/cli-surface.md "Command options", the create table).
+    // The partner portal's form defaults (portal AddNewCustomer.razor, CustomerCreateFormModel),
+    // sent for a flag left out so that a change to the API's own defaults does not change what
+    // create does.
     private const int DefaultSystems = 50;
 
     private const int DefaultGateways = 0;
@@ -80,13 +71,12 @@ internal static class PartnerCustomerCommand
         var industryDiscount = verb.Add(CliOptions.Flag("--industry-discount", "Request the industry discount."));
         var hardLimit = verb.Add(CliOptions.Flag("--hard-limit", "Refuse systems beyond the licensed number."));
         var autoSync = verb.Add(CliOptions.Flag("--auto-sync", "Keep the partner's staff as the customer's admins."));
-        RefuseBlankName(verb, name, context => context.Get(name));
+        verb.RefuseBlank(name, context => context.Get(name), "a customer name");
 
         verb.SetHandler(async context =>
         {
-            // The owner, domain and contact have no portal default and are sent without a value
-            // when left out; Enclave.Sdk.Api writes every property of the model, so they go as
-            // null (ClientBase.CreateJsonContent).
+            // The owner, domain and contact have no portal default. Left out, they go as null,
+            // since Enclave.Sdk.Api writes every property (ClientBase.CreateJsonContent).
             var model = new CustomerCreateModel
             {
                 Name = context.Get(name)!,
@@ -109,10 +99,8 @@ internal static class PartnerCustomerCommand
         return verb;
     }
 
-    // An update sends only the fields given, so one with no change flag has nothing to send, and a
-    // flag given with its --no- form leaves the field's new value unclear; both exit 2
-    // (spec/cli-surface.md "Details"). Auto-sync is not an update flag: it changes through
-    // enable-auto-sync and disable-auto-sync, which have their own API routes ("Command options").
+    // Auto-sync has its own API routes, so it changes through enable-auto-sync and
+    // disable-auto-sync (spec/cli-surface.md "Command options").
     private static CliVerb Update()
     {
         var (verb, customer) = ForCustomer("update", "Change a customer's name, contact, licensed systems and gateways, discount request and hard limit.", changes: true);
@@ -124,14 +112,12 @@ internal static class PartnerCustomerCommand
         var noIndustryDiscount = verb.Add(CliOptions.Flag("--no-industry-discount", "Withdraw the industry discount request."));
         var hardLimit = verb.Add(CliOptions.Flag("--hard-limit", "Refuse systems beyond the licensed number."));
         var noHardLimit = verb.Add(CliOptions.Flag("--no-hard-limit", "Allow systems beyond the licensed number."));
-        RefuseBlankName(verb, name, context => context.Get(name));
+        verb.RefuseBlank(name, context => context.Get(name), "a customer name");
 
         verb.AtLeastOne(name, contact, systems, gateways, industryDiscount, noIndustryDiscount, hardLimit, noHardLimit);
         verb.Exclusive(industryDiscount, noIndustryDiscount);
         verb.Exclusive(hardLimit, noHardLimit);
 
-        // --systems sets LicensedAgentsCount and --gateways LicensedGatewaysCount (portal
-        // CustomerPatchModelValidator.cs:14-16, spec/cli-surface.md "Command options").
         SetHandler(verb, customer, (context, customers, id) =>
         {
             var patch = customers.Update(id);
@@ -172,9 +158,8 @@ internal static class PartnerCustomerCommand
         return verb;
     }
 
-    // --billing-months is required, so the command states the billing period it commits to; the
-    // API's default is 1 month (spec/cli-surface.md "Command options"; portal
-    // ConvertCustomerModelValidator.cs:13-17).
+    // --billing-months is required so the command states the billing period it commits to; the
+    // API's default is 1 month (portal ConvertCustomerModel.BillingPeriodMonths).
     private static CliVerb Convert()
     {
         var (verb, customer) = ForCustomer("convert", "Convert a customer from trial to paid, with the billing period it commits to.", changes: true);
@@ -191,8 +176,8 @@ internal static class PartnerCustomerCommand
 
         SetHandler(verb, customer, async (context, customers, id) =>
         {
-            // GetAdminsAsync returns every owner and admin in one response
-            // (CustomersClient.GetAdminsAsync, Enclave.Sdk.Api), so there are no pages to read.
+            // Not paged: one response holds every owner and admin (Enclave.Sdk.Api
+            // CustomersClient.GetAdminsAsync).
             var admins = await SingleItem.CallAsync(() => customers.GetAdminsAsync(id));
 
             await context.Output.WriteListAsync(ListKind.Admin, admins, context.CancellationToken);
@@ -201,9 +186,8 @@ internal static class PartnerCustomerCommand
         return verb;
     }
 
-    // The account is given by ID only: it is a partner user, and listing partner users needs a
-    // scope personal access tokens cannot carry, so an email address cannot be looked up
-    // (spec/cli-surface.md "Names and IDs").
+    // By ID only: listing partner users needs a scope personal access tokens cannot carry, so an
+    // email address cannot be looked up (spec/cli-surface.md "Names and IDs").
     private static CliVerb AddAdmin()
     {
         var (verb, customer) = ForCustomer("add-admin", "Make one of the partner's users an admin of the customer, given by account ID, which the partner portal shows.", changes: true);
@@ -214,8 +198,6 @@ internal static class PartnerCustomerCommand
         return verb;
     }
 
-    // An email address with an account ID contradict each other, as a name with its ID option does
-    // (spec/cli-surface.md "Details").
     private static CliVerb RemoveAdmin()
     {
         var (verb, customer) = ForCustomer("remove-admin", "Remove an admin from the customer, given by email address or account ID.", changes: true);
@@ -241,9 +223,8 @@ internal static class PartnerCustomerCommand
 
         SetHandler(verb, customer, async (context, customers, id) =>
         {
-            // GetPendingInvitesAsync returns every invite in one response
-            // (CustomersClient.GetPendingInvitesAsync, Enclave.Sdk.Api), so there are no pages
-            // to read.
+            // Not paged: one response holds every invite (Enclave.Sdk.Api
+            // CustomersClient.GetPendingInvitesAsync).
             var invites = await SingleItem.CallAsync(() => customers.GetPendingInvitesAsync(id));
 
             await context.Output.WriteListAsync(ListKind.Invite, invites, context.CancellationToken);
@@ -260,8 +241,6 @@ internal static class PartnerCustomerCommand
         return verb;
     }
 
-    // The partner API cancels an invite by its ID, so the address is looked up in the customer's
-    // invites (spec/cli-surface.md "Partner API").
     private static CliVerb CancelInvite()
     {
         var (verb, customer, email) = ForInvite("cancel-invite", "Cancel a pending admin invite to the customer, given by its email address.");
@@ -277,10 +256,8 @@ internal static class PartnerCustomerCommand
     }
 
     // For a customer the partner does not have, the auto-sync routes answer 204 with no body where
-    // the other customer routes answer 404, and Enclave.Sdk.Api reports it by throwing
-    // InvalidOperationException (ICustomersClient.EnableAutoSyncAsync and DisableAutoSyncAsync,
-    // CustomersClient.SetAutoSyncAsync). That is the unknown customer a single-ID command
-    // exits 5 for (spec/cli-surface.md "Several IDs").
+    // the other customer routes answer 404, and Enclave.Sdk.Api throws InvalidOperationException
+    // (CustomersClient.SetAutoSyncAsync). It exits 5, as an unknown customer does elsewhere.
     private static CliVerb AutoSync(string name, string description, Func<ICustomersClient, OrganisationGuid, Task<CustomerModel>> call)
     {
         var (verb, customer) = ForCustomer(name, description, changes: true);
@@ -308,71 +285,40 @@ internal static class PartnerCustomerCommand
         return (verb, customer, email);
     }
 
-    // An empty or blank address names no admin, invite or owner, so it is refused with the other
-    // argument checks, before the token and any call (spec/cli-surface.md "Errors and exit
-    // codes"). Passed on, it would cost the customer lookup and then match nothing, or reach
-    // ICustomersClient.InviteAdminAsync, which throws ArgumentException for a blank address
-    // (Enclave.Sdk.Api), or reach the API as create's owner, which the API refuses (portal
-    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:20,
-    // EmailAddress, which fails a string with no "@" after its first character: FluentValidation
-    // 11.9.0, AspNetCoreCompatibleEmailValidator.IsValid).
+    // A blank address names no admin, invite or owner, so it exits 2 before the token and any call
+    // (spec/cli-surface.md "Details").
     private static Option<string?> EmailOption(CliVerb verb, string name, string description)
     {
         var option = verb.Add(CliOptions.Text(name, description, "email"));
-        RefuseBlank(verb, option, context => context.Get(option), "an email address");
+        verb.RefuseBlank(option, "an email address");
         return option;
     }
 
-    // An empty or blank domain or contact name names no domain or contact. The API stores it as the
-    // customer's (portal CustomerCreateModelValidator.cs:23 and 48 accept it, and
-    // Handlers/CreateCustomerHandler.cs:71 and 76 pass it on), where a flag left out sends null
-    // (spec/cli-surface.md "Command options", the create table), so it is refused with the other
-    // argument checks, before the token and any call ("Errors and exit codes").
+    // A blank domain or contact names nothing, and the API would store it (portal
+    // CustomerCreateModelValidator, CreateCustomerHandler.GetResponseAsync), so it exits 2 before
+    // the token and any call (spec/cli-surface.md "Details").
     private static Option<string?> CreateTextOption(CliVerb verb, string name, string description, string valueName, string takes)
     {
         var option = verb.Add(CliOptions.Text(name, description, valueName));
-        RefuseBlank(verb, option, context => context.Get(option), takes);
+        verb.RefuseBlank(option, takes);
         return option;
     }
 
-    // A command that acts on one customer takes its name, or --org-id, its organisation ID, the
-    // only ID a customer has (portal CustomersController.cs:69). It takes exactly one of them: a
-    // name with its ID option contradict each other (spec/cli-surface.md "Details"), and
+    // A customer's only ID is its organisation ID (portal CustomersController), hence --org-id.
     // ENCLAVE_ORG_ID and the saved organisation choose the organisation that organisation commands
-    // act within, so they never stand in for the customer ("Context").
+    // act within, so they never stand in for the customer (spec/cli-surface.md "Context").
     private static (CliVerb Verb, CustomerChoice Customer) ForCustomer(string name, string description, bool changes)
     {
         var verb = new CliVerb(name, description, CommandScope.Partner, changes);
         var customer = verb.Add(CliArguments.OptionalText("customer", "The customer's name, matched whole and ignoring case."));
         var orgId = verb.Add(CliOptions.Id("--org-id", "The customer's organisation ID.", IdFormats.Guid, "orgId"));
         verb.ExactlyOne(customer, orgId);
-        RefuseBlankName(verb, customer, context => context.Get(customer));
+        verb.RefuseBlank(customer, context => context.Get(customer), "a customer name");
         return (verb, new CustomerChoice(customer, orgId));
     }
 
-    // An empty or blank name names no customer, so it is refused with the other argument checks,
-    // before the token and any call (spec/cli-surface.md "Errors and exit codes"). Passed on,
-    // the name of the customer a command acts on would cost the customer lookup and then match
-    // nothing, and a name for create or update --name would reach the API, which refuses it (portal
-    // Enclave.Partner.Api/Modules/CustomerManagement/Customers/Validators/CustomerCreateModelValidator.cs:19
-    // and CustomerPatchModelValidator.cs:10, NotEmpty, which fails a string that is empty or white
-    // space: FluentValidation 11.9.0, NotEmptyValidator.IsValid).
-    private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value) =>
-        RefuseBlank(verb, symbol, value, "a customer name");
-
-    private static void RefuseBlank(CliVerb verb, Symbol symbol, Func<CliContext, string?> value, string takes) =>
-        verb.Check(context =>
-        {
-            if (value(context) is { } given && string.IsNullOrWhiteSpace(given))
-            {
-                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes {takes}, and the value given is blank.");
-            }
-        });
-
-    // Checks run in the order arguments, token, partner, then the call (spec/cli-surface.md
-    // "Errors and exit codes"). The declared checks run before the handler, and GetPartnerAsync
-    // checks the token and the partner with no call, so it comes before the customer lookup, which
-    // is the first call a command given a customer name makes.
+    // GetPartnerAsync checks the token and the partner with no call, so it goes before the customer
+    // lookup to keep the order of checks (spec/cli-surface.md "Errors and exit codes").
     private static void SetHandler(CliVerb verb, CustomerChoice customer, Func<CliContext, ICustomersClient, OrganisationGuid, Task> handler) =>
         verb.SetHandler(async context =>
         {
@@ -387,8 +333,7 @@ internal static class PartnerCustomerCommand
         });
 
     // Every call on one customer is a single-ID call: a 404 means the API does not know the
-    // customer, or the admin or invite named, and exits 5 ("Several IDs"). Every customer route
-    // answers with a model, which the command prints unchanged.
+    // customer, or the admin or invite named (spec/cli-surface.md "Several IDs").
     private static async Task PrintAsync<T>(CliContext context, Func<Task<T>> call)
     {
         var model = await SingleItem.CallAsync(call);

@@ -1,9 +1,8 @@
 namespace Enclave.Cli.Context;
 
 /// <summary>
-/// The contents of credentials.json. Token, BaseUrl and PartnerApiBaseUrl are null when the file
-/// leaves them out or empty, and all three are null when the file is not a JSON object (IsValid
-/// false).
+/// Token, BaseUrl and PartnerApiBaseUrl are null when the file leaves them out or empty, and all
+/// three are null when IsValid is false.
 /// </summary>
 // A class, not a record: a record's generated ToString lists every property, and the token must
 // never reach output, diagnostics included.
@@ -18,7 +17,7 @@ internal sealed class StoredCredentials
     }
 
     /// <summary>
-    /// The personal access token. Never printed.
+    /// Never printed.
     /// </summary>
     public string? Token { get; }
 

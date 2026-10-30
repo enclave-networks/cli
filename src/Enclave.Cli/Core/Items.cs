@@ -4,16 +4,12 @@ using System.Text.Json.Nodes;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Reads the items a command that takes several was given: arguments, --id a,b, or "-" to read a
-/// list printed by an enclave-cli list command from stdin (spec/cli-surface.md "Several IDs").
-/// </summary>
+// spec/cli-surface.md "Several IDs"
 internal static class Items
 {
     /// <summary>
-    /// For a command whose arguments are names and whose IDs go after --id (keys, policies, zones,
-    /// hostnames, trust requirements): the names, or the IDs from --id or a list on stdin. Declare
-    /// the argument and --id exclusive on the command. Exits 2 when nothing is given.
+    /// For a command whose arguments are names and whose IDs go after --id; declare the two
+    /// exclusive. Exits 2 when nothing is given.
     /// </summary>
     /// <typeparam name="TId">The ID type.</typeparam>
     public static async Task<ItemSelection<TId>> ReadAsync<TId>(
@@ -36,10 +32,9 @@ internal static class Items
 
         if (context.Get(ids) is { } idList)
         {
-            // --id "" or --id "," reads as an empty list (CliOptions.Pieces). It names nothing, as a
-            // command given no items does; only "-" with an empty list succeeds with nothing to do,
-            // so that a pipeline fed by an empty list succeeds (spec/cli-surface.md "Several
-            // IDs").
+            // --id "" reads as an empty list (CliOptions.Pieces), which names nothing. Only "-" with
+            // an empty list succeeds with nothing to do, so a pipeline fed by an empty list succeeds
+            // (spec/cli-surface.md "Several IDs").
             return idList.Count > 0
                 ? new ItemSelection<TId>(idList.Distinct().ToArray(), [])
                 : throw CliErrors.InvalidArgument(ids.Name, $"{ids.Name} holds no ID. Give at least one ID after {ids.Name}, a <{names.Name}>, or \"{CliArguments.Stdin}\" to read a list from stdin.");
@@ -54,9 +49,7 @@ internal static class Items
     }
 
     /// <summary>
-    /// For a command whose arguments are IDs (systems, and tags, which are given by name only): the
-    /// arguments, each as <paramref name="format"/> reads it, or the IDs of a list on stdin.
-    /// Duplicates are removed and the order kept. Exits 2 when nothing is given.
+    /// For a command whose arguments are IDs: systems, and tags. Exits 2 when nothing is given.
     /// </summary>
     // Duplicates are compared in the form the format reads, so a system ID given in two cases is
     // one ID (IdFormats.System).
@@ -98,9 +91,8 @@ internal static class Items
     }
 
     /// <summary>
-    /// The IDs of the items of a list on stdin, which must be a list of <paramref name="kind"/>,
-    /// duplicates removed and the order kept. Exits 2, reading nothing, when stdin is a terminal,
-    /// and exits 2 for input that is not such a list or an ID not in <paramref name="format"/>.
+    /// Exits 2 when stdin is a terminal, is not a list of <paramref name="kind"/>, or holds an ID not
+    /// in <paramref name="format"/>.
     /// </summary>
     /// <typeparam name="TId">The ID type.</typeparam>
     public static async Task<IReadOnlyList<TId>> FromStdinAsync<TId>(CliContext context, ListKind kind, IdFormat<TId> format)

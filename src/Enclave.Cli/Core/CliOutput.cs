@@ -4,10 +4,7 @@ using System.Text.Json.Nodes;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// What a command prints. stdout is held until the command succeeds, so a command that fails part
-/// way prints nothing there; errors and --verbose diagnostics go to stderr as they happen.
-/// </summary>
+// stdout is held until the command succeeds, so a command that fails part way prints nothing there.
 internal sealed class CliOutput
 {
     private readonly TextWriter _stdout;
@@ -18,13 +15,9 @@ internal sealed class CliOutput
 
     private readonly bool _dropCommandOutput;
 
-    /// <summary>
-    /// The output of one command. With <paramref name="dryRun"/> set, everything the command prints
-    /// on stdout is dropped, and <see cref="WriteDryRunAsync"/> prints the dry-run report in its place.
-    /// </summary>
-    // Under --dry-run each change is answered by the CLI itself (DryRun.Answer), so the model or
-    // count a command would print comes from that answer, which the API never sent. Dropping it
-    // unread keeps it out of stdout, and spares writing a model whose fields hold default values.
+    // Under --dry-run the command's own output comes from answers the API never sent (DryRun.Answer),
+    // so it is dropped and WriteDryRunAsync prints the report in its place (spec/cli-surface.md "Dry
+    // run").
     public CliOutput(TextWriter stdout, TextWriter stderr, bool verbose, bool dryRun = false)
     {
         _stdout = stdout;
@@ -36,15 +29,12 @@ internal sealed class CliOutput
     public bool IsVerbose { get; }
 
     /// <summary>
-    /// Prints an Enclave.Sdk.Api model, or any value, as JSON. Under --dry-run it prints nothing.
+    /// Under --dry-run it prints nothing.
     /// </summary>
     /// <typeparam name="T">The value's type, which decides the properties written.</typeparam>
     public Task WriteAsync<T>(T value, CancellationToken cancellationToken = default) =>
         _dropCommandOutput ? Task.CompletedTask : AppendJsonAsync(value, cancellationToken);
 
-    /// <summary>
-    /// Prints the --dry-run report, { "dryRun", "org", "requests" }, as the command's only output.
-    /// </summary>
     public Task WriteDryRunAsync(JsonObject report, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(report);
@@ -53,10 +43,6 @@ internal sealed class CliOutput
         return AppendJsonAsync(report, cancellationToken);
     }
 
-    /// <summary>
-    /// Prints a list in its envelope, { "kind", "items", "total" }, with total the number of items.
-    /// </summary>
-    /// <typeparam name="T">The item model.</typeparam>
     public Task WriteListAsync<T>(ListKind kind, IReadOnlyCollection<T> items, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(kind);
@@ -65,14 +51,11 @@ internal sealed class CliOutput
         return WriteAsync(new ListEnvelope<T>(kind.Name, items, items.Count), cancellationToken);
     }
 
-    /// <summary>
-    /// Prints { "requested", "affected" }, the output of a command that takes several items.
-    /// </summary>
     public Task WriteBulkAsync(BulkResult result, CancellationToken cancellationToken = default) =>
         WriteAsync(result, cancellationToken);
 
     /// <summary>
-    /// Prints text as it is. Only help prints text; every other output is JSON.
+    /// Only help prints text; every other output is JSON.
     /// </summary>
     public Task WriteTextAsync(string text)
     {
@@ -85,7 +68,7 @@ internal sealed class CliOutput
     }
 
     /// <summary>
-    /// Writes a diagnostic line on stderr when --verbose is given. Callers never pass the token.
+    /// Never pass the token.
     /// </summary>
     public void Verbose(string message)
     {
@@ -96,7 +79,7 @@ internal sealed class CliOutput
     }
 
     /// <summary>
-    /// Writes the held stdout. Called once the command has succeeded.
+    /// Call once the command has succeeded.
     /// </summary>
     public async Task FlushAsync()
     {
@@ -104,9 +87,6 @@ internal sealed class CliOutput
         _pending.Clear();
     }
 
-    /// <summary>
-    /// Drops the held stdout and writes the error as one JSON line on stderr.
-    /// </summary>
     public async Task WriteErrorAsync(CliException error)
     {
         ArgumentNullException.ThrowIfNull(error);
@@ -115,10 +95,6 @@ internal sealed class CliOutput
         await _stderr.WriteLineAsync(Describe(error).ToJsonString(CliJson.Compact));
     }
 
-    /// <summary>
-    /// The error as the CLI writes it: { "error": { "code", "status", "title", "detail", "errors" } },
-    /// with candidates, requested and affected when the error carries them.
-    /// </summary>
     public static JsonObject Describe(CliException error)
     {
         ArgumentNullException.ThrowIfNull(error);
@@ -152,9 +128,8 @@ internal sealed class CliOutput
         return new JsonObject { ["error"] = body };
     }
 
-    // SerializeAsync, because some Enclave.Sdk.Api models hold IAsyncEnumerable properties, which
-    // only the asynchronous serializer writes (System.Text.Json, JsonSerializer.Serialize throws
-    // NotSupportedException for them).
+    // Some Enclave.Sdk.Api models hold IAsyncEnumerable properties, which only the asynchronous
+    // serializer writes; JsonSerializer.Serialize throws NotSupportedException for them.
     private async Task AppendJsonAsync<T>(T value, CancellationToken cancellationToken)
     {
         using var stream = new MemoryStream();

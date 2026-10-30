@@ -7,30 +7,18 @@ using Enclave.Cli.Context;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// The changes a command run with --dry-run would send, captured in place of being sent, and the
-/// organisation or partner they are for (spec/cli-surface.md "Dry run").
-/// </summary>
+// spec/cli-surface.md "Dry run"
 internal sealed class DryRun
 {
     private readonly List<JsonObject> _requests = [];
 
     private readonly Lock _lock = new();
 
-    /// <summary>
-    /// The organisation the command acts in, once the command has resolved it.
-    /// </summary>
     public OrganisationInUse? Organisation { get; set; }
 
-    /// <summary>
-    /// The partner a partner command acts for, once the command has resolved it.
-    /// </summary>
     public PartnerInUse? Partner { get; set; }
 
-    /// <summary>
-    /// Records the request's method, URL and body, in the order the command sends them. The
-    /// request's headers, the Authorization header that carries the token among them, are left out.
-    /// </summary>
+    // The headers are left out, so the token in the Authorization header stays out of the report.
     public async Task CaptureAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -50,37 +38,18 @@ internal sealed class DryRun
         }
     }
 
-    /// <summary>
-    /// The answer a captured change gets in place of the API's: 200 with the JSON body {}.
-    /// </summary>
-    // Every Enclave.Sdk.Api call the CLI makes to change something checks the status, reads the body
-    // into a model or a bulk result, and fails when there is none. Most read it with
-    // ClientBase.DeserialiseAsync and check it with EnsureNotNull, as PatchClient.ApplyAsync and
-    // CustomersClient.ReadAsync do; RemoveUserAsync, InviteUserAsync and CancelInviteAync throw
-    // InvalidOperationException for an empty body or JSON null and deserialise any other
-    // (OrganisationScopedClient.ReadModelAsync, OrganisationScopedClient.cs:158-176; Enclave.Sdk.Api).
-    // {} passes both: it is neither empty nor null, and it reads as a model whose fields hold
-    // their default values, or a bulk count of 0, since no model has a required member (neither
-    // Enclave.Sdk.Api nor Enclave.Sdk.Api.Data uses RequiredMemberAttribute or
-    // JsonRequiredAttribute). Every call then completes, so a bulk command over 200 IDs goes on to
-    // show each of its calls.
-    //
-    // Nothing read from the answer is printed: the command's own output is dropped under --dry-run,
-    // and the report holds the captured requests alone. No command builds a request from a change's
-    // answer, with one exception: tag set sends its create after a 404 from its update, and under
-    // --dry-run it reads the tag instead to choose between them (TagSetCommand).
+    // Every Enclave.Sdk.Api change call fails on an empty body or JSON null (ClientBase.EnsureNotNull,
+    // OrganisationScopedClient.ReadModelAsync). {} reads as a model with default values, or a bulk
+    // count of 0, since no model has a required member, so every call completes and a bulk command
+    // over 200 IDs shows each of its calls. Nothing read from the answer is printed, and no command
+    // builds a request from it; tag set, which would, reads the tag instead (TagSetCommand).
     public static HttpResponseMessage Answer(HttpRequestMessage request) => new(HttpStatusCode.OK)
     {
         Content = new StringContent("{}", Encoding.UTF8, MediaTypeNames.Application.Json),
         RequestMessage = request,
     };
 
-    /// <summary>
-    /// The --dry-run output: { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method",
-    /// "url", "body" } ] }, with "partner": { "id" } in place of "org" for a partner command. The
-    /// organisation's name is null when it was given by ID, and org is null when the command
-    /// resolved neither an organisation nor a partner.
-    /// </summary>
+    // The organisation's name is null when it was given by ID.
     public JsonObject Report()
     {
         JsonArray requests;
@@ -105,8 +74,8 @@ internal sealed class DryRun
         return report;
     }
 
-    // Every body Enclave.Sdk.Api sends is JSON; anything else is shown as the text it is, so the
-    // report holds what would have been sent.
+    // Every body Enclave.Sdk.Api sends is JSON; any other is shown as text, so the report holds what
+    // would have been sent.
     private static JsonNode? Parse(string? body)
     {
         if (string.IsNullOrEmpty(body))

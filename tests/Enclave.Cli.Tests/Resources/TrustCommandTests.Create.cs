@@ -5,14 +5,8 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// trust create <description> (spec/cli-surface.md "Command options"). The body is the API's
-// TrustRequirementCreateModel: description, type, notes, and settings holding a configuration and
-// a list of conditions, every value a string (portal TrustRequirementSettingsModel, and portal-spa
-// redux/sagas/business/trust-requirements/createTrustRequirement.ts sends the same four fields).
-// The type comes from the flags: --authority makes a sign-in requirement (UserAuthentication), the
-// --allow-* and --block-* flags a public IP one (PublicIp). The configuration keys are the API's:
-// authority, tenantId, authorityUri, clientId and aud (portal UserAuthenticationConstants.cs;
-// portal-spa appConstants/trustRequirements.ts:73-75).
+// The configuration keys are the API's: authority, tenantId, authorityUri, clientId and aud (portal
+// UserAuthenticationConstants).
 
 /// <summary>
 /// Tests for trust create.
@@ -21,16 +15,13 @@ public partial class TrustCommandTests
 {
     private const string Tenant = "9b1c3a52-7f0e-4d8a-b0a4-2c6e1d5f8a31";
 
-    // The fields of TrustRequirementCreateModel and TrustRequirementSettingsModel (portal
-    // Enclave.Api/Modules/SystemManagement/TrustRequirements/Models), every one a setting a create
-    // sends ("Create and update").
+    // The fields of the API's TrustRequirementCreateModel and TrustRequirementSettingsModel.
     private static readonly string[] TrustCreateFields = ["description", "type", "notes", "settings"];
 
     private static readonly string[] TrustSettingsFields = ["configuration", "conditions"];
 
-    // Example 26. azure takes --tenant, and its configuration holds the authority and tenantId only
-    // (portal TrustRequirementSettingsUserAuthValidator.cs:35-38); a claim condition is
-    // { claim, value } (same file, 55).
+    // Example 26. The API allows only authority and tenantId for azure, and { claim, value } for a
+    // claim (portal TrustRequirementSettingsUserAuthValidator).
     [Test]
     public async Task Trust_create_with_the_azure_authority_sends_a_sign_in_requirement_with_its_tenant_and_claim()
     {
@@ -70,11 +61,8 @@ public partial class TrustCommandTests
         });
     }
 
-    // Example 56 is the portal case. portal and google take no settings ("Command options"), so the
-    // configuration holds the authority alone (portal TrustRequirementSettingsUserAuthValidator.cs:40-43
-    // for portal). The body holds every field of TrustRequirementCreateModel, and --claim, the list
-    // flag left out, is sent as an empty list of conditions ("Details"; portal
-    // TrustRequirementCreateModel.cs, TrustRequirementSettingsModel.cs).
+    // Example 56 is the portal case. --claim left out is sent as an empty list of conditions
+    // ("Details").
     [TestCase("portal")]
     [TestCase("google")]
     public async Task Trust_create_with_an_authority_that_takes_no_settings_sends_the_authority_alone(string authority)
@@ -100,8 +88,7 @@ public partial class TrustCommandTests
         });
     }
 
-    // Example 57. A generic OIDC provider requires its https address and a client ID (portal
-    // TrustRequirementSettingsUserAuthValidator.cs:45-48), sent as authorityUri and clientId.
+    // Example 57.
     [Test]
     public async Task Trust_create_with_the_oidc_authority_sends_the_authority_uri_client_id_and_claim()
     {
@@ -124,8 +111,7 @@ public partial class TrustCommandTests
         });
     }
 
-    // okta, jumpcloud, duo and oidc take --audience, which the API reads as aud (portal
-    // UserAuthenticationConstants.AudienceKey; TrustRequirementSettingsUserAuthValidator.cs:49).
+    // The API reads the audience as aud (portal UserAuthenticationConstants.AudienceKey).
     [TestCase("okta")]
     [TestCase("jumpcloud")]
     [TestCase("duo")]
@@ -162,9 +148,7 @@ public partial class TrustCommandTests
         });
     }
 
-    // A generic authority requires --authority-uri and --client-id (portal
-    // TrustRequirementSettingsUserAuthValidator.cs:47-48; "Command options"). Each case gives one,
-    // or neither.
+    // The API requires both for a generic authority (portal TrustRequirementSettingsUserAuthValidator).
     [TestCase("--client-id", "enclave-portal")]
     [TestCase("--authority-uri", "https://sso.example.com")]
     [TestCase(null, null)]
@@ -178,8 +162,7 @@ public partial class TrustCommandTests
             run, rejected, ["trust", "create", "sso", "--authority", "oidc", "--authority-uri", "https://sso.example.com", "--client-id", "enclave-portal"], "POST", TrustsPath);
     }
 
-    // The authority's address must be https (portal TrustRequirementSettingsUserAuthValidator.cs:47,
-    // KeyMustBeHttpsUri; "Command options").
+    // The API requires https (portal TrustRequirementSettingsUserAuthValidator, KeyMustBeHttpsUri).
     [Test]
     public async Task Trust_create_rejects_an_authority_uri_that_is_not_https()
     {
@@ -194,15 +177,9 @@ public partial class TrustCommandTests
             TrustsPath);
     }
 
-    // A sign-in setting given "" or only white space carries no value, so it exits 2 before the
-    // token and any call, as trust update's --set-client-id "" does ("Command options"). The API
-    // refuses an authority address that is not https, and a client ID or audience that is empty or
-    // white space (portal TrustRequirementSettingsUserAuthValidator.cs:47-49, whose
-    // MustHaveKeyWithValue and KeyNotEmptyIfSet test string.IsNullOrWhiteSpace,
-    // DictionaryValidationExtensions.cs:45,82), and stores a blank tenant, since for azure it checks
-    // only which keys the configuration holds (TrustRequirementSettingsUserAuthValidator.cs:35-38).
-    // The command with every setting given a value, run next, shows the rejection comes from the
-    // blank one, and the run without a token shows the check comes before the token.
+    // The API refuses a blank client ID or audience and an address that is not https, and stores a
+    // blank tenant (portal TrustRequirementSettingsUserAuthValidator; DictionaryValidationExtensions
+    // MustHaveKeyWithValue, KeyNotEmptyIfSet). The run without a token shows the check comes first.
     [TestCase("oidc", "--authority-uri", "")]
     [TestCase("oidc", "--authority-uri", " ")]
     [TestCase("oidc", "--client-id", "")]
@@ -224,9 +201,8 @@ public partial class TrustCommandTests
         CliAssert.Rejected(withoutToken, await withoutToken.RunAsync(rejected));
     }
 
-    // The API stores a repeated range or country as given: its public IP validator checks each
-    // condition on its own (portal TrustRequirementSettingsPublicIpValidator.cs:24-53), so the CLI
-    // sends both conditions ("Command options").
+    // The API checks each condition on its own and accepts a repeat (portal
+    // TrustRequirementSettingsPublicIpValidator), so the CLI sends both.
     [TestCase("--allow-ip")]
     [TestCase("--block-ip")]
     [TestCase("--allow-country")]
@@ -243,10 +219,9 @@ public partial class TrustCommandTests
         Assert.That(JsonAssert.Property(JsonAssert.Property(request.BodyJson, "settings"), "conditions").GetArrayLength(), Is.EqualTo(2));
     }
 
-    // Each authority takes only its own settings, and a setting the authority does not take exits 2
-    // ("Command options"). The API refuses such a setting for azure and portal only (portal
-    // TrustRequirementSettingsUserAuthValidator.cs:35-43), so the google case shows the CLI refuses
-    // one the API would store.
+    // The API refuses such a setting for azure and portal only (portal
+    // TrustRequirementSettingsUserAuthValidator, AllowedKeys), so the google case shows the CLI
+    // refuses one the API would store.
     [TestCase("portal", "--tenant", Tenant)]
     [TestCase("google", "--client-id", "enclave-portal")]
     [TestCase("azure", "--client-id", "enclave-portal")]
@@ -274,7 +249,6 @@ public partial class TrustCommandTests
             TrustsPath);
     }
 
-    // --claim repeats, and a token must carry every claim given.
     [Test]
     public async Task Trust_create_sends_every_claim_given()
     {
@@ -287,8 +261,8 @@ public partial class TrustCommandTests
         Assert.That(Claims(JsonAssert.Property(JsonAssert.Property(request.BodyJson, "settings"), "conditions")), Is.EqualTo(Set("groups=admins", "roles=operator")));
     }
 
-    // --authority takes portal, azure, google, okta, jumpcloud, duo or oidc ("Command options"),
-    // the authorities the API knows (portal TrustRequirementSettingsUserAuthValidator.cs:13-26).
+    // The API knows no other authority (portal TrustRequirementSettingsUserAuthValidator,
+    // _knownAuthorities).
     [Test]
     public async Task Trust_create_rejects_an_authority_outside_the_allowed_values()
     {
@@ -299,10 +273,8 @@ public partial class TrustCommandTests
             run, ["trust", "create", "sign in", "--authority", "ldap"], ["trust", "create", "sign in", "--authority", "google"], "POST", TrustsPath);
     }
 
-    // Example 27. Each condition is { type, value, isBlocked, description } with type ip or country
-    // (portal TrustRequirementSettingsPublicIpValidator.cs:27). isBlocked is sent on every
-    // condition, since the check skips an IP condition without it (services
-    // Enclave.Discover/TrustValidators/PublicIpValidator.cs:163-167).
+    // Example 27. isBlocked is sent on every condition, since the check skips an IP condition without
+    // it (services PublicIpValidator.GetIpRanges).
     [Test]
     public async Task Trust_create_with_allow_and_block_flags_sends_a_public_ip_requirement_with_isblocked_on_every_condition()
     {
@@ -323,7 +295,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // Country codes are matched ignoring case ("Command options"), so gb is the United Kingdom.
     [Test]
     public async Task Trust_create_takes_a_country_code_in_either_case()
     {
@@ -335,7 +306,7 @@ public partial class TrustCommandTests
         Assert.That(Conditions(JsonAssert.Property(JsonAssert.Property(request.BodyJson, "settings"), "conditions")), Is.EqualTo("country|GB|false|(none)"));
     }
 
-    // Example 82. The label after "=" is the condition's description ("Command options").
+    // Example 82.
     [Test]
     public async Task Trust_create_sends_each_ip_label_as_the_condition_description()
     {
@@ -350,8 +321,7 @@ public partial class TrustCommandTests
             Is.EqualTo(Set("ip|203.0.113.0/24|false|Office", "ip|203.0.113.66/32|true|Guest Wi-Fi NAT")));
     }
 
-    // Example 83, with a comma in one label. Country flags repeat, one country each, never a comma
-    // list, since a label can hold a comma ("Command options").
+    // Example 83. Country flags repeat in place of a comma list, so a label can hold a comma.
     [Test]
     public async Task Trust_create_sends_each_country_flag_as_one_labelled_condition()
     {
@@ -377,7 +347,6 @@ public partial class TrustCommandTests
             Is.EqualTo(Set("country|GB|false|UK offices, London and Leeds", "country|IE|false|Dublin office", "ip|198.51.100.0/24|true|Shared hosting")));
     }
 
-    // An empty label is sent as a null description ("Details").
     [Test]
     public async Task Trust_create_sends_an_empty_label_as_a_null_description()
     {
@@ -416,8 +385,7 @@ public partial class TrustCommandTests
         Assert.That(Text(request.BodyJson, "notes"), Is.EqualTo("Required for admins, see ticket 88"));
     }
 
-    // The type comes from the flags, and a requirement is either a sign-in or a public IP one, so
-    // mixing the two exits 2 ("Command options").
+    // The type comes from the flags, and a requirement has one type.
     [Test]
     public async Task Trust_create_rejects_sign_in_and_public_ip_flags_together()
     {

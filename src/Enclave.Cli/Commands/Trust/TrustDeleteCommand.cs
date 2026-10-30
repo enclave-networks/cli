@@ -3,10 +3,6 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// `trust delete`: deletes any number of trust requirements with the bulk call
-/// (spec/cli-surface.md "Several IDs").
-/// </summary>
 internal static class TrustDeleteCommand
 {
     public static CliVerb Create()
@@ -21,12 +17,8 @@ internal static class TrustDeleteCommand
         {
             var selection = await Items.ReadAsync(context, requirements, ids, ListKind.Trust, IdFormats.Int32);
 
-            // An empty list from stdin makes no call and needs no organisation, so a pipeline fed by
-            // an empty list succeeds ("Several IDs"). Under --dry-run an empty list resolves the
-            // organisation too, since the dry run output names it ("Dry run").
-            if (selection.Ids.Count == 0 && selection.Names.Count == 0 && !context.IsDryRun)
+            if (await Bulk.WroteEmptyAsync(context, selection.Count))
             {
-                await context.Output.WriteBulkAsync(new BulkResult(0, 0), context.CancellationToken);
                 return;
             }
 

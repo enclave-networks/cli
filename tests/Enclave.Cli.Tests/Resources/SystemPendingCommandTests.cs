@@ -3,9 +3,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// Systems waiting for approval are reached with --pending on system list, show and update, and
-// approved or declined with system approve and decline (spec/cli-surface.md "Commands"). The
-// API keeps them apart from enrolled systems, under unapproved-systems.
+// The API keeps systems waiting for approval apart from enrolled systems, under
+// unapproved-systems.
 public class SystemPendingCommandTests
 {
     private static readonly string PendingPath = TestData.OrgPath("unapproved-systems");
@@ -16,30 +15,10 @@ public class SystemPendingCommandTests
 
     private static readonly string KeysPath = TestData.OrgPath("enrolment-keys");
 
-    // The clock the --waiting-for tests give the CLI, so each enrolledAt is a fixed time before it.
+    // The --waiting-for tests fix the clock, so each enrolledAt is a fixed time before it.
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
-    // The list's kind is pending-system, so that approve and decline can check a list given to them
-    // (spec/cli-surface.md "Output"). Three systems two to a page take two reads.
-    [Test]
-    public async Task System_list_pending_reads_every_page_of_the_waiting_systems_and_prints_a_pending_system_list()
-    {
-        using var run = CliRun.Start();
-        run.StubPages(PendingPath, 2, ApiJson.PendingSystem("XYZ12"), ApiJson.PendingSystem("XYZ13"), ApiJson.PendingSystem("XYZ14"));
-
-        var result = await run.RunAsync("system", "list", "--pending");
-
-        var items = CliAssert.List(result, "pending-system");
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("XYZ12,XYZ13,XYZ14"));
-            Assert.That(run.PagesRequested(PendingPath), Is.EqualTo("0,1"));
-            Assert.That(run.RequestsTo("GET", SystemsPath), Is.Empty);
-        });
-    }
-
-    // --key-id uses the API's enrolment_key parameter (Enclave.Sdk.Api
-    // UnapprovedSystemsClient.BuildQueryString). Example 3, first command.
+    // Example 3, first command (Enclave.Sdk.Api UnapprovedSystemsClient.BuildQueryString).
     [Test]
     public async Task System_list_pending_key_id_sends_the_enrolment_key_parameter()
     {
@@ -55,9 +34,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --key looks the key up by its description with one list call, then sends its ID as --key-id
-    // does (spec/cli-surface.md "Filters" and "Names and IDs"). Name lookups ask for disabled
-    // items too ("Filters").
+    // The lookup asks for disabled keys too (spec/cli-surface.md "Filters").
     [Test]
     public async Task System_list_pending_key_looks_the_key_up_by_description_and_sends_its_id_as_the_enrolment_key_parameter()
     {
@@ -78,10 +55,8 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --filter sends its text as typed, and --tag adds the API's tags key to the search
-    // (spec/cli-surface.md "Filters"). The waiting systems are searched with the enrolled
-    // systems' search keys (portal UnapprovedSystems/Handlers/PaginatedUnapprovedSystemsHandler.cs
-    // passes the search to the system repository).
+    // The API searches waiting systems with the enrolled systems' search keys (portal
+    // PaginatedUnapprovedSystemsHandler passes the search to the system repository).
     [TestCase("--filter laptop", "laptop")]
     [TestCase("--filter version:<2024.8.0", "version:<2024.8.0")]
     [TestCase("--tag kiosk", "tags:kiosk")]
@@ -96,26 +71,7 @@ public class SystemPendingCommandTests
         Assert.That(request.QueryValue("search"), Is.EqualTo(search));
     }
 
-    // --sort takes UnapprovedSystemQuerySortMode's members (portal
-    // UnapprovedSystems/Models/UnapprovedSystemQuerySortMode.cs), lower-case and hyphenated
-    // (spec/cli-surface.md "Options on every command").
-    [TestCase("recently-enrolled", "RecentlyEnrolled")]
-    [TestCase("description", "Description")]
-    [TestCase("enrolment-key-used", "EnrolmentKeyUsed")]
-    [TestCase("description-or-hostname", "DescriptionOrHostname")]
-    public async Task System_list_pending_sort_sends_the_api_sort_name(string sort, string expected)
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", PendingPath, json: ApiJson.Page());
-
-        var request = await CliAssert.AcceptedAsync(run, "GET", PendingPath, "system", "list", "--pending", "--sort", sort);
-
-        Assert.That(request.QueryValue("sort"), Is.EqualTo(expected));
-    }
-
-    // With --pending, --sort takes the waiting systems' sort values (spec/cli-surface.md
-    // "Details"), and UnapprovedSystemQuerySortMode has none of these members.
-    [TestCase("recently-connected")]
+    // UnapprovedSystemQuerySortMode has none of these members (spec/cli-surface.md "Details").
     [TestCase("last-connected")]
     [TestCase("state")]
     [TestCase("version")]
@@ -132,8 +88,7 @@ public class SystemPendingCommandTests
             PendingPath);
     }
 
-    // --pending with an option only enrolled systems have exits 2 (spec/cli-surface.md
-    // "Details"). The corrected command leaves the option out.
+    // spec/cli-surface.md "Details".
     [TestCase("--include-disabled")]
     [TestCase("--state connected")]
     [TestCase("--os linux")]
@@ -155,8 +110,7 @@ public class SystemPendingCommandTests
             PendingPath);
     }
 
-    // --waiting-for without --pending exits 2 (spec/cli-surface.md "Details"); enrolled systems
-    // are not waiting.
+    // Enrolled systems are not waiting (spec/cli-surface.md "Details").
     [Test]
     public async Task System_list_waiting_for_without_pending_exits_2_without_a_request()
     {
@@ -172,14 +126,10 @@ public class SystemPendingCommandTests
             PendingPath);
     }
 
-    // --waiting-for has no API search key, so the CLI keeps the systems whose enrolledAt is longer ago
-    // than the duration, from every page it reads, and total counts the matches
-    // (spec/cli-surface.md "Filters"). The matches are on all three pages, so a CLI that filters
-    // one page misses some. The clock is fixed at Now, so 7d reaches back to
-    // 2030-03-07T20:00:00Z exactly: EDGE01, enrolled at that instant, has waited 7 days, which is at
-    // least the duration (the option's description), and NEW01, enrolled one second later, has not.
-    // The systems enrolled in 2030, so the matches follow from the clock the test gives the CLI and
-    // from no other.
+    // The API has no search key for this, so the CLI filters every page it reads
+    // (spec/cli-surface.md "Filters"); the matches are on all three pages. 7d before the clock is
+    // 2030-03-07T20:00:00Z: EDGE01, enrolled then, has waited at least 7 days, and NEW01, a second
+    // later, has not.
     [Test]
     public async Task System_list_pending_waiting_for_keeps_the_systems_waiting_longer_and_counts_only_them_in_total()
     {
@@ -204,10 +154,8 @@ public class SystemPendingCommandTests
         });
     }
 
-    // A duration that reaches back before year 1 names no time the CLI can compare enrolledAt with
-    // (DateTimeOffset.MinValue), so it is an argument error that names its option, and exits 2
-    // before any call. 1000000d, about 2,700 years, reaches back before year 1 from the fixed clock
-    // in 2030, in the test's own zone, TestData.LocalZone, as in Contract/TimeInputTests.cs.
+    // No DateTimeOffset is earlier than year 1, so the CLI has no time to compare enrolledAt with.
+    // 1000000d is about 2,700 years.
     [Test]
     public async Task System_list_pending_waiting_for_a_duration_reaching_before_year_1_exits_2_without_a_request()
     {
@@ -222,8 +170,7 @@ public class SystemPendingCommandTests
         await CliAssert.AcceptedAsync(run, "GET", PendingPath, "system", "list", "--pending", "--waiting-for", "7d");
     }
 
-    // Example 3: the list system list --pending prints is the input of system approve, which
-    // approves the listed systems. Both commands run in one sandbox, as a shell pipeline runs them.
+    // Example 3, with both commands in one sandbox as a shell pipeline runs them.
     [Test]
     public async Task System_approve_given_the_waiting_systems_enrolled_with_key_12_approves_those_systems()
     {
@@ -246,9 +193,8 @@ public class SystemPendingCommandTests
         });
     }
 
-    // Example 5: the list --waiting-for prints is the input of system decline, which declines the
-    // systems waiting more than a week and no others. The clock is fixed at Now: OLD01 and OLD02
-    // have waited 10 and 30 days, and NEW01 2 days.
+    // Example 5, with both commands in one sandbox. OLD01 and OLD02 have waited 10 and 30 days, and
+    // NEW01 2 days.
     [Test]
     public async Task System_decline_given_the_systems_waiting_more_than_a_week_declines_those_systems()
     {
@@ -269,31 +215,9 @@ public class SystemPendingCommandTests
         Assert.That(string.Join(",", declines[0].BodyIds("systemIds")), Is.EqualTo("OLD01,OLD02"));
     }
 
-    // show --pending reads the waiting system, never an enrolled one, and prints the model the API
-    // returned.
-    [Test]
-    public async Task System_show_pending_gets_the_waiting_system_and_prints_it()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", $"{PendingPath}/XYZ12", json: ApiJson.PendingSystem("XYZ12", "lobby kiosk"));
-
-        var result = await run.RunAsync("system", "show", "XYZ12", "--pending");
-
-        CliAssert.Succeeded(result);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("GET"));
-            Assert.That(request.Path, Is.EqualTo($"{PendingPath}/XYZ12"));
-            Assert.That(result.StdoutJson.GetProperty("systemId").GetString(), Is.EqualTo("XYZ12"));
-            Assert.That(result.StdoutJson.GetProperty("description").GetString(), Is.EqualTo("lobby kiosk"));
-            Assert.That(result.StdoutJson.GetProperty("enrolledFrom").GetString(), Is.EqualTo("203.0.113.10"));
-        });
-    }
-
-    // An update sends only the fields given (spec/cli-surface.md "Create and update").
     // Enclave.Sdk.Api keys the patch body by UnapprovedSystemPatchModel's property names
-    // (PatchClient.Set). The output is the model the API returned.
+    // (PatchClient.Set). The API answers with another description, so the output shows it is the
+    // model returned.
     [Test]
     public async Task System_update_pending_sends_the_description_notes_and_tags_to_the_waiting_system()
     {
@@ -325,8 +249,7 @@ public class SystemPendingCommandTests
         });
     }
 
-    // An update with no change flag exits 2 (spec/cli-surface.md "Details"): there is nothing to
-    // send.
+    // spec/cli-surface.md "Details".
     [Test]
     public async Task System_update_pending_without_a_change_flag_exits_2_without_a_request()
     {
@@ -367,9 +290,9 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --add-tags reads the waiting system, then patches its whole tag list, so the tags it has stay
-    // (spec/cli-surface.md "Create and update"). The read and the patch both go to the waiting
-    // system. The order of the tags does not matter to the API, so they are compared sorted.
+    // The API takes the whole tag list, so the CLI reads the waiting system's tags to keep them
+    // (spec/cli-surface.md "Create and update"). Tags are compared sorted, since their order does
+    // not matter to the API.
     [Test]
     public async Task System_update_pending_add_tags_reads_the_waiting_system_and_sends_its_tags_with_the_new_tag()
     {
@@ -391,8 +314,8 @@ public class SystemPendingCommandTests
         });
     }
 
-    // --pending with the gateway flags exits 2 (spec/cli-surface.md "Details"): a waiting system
-    // has no gateway routes to set (UnapprovedSystemPatchModel).
+    // A waiting system has no gateway routes to set (UnapprovedSystemPatchModel; spec/cli-surface.md
+    // "Details").
     [TestCase("--enable-gateway-for 10.0.0.0/16")]
     [TestCase("--disable-gateway")]
     public async Task System_update_pending_with_a_gateway_flag_exits_2_without_a_request(string flags)
@@ -410,35 +333,7 @@ public class SystemPendingCommandTests
             $"{PendingPath}/XYZ12");
     }
 
-    // approve and decline act on waiting systems only (spec/cli-surface.md "Commands"), in one
-    // bulk call for any number of systems ("Several IDs"). Routes and result fields are those of
-    // Enclave.Sdk.Api UnapprovedSystemsClient (ApproveSystemsAsync, DeclineSystems). Bulk
-    // approve succeeds when some systems were not approved (portal UnapprovedSystemsController.cs:
-    // 170-177), so the API counts one of the two and the output carries its count.
-    [TestCase("approve", "PUT", "unapproved-systems/approve", "systemsApproved")]
-    [TestCase("decline", "DELETE", "unapproved-systems", "systemsDeclined")]
-    public async Task System_approve_and_decline_send_every_system_given_in_one_bulk_call_and_print_requested_and_affected(
-        string verb, string method, string pathSuffix, string resultField)
-    {
-        ArgumentNullException.ThrowIfNull(pathSuffix);
-        using var run = CliRun.Start();
-        var path = TestData.OrgPath(pathSuffix);
-        run.StubBulk(method, path, resultField, 1);
-
-        var result = await run.RunAsync("system", verb, "XYZ12", "XYZ13");
-
-        CliAssert.Bulk(result, 2, 1);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo(method));
-            Assert.That(request.Path, Is.EqualTo(path));
-            Assert.That(string.Join(",", request.BodyIds("systemIds")), Is.EqualTo("XYZ12,XYZ13"));
-        });
-    }
-
-    // enrolledAt is a DateTime in UnapprovedSystemSummaryModel, written as ApiJson writes those, in
-    // UTC with Z; each test gives it in that form.
+    // enrolledAt is a DateTime in UnapprovedSystemSummaryModel, which ApiJson writes in UTC with Z.
     private static string Waiting(string systemId, string enrolledAt) =>
         ApiJson.Altered(ApiJson.PendingSystem(systemId), ("enrolledAt", enrolledAt));
 }

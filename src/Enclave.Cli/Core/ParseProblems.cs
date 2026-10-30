@@ -3,24 +3,18 @@ using System.CommandLine.Parsing;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Reports what System.CommandLine could not parse as one invalid_argument error.
-/// </summary>
-// Every command action of the CLI clears System.CommandLine's parse errors (ClearsParseErrors), so
-// the parser never runs its own ParseErrorAction, which writes text and help and exits 1
-// (ParseErrorAction.cs, System.CommandLine 2.0.12). Clearing removes the errors the parser
-// attached to the command itself, which are the unmatched tokens, and keeps those of options and
-// arguments (ParseOperation.ValidateAndAddDefaultResults). The unmatched tokens stay in
-// ParseResult.UnmatchedTokens, so this class rebuilds those errors from them and adds the errors
-// the parser kept.
+// Every command action clears System.CommandLine's parse errors (CliAction.ClearsParseErrors). That
+// removes the errors attached to the command itself, which are the unmatched tokens, and keeps
+// those of options and arguments (System.CommandLine 2.0.12,
+// ParseOperation.ValidateAndAddDefaultResults), so this class rebuilds the removed ones from
+// ParseResult.UnmatchedTokens.
 internal static class ParseProblems
 {
     // The errors key of an unknown option reported without its name.
     private const string UnnamedOptionKey = "options";
 
     /// <summary>
-    /// The error for everything that did not parse, with detail naming the first problem and
-    /// errors listing each, or null when the command line parsed.
+    /// Null when the command line parsed.
     /// </summary>
     public static CliException? Find(ParseResult parseResult)
     {
@@ -29,11 +23,9 @@ internal static class ParseProblems
         var problems = new List<(string Key, string Message)>();
         AddUnmatchedTokens(parseResult, problems);
 
-        // An error the parser attached to a command is about an unmatched token, which the tokens
-        // above already report, and its message repeats the token. It reaches here when the action
-        // that runs does not clear parse errors (--version), or when the token came before a
-        // subcommand (`system --bogus list`), since clearing keeps the errors of commands other
-        // than the innermost.
+        // A command's errors are about unmatched tokens, reported above, and repeat the token. They
+        // reach here under --version, whose action does not clear them, and for a token before a
+        // subcommand (`system --bogus list`), since clearing keeps the errors of outer commands.
         foreach (var error in parseResult.Errors.Where(error => error.SymbolResult is not CommandResult))
         {
             problems.Add((KeyOf(error.SymbolResult), MessageOf(error)));
@@ -54,8 +46,7 @@ internal static class ParseProblems
     }
 
     /// <summary>
-    /// The command's full name without the executable, such as "partner customer list", or
-    /// "enclave-cli" for the root.
+    /// Such as "partner customer list"; "enclave-cli" for the root.
     /// </summary>
     public static string CommandName(CommandResult result)
     {
@@ -72,14 +63,12 @@ internal static class ParseProblems
     }
 
     // A value given to an unknown option could be a token passed by mistake, so no message repeats
-    // any part of a value, or anything joined to an option's name (spec/cli-surface.md "Errors
-    // and exit codes"). An unknown option is named only when what is printed has the form the
-    // CLI's own options have: "--" and lower-case words joined by hyphens, or "-" and one letter or
-    // digit. Every option of the CLI is written that way, apart from help's -?, /h and /?
-    // (ParseErrorTests checks it), so a mistyped option written as the CLI's options are is named.
-    // A word that follows an unknown option is taken as its value and left out unless the option
-    // carries a value of its own, and an unknown command or extra argument is described by its
-    // position.
+    // any part of a value, or anything joined to an option's name (spec/cli-surface.md "Errors and
+    // exit codes"). An unknown option is named only when it has the form every CLI option but help's
+    // -?, /h and /? has (ParseErrorTests): "--" and lower-case words joined by hyphens, or "-" and
+    // one letter or digit. A word after an unknown option is taken as its value and left out unless
+    // the option carries a value of its own. An unknown command or extra argument is described by
+    // its position.
     //
     //   token                        named as   the word after it
     //   ---------------------------  ---------  -------------------
@@ -92,24 +81,18 @@ internal static class ParseProblems
     //   --Bogus=V                    not named  reported on its own
     //
     // A long name ends at "=" or ":", where System.CommandLine splits a known option from its value
-    // (Parsing/StringExtensions.cs, TrySplitIntoSubtokens, version 2.0.12), or at white space, which
-    // one argument holds when a script quotes an option and its value together. Anything else after
-    // the name, such as a token glued to it, leaves the option unnamed, with no suggestion, and the
-    // message points to `commands` for the options the command takes.
+    // (System.CommandLine 2.0.12, StringExtensions.TrySplitIntoSubtokens), or at white space, as
+    // when a script quotes an option and its value together. Anything else glued to the name leaves
+    // the option unnamed, and the message points to `commands`.
     //
-    // The rule gives up some cases. A value glued to a name with nothing between them reads as part
-    // of the name when the value is itself lower-case letters and hyphens, since nothing tells
-    // "--notesreviewed" from a mistyped option; a personal access token is 63 characters of
-    // Base58, which holds digits and capitals as well as lower-case letters (portal
-    // src/Enclave.Accounts.Data/Stores/AccessTokenStore.cs:102-135, StoreReferenceTokenAsync), so
-    // one glued to a name is printed only when every character of it is a lower-case letter. A
-    // single-dash token shows the character after the dash, which is one character of a value
-    // written straight after a dash, too little to give a token away. A word that starts with "-"
-    // after an unknown option is read as another option, so such a value is named when it has an
-    // option's form; in exchange two unknown options in a row (`--bogus --wrong`) are both
-    // reported. An option written with a capital or a digit gets no name and no suggestion, which
-    // the pointer to `commands` makes up for, as the suggestion does for the less specific message
-    // a mistyped command word gets.
+    // Trade-offs: a value glued to a name reads as part of it when the value is lower-case letters
+    // and hyphens, since nothing tells "--notesreviewed" from a mistyped option; a personal access
+    // token is Base58, with digits and capitals (portal AccessTokenStore.StoreReferenceTokenAsync),
+    // so one is printed only when every character is a lower-case letter. A single-dash token shows
+    // one character of a value, too little to give a token away. A value starting with "-" after an
+    // unknown option is read as another option, and named when it has an option's form; in exchange
+    // `--bogus --wrong` reports both. An option with a capital or digit gets no name or suggestion;
+    // the pointer to `commands` makes up for it.
     private static void AddUnmatchedTokens(ParseResult parseResult, List<(string Key, string Message)> problems)
     {
         var commandResult = parseResult.CommandResult;
@@ -131,7 +114,7 @@ internal static class ParseProblems
                 }
                 else
                 {
-                    var suggestion = Suggestions.Closest(name, OptionNames(commandResult));
+                    var suggestion = Suggestions.Closest(name, HelpWriter.VisibleOptions(commandResult).Select(option => option.Name));
                     problems.Add((name, $"`{commandName}` has no option {name}.{DidYouMean(suggestion)}"));
                 }
 
@@ -162,9 +145,7 @@ internal static class ParseProblems
         }
     }
 
-    // The name an unknown option is reported by, or null when the token is not written as an option
-    // name, and whether the token carries a value of its own; the table above AddUnmatchedTokens
-    // gives the cases.
+    // The table above AddUnmatchedTokens gives the cases.
     private static (string? Name, bool CarriesValue) ReadOption(string token)
     {
         if (token[1] != '-')
@@ -188,22 +169,6 @@ internal static class ParseProblems
 
     private static IEnumerable<Command> VisibleSubcommands(Command command) =>
         command.Subcommands.Where(subcommand => !subcommand.Hidden);
-
-    private static IEnumerable<string> OptionNames(CommandResult commandResult)
-    {
-        foreach (var option in commandResult.Command.Options.Where(option => !option.Hidden))
-        {
-            yield return option.Name;
-        }
-
-        for (var parent = commandResult.Parent as CommandResult; parent is not null; parent = parent.Parent as CommandResult)
-        {
-            foreach (var option in parent.Command.Options.Where(option => option.Recursive && !option.Hidden))
-            {
-                yield return option.Name;
-            }
-        }
-    }
 
     // A missing value gets a message that names the command or option in the CLI's terms; any
     // other parser message, such as a value given twice to an option that takes one, is passed on.

@@ -5,27 +5,16 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// Every ID is checked against its format before any call, and one bad ID stops the command with
-/// exit 2 (spec/cli-surface.md "ID checks"). A parse error also exits 2, so each test runs the
-/// command again with valid IDs and checks it then sends its request.
-/// </summary>
+// spec/cli-surface.md "ID checks". A parse error also exits 2, so each test runs the command again
+// with valid IDs and checks it then sends its request.
 public class IdCheckTests
 {
-    private const string Until = "2030-01-01T00:00:00Z";
-
     private const string AllZeroGuid = "00000000-0000-0000-0000-000000000000";
 
-    // An --until that has passed exits 2 ("Details"), so the commands run on a clock fixed before
-    // Until, which keeps each case's answer the same whatever the date.
-    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
-
-    // spec/cli-surface.md "ID checks": every ID is checked before any call, so a malformed one
-    // exits 2 naming it and sends nothing. Put into a URL path unescaped, this ID would send DELETE
-    // org/<id>/systems/ABCDE and revoke system ABCDE, since .NET resolves ".." when it combines the
-    // path with the base address; Enclave.Sdk.Api escapes it (ClientBase.PathSegment), and the
-    // check does not depend on that. Every route the ID could reach is answered, so any request it
-    // caused would be recorded.
+    // Unescaped in a URL path, this ID would revoke system ABCDE, since .NET resolves ".." against
+    // the base address. Enclave.Sdk.Api escapes it (ClientBase.PathSegment), and the check does not
+    // depend on that. Every route the ID could reach is answered, so any request it caused would be
+    // recorded.
     [Test]
     public async Task System_decline_exits_2_for_a_path_traversal_id_and_sends_nothing()
     {
@@ -106,7 +95,7 @@ public class IdCheckTests
         string? readResponse)
     {
         using var run = CliRun.Start();
-        run.Time = Clock;
+        run.Time = TestData.Clock;
         run.Stub(method, path, 200, response);
 
         if (otherPath is not null)
@@ -154,9 +143,8 @@ public class IdCheckTests
         Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
     }
 
-    // partner use saves the partner as the default for later commands, and partners are given by
-    // GUID (spec/cli-surface.md "ID checks"), so an ID that is not a GUID is refused before
-    // anything is saved. partner use makes no call either way ("Login, logout and status").
+    // partner use saves the default for later commands, and makes no call either way ("Login,
+    // logout and status").
     [Test]
     public async Task Partner_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
     {
@@ -177,9 +165,8 @@ public class IdCheckTests
         });
     }
 
-    // The all-zero GUID names no organisation or partner, so org use and partner use refuse it
-    // before saving it as the default every later command would use. The corrected run proves the
-    // option and the file.
+    // The all-zero GUID names no organisation or partner, and a saved default reaches every later
+    // command.
     [TestCase("org")]
     [TestCase("partner")]
     public async Task Use_exits_2_for_the_all_zero_guid_and_saves_nothing(string noun)
@@ -200,11 +187,9 @@ public class IdCheckTests
         Assert.That(Guid.Parse(JsonAssert.Property(saved, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(valid));
     }
 
-    // The organisation and partner IDs that come from the environment or from cli.json are checked
-    // as the options' are ("ID checks"), so the all-zero GUID there exits 2 before any call. It
-    // comes after the token in the order of checks ("Errors and exit codes"), and a saved default
-    // names the file it came from, so the caller knows what to fix. The corrected run, with a real
-    // ID in the same place, proves the source is read.
+    // IDs from the environment or cli.json are checked as the options' are ("ID checks"). The error
+    // for a saved default names its file, so the caller knows what to fix. The corrected run shows
+    // the source is read.
     [TestCase("ENCLAVE_ORG_ID")]
     [TestCase("ENCLAVE_PARTNER_ID")]
     [TestCase("cli.json org")]
@@ -238,10 +223,8 @@ public class IdCheckTests
         Assert.That(run.Calls(), Is.EqualTo(new[] { call }));
     }
 
-    // Partners and customers are given by GUID (spec/cli-surface.md "ID checks"), and arguments
-    // are checked before anything else ("Errors and exit codes"), so a bad ID exits 2 and sends
-    // nothing. The second run, with GUIDs, passes the check and makes the command's one call, on the
-    // partner API route of the partner and customer it was given.
+    // The second run makes the command's one call, on the route of the partner and customer it was
+    // given ("ID checks").
     [TestCaseSource(nameof(PartnerIdCases))]
     public async Task Partner_customer_command_exits_2_for_a_partner_or_customer_id_that_is_not_a_guid(string[] rejectedArgs, string[] acceptedArgs, string call)
     {
@@ -333,16 +316,15 @@ public class IdCheckTests
         yield return Case("dns create-hostname --systems ../systems/ABCDE", ["dns", "create-hostname", "db.internal", "--systems", "FGHIJ,../systems/ABCDE"], ["dns", "create-hostname", "db.internal", "--systems", "FGHIJ,ABCDE"], "POST", "dns/records", ApiJson.Record(7, "db"), readPathSuffix: "dns/zones", readResponse: ApiJson.Page(ApiJson.Zone(4, "internal")));
         yield return Case("dns update-hostname --set-systems AB/CD", ["dns", "update-hostname", "--id", "7", "--set-systems", "ABCDE,AB/CD"], ["dns", "update-hostname", "--id", "7", "--set-systems", "ABCDE,FGHIJ"], "PATCH", "dns/records/7", ApiJson.Record(7, "db"));
 
-        // Tags: the API's tag rule (portal TagValidationExtensions.cs:13).
+        // Tags: the API's tag rule (portal TagValidationExtensions.MustBeValidTag).
         yield return Case("tag show Web", ["tag", "show", "Web"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
         yield return Case("tag show web/db", ["tag", "show", "web/db"], ["tag", "show", "web"], "GET", "tags/web", ApiJson.Tag("web"));
         yield return Case("tag show web..db", ["tag", "show", "web..db"], ["tag", "show", "web.db"], "GET", "tags/web.db", ApiJson.Tag("web.db"));
         yield return Case("tag show web-", ["tag", "show", "web-"], ["tag", "show", "web-1"], "GET", "tags/web-1", ApiJson.Tag("web-1"));
         yield return Case("tag set ../systems/ABCDE", ["tag", "set", "../systems/ABCDE", "--notes", "front end"], ["tag", "set", "web", "--notes", "front end"], "PATCH", "tags/web", ApiJson.Tag("web"), readPathSuffix: "tags/web", readResponse: ApiJson.Tag("web"));
 
-        // Keys, policies, zones, hostnames and trust requirements: integers after --id or an option
-        // naming the item. Integer IDs are 32-bit (spec/cli-surface.md "Details"; portal
-        // Enclave.Configuration.Data/Identifiers, IdBackingType.Int), so 99999999999 is refused.
+        // Keys, policies, zones, hostnames and trust requirements: integers. Integer IDs are 32-bit
+        // ("Details"; portal IdBackingType.Int), so 99999999999 is refused.
         yield return Case("key show --id 12a", ["key", "show", "--id", "12a"], ["key", "show", "--id", "12"], "GET", "enrolment-keys/12", ApiJson.Key(12));
         yield return Case("key update --id ../policies/3", ["key", "update", "--id", "../policies/3", "--description", "build agents"], ["key", "update", "--id", "12", "--description", "build agents"], "PATCH", "enrolment-keys/12", ApiJson.Key(12, "build agents"));
         yield return Case("key enable --for --id 1.5", ["key", "enable", "--id", "1.5", "--for", "8h"], ["key", "enable", "--id", "12", "--for", "8h"], "PUT", "enrolment-keys/12/enable-until", ApiJson.Key(12));
@@ -350,7 +332,7 @@ public class IdCheckTests
         yield return Case("system list --pending --key-id ../3", ["system", "list", "--pending", "--key-id", "../3"], ["system", "list", "--pending", "--key-id", "3"], "GET", "unapproved-systems", ApiJson.Page(ApiJson.PendingSystem("XYZ12")));
         yield return Case("policy show --id 0x1F", ["policy", "show", "--id", "0x1F"], ["policy", "show", "--id", "31"], "GET", "policies/31", ApiJson.Policy(31));
         yield return Case("policy update --id ../3", ["policy", "update", "--id", "../3", "--description", "web to db"], ["policy", "update", "--id", "3", "--description", "web to db"], "PATCH", "policies/3", ApiJson.Policy(3, "web to db"));
-        yield return Case("policy enable --until --id three", ["policy", "enable", "--id", "three", "--until", Until], ["policy", "enable", "--id", "3", "--until", Until], "PUT", "policies/3/enable-until", ApiJson.Policy(3));
+        yield return Case("policy enable --until --id three", ["policy", "enable", "--id", "three", "--until", TestData.FutureUntil], ["policy", "enable", "--id", "3", "--until", TestData.FutureUntil], "PUT", "policies/3/enable-until", ApiJson.Policy(3));
         yield return Case("policy create --trust-id 3a", ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432", "--trust-id", "3a"], ["policy", "create", "web to db", "--senders", "web", "--receivers", "db", "--acl", "tcp:5432", "--trust-id", "3"], "POST", "policies", ApiJson.Policy(42, "web to db"));
         yield return Case("tag set --trust-id ../5", ["tag", "set", "prod", "--trust-id", "../5"], ["tag", "set", "prod", "--trust-id", "5"], "PATCH", "tags/prod", ApiJson.Tag("prod"), readPathSuffix: "tags/prod", readResponse: ApiJson.Tag("prod"));
         yield return Case("dns show-zone --id ../records/7", ["dns", "show-zone", "--id", "../records/7"], ["dns", "show-zone", "--id", "4"], "GET", "dns/zones/4", ApiJson.Zone(4, "internal"));
@@ -362,9 +344,8 @@ public class IdCheckTests
         yield return Case("trust show --id five", ["trust", "show", "--id", "five"], ["trust", "show", "--id", "5"], "GET", "trust-requirements/5", ApiJson.Trust(5));
         yield return Case("trust update --id ../5", ["trust", "update", "--id", "../5", "--description", "uk only"], ["trust", "update", "--id", "5", "--description", "uk only"], "PATCH", "trust-requirements/5", ApiJson.Trust(5, "uk only"));
 
-        // Organisations and accounts: GUIDs. RemoveUserAsync takes the account ID as a string
-        // (Enclave.Sdk.Api, OrganisationScopedClient.RemoveUserAsync), so the path carries
-        // whichever GUID form the CLI passes.
+        // Organisations and accounts: GUIDs. org remove-user answers both GUID forms, as in
+        // ChangeCommand.All.
         yield return Case("system list --org-id not-a-guid", ["system", "list", "--org-id", "not-a-guid"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("system list --org-id ../account/orgs", ["system", "list", "--org-id", "../account/orgs"], ["system", "list", "--org-id", TestData.OtherOrgId.ToString()], "GET", otherOrgSystems, ApiJson.Page(ApiJson.System("ABCDE")));
         yield return Case("org remove-user --id not-a-guid", ["org", "remove-user", "--id", "not-a-guid"], ["org", "remove-user", "--id", TestData.PartnerStaffAccountId], "DELETE", $"users/{TestData.PartnerStaffAccountGuid:N}", ApiJson.User(TestData.PartnerStaffAccountGuid, "sam@example.com"), otherPathSuffix: $"users/{TestData.PartnerStaffAccountGuid:D}");

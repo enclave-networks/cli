@@ -1,20 +1,15 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Finds the known name closest to a mistyped one.
-/// </summary>
 internal static class Suggestions
 {
-    // System.CommandLine's own typo corrections allow three edits whatever the length
-    // (ParseErrorAction, MaxLevenshteinDistance, version 2.0.12), which suggests --os for --bogus.
-    // One edit per three characters, up to three, keeps the suggestions for slips such as sytem,
-    // lst or --filtr and drops those for words that only share a few letters.
+    // System.CommandLine's own typo corrections allow three edits whatever the length, which
+    // suggests --os for --bogus (System.CommandLine 2.0.12, ParseErrorAction.MaxLevenshteinDistance).
+    // One edit per three characters, up to three, keeps slips such as sytem, lst or --filtr and drops
+    // words that only share a few letters.
     private const int MaxDistance = 3;
 
     /// <summary>
-    /// The candidate with the smallest edit distance from <paramref name="typed"/>, within one edit
-    /// per three characters typed (at least one, at most three), preferring the longer common prefix
-    /// on a tie; null when none is that close.
+    /// Null when no candidate is close enough.
     /// </summary>
     public static string? Closest(string typed, IEnumerable<string> candidates)
     {

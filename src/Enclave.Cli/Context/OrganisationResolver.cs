@@ -7,9 +7,7 @@ using Enclave.Sdk.Api;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// Chooses the organisation a command acts in (spec/cli-surface.md "Context").
-/// </summary>
+// spec/cli-surface.md "Context".
 internal static class OrganisationResolver
 {
     public const string NameVariable = "ENCLAVE_ORG";
@@ -17,38 +15,14 @@ internal static class OrganisationResolver
     public const string IdVariable = "ENCLAVE_ORG_ID";
 
     /// <summary>
-    /// The source status reports when the token sees one organisation and nothing else chose it.
+    /// The source when the token sees one organisation and nothing else chose it.
     /// </summary>
     public const string OnlyOrganisation = "only-organisation";
 
     /// <summary>
-    /// Refuses an empty or blank organisation name given to <paramref name="option"/>, --org, with
-    /// the verb's other argument checks.
-    /// </summary>
-    public static void RefuseBlankName(CliVerb verb, Option<string?> option)
-    {
-        ArgumentNullException.ThrowIfNull(option);
-
-        RefuseBlankName(verb, option, context => context.Get(option));
-    }
-
-    /// <summary>
-    /// Refuses an empty or blank organisation name given to <paramref name="argument"/>, such as
-    /// org use's name, with the verb's other argument checks.
-    /// </summary>
-    public static void RefuseBlankName(CliVerb verb, Argument<string?> argument)
-    {
-        ArgumentNullException.ThrowIfNull(argument);
-
-        RefuseBlankName(verb, argument, context => context.Get(argument));
-    }
-
-    /// <summary>
-    /// The organisation the command line, the environment or cli.json chooses, before any lookup;
-    /// null when none does. Precedence is --org or --org-id, then ENCLAVE_ORG or ENCLAVE_ORG_ID,
-    /// then the saved default, and a lower source is not read once a higher one gives a value, so a
-    /// malformed lower source does not fail the command ("Details"). An empty variable counts as
-    /// unset. A malformed source that is read, or both variables set, exits 2.
+    /// Null when no source chooses one. A lower source is not read once a higher one gives a value,
+    /// so a malformed lower source does not fail the command ("Details"). An empty variable counts
+    /// as unset. A malformed source that is read, or both variables set, exits 2.
     /// </summary>
     public static OrganisationChoice? Choose(CliContext context)
     {
@@ -91,9 +65,8 @@ internal static class OrganisationResolver
     }
 
     /// <summary>
-    /// The organisation for a command: by ID with no call, or by name or with none chosen after one
-    /// GetOrganisationsAsync call. With none chosen, the token's only organisation is used, and
-    /// several exit 2 with no_org and the organisations as candidates.
+    /// By ID with no call; by name, or with none chosen, after one GetOrganisationsAsync call. With
+    /// none chosen the token's only organisation is used; with several it exits 2 with no_org.
     /// </summary>
     public static async Task<OrganisationInUse> ResolveAsync(CliContext context, EnclaveClient client)
     {
@@ -133,8 +106,8 @@ internal static class OrganisationResolver
     }
 
     /// <summary>
-    /// The one organisation whose name is <paramref name="name"/>, matched whole and ignoring case.
-    /// No match, or several, exits 2 with the matches as candidates (none for no match).
+    /// Matched whole and ignoring case. No match, or several, exits 2 with the matches as
+    /// candidates.
     /// </summary>
     public static AccountOrganisationModel MatchName(string name, IReadOnlyList<AccountOrganisationModel> organisations, string key)
     {
@@ -151,9 +124,6 @@ internal static class OrganisationResolver
         };
     }
 
-    /// <summary>
-    /// Organisations as error candidates, { "id", "name" }.
-    /// </summary>
     public static JsonArray Candidates(IEnumerable<AccountOrganisationModel> organisations)
     {
         ArgumentNullException.ThrowIfNull(organisations);
@@ -167,43 +137,8 @@ internal static class OrganisationResolver
             .ToArray());
     }
 
-    // An empty or blank name names no organisation. Passed on, it would cost the lookup a name makes
-    // and then match nothing, and that lookup needs the token, so the same command line would exit 3
-    // without a token and 2 with one. Refused with the other argument checks, it exits 2 before the
-    // token and any call whatever the token (spec/cli-surface.md "Errors and exit codes").
-    private static void RefuseBlankName(CliVerb verb, Symbol symbol, Func<CliContext, string?> value)
-    {
-        ArgumentNullException.ThrowIfNull(verb);
-
-        verb.Check(context =>
-        {
-            if (value(context) is { } name && string.IsNullOrWhiteSpace(name))
-            {
-                throw CliErrors.InvalidArgument(CliVerb.KeyOf(symbol), $"{CliVerb.Describe(symbol)} takes an organisation name, and the value given is blank.");
-            }
-        });
-    }
-
-    // A default in a shape org use does not save, such as an ID given as a bare string, names no
-    // organisation, so it exits 2 naming the file, as a malformed ID does. Only a missing default
-    // falls through to the lookup.
-    private static OrganisationChoice? Saved(CliHost host)
-    {
-        if (SettingsFile.PathFor(host) is not { } path || SettingsFile.Read(host)?["org"] is not { } saved)
-        {
-            return null;
-        }
-
-        if (saved is not JsonObject savedOrg
-            || savedOrg["id"] is not JsonValue value
-            || !value.TryGetValue(out string? text)
-            || !IdFormats.Guid.TryParse(text, out var guid))
-        {
-            throw CliErrors.InvalidArgument($"The default organisation in {path} has no valid ID. Save it again with `enclave-cli org use`.");
-        }
-
-        var name = savedOrg["name"] is JsonValue savedName && savedName.TryGetValue(out string? nameText) ? nameText : null;
-
-        return new OrganisationChoice(OrganisationGuid.FromGuid(guid), name, path);
-    }
+    private static OrganisationChoice? Saved(CliHost host) =>
+        SettingsFile.ReadDefault(host, "org", "organisation", "enclave-cli org use") is { } saved
+            ? new OrganisationChoice(OrganisationGuid.FromGuid(saved.Id), saved.Name, saved.Path)
+            : null;
 }

@@ -3,23 +3,17 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// System IDs are upper-case: the API makes each one from an alphabet of upper-case letters and
-// digits (portal Enclave.Configuration/HashIdProvider.cs:39, with the sdk repository's
-// Enclave.Sdk.Security.Abstractions/SecurityConstants.cs:13, CertificateNameKeyspaceAlphabet). The
-// API upper-cases the ID its own system routes are given (portal
-// Enclave.Api/Modules/SystemManagement/Systems/Handlers/SingleSystemQueryHandler.cs:45,
-// BulkSystemUpdateHandler.cs:56, MultipleSystemDeletionHandler.cs:110,
-// UnapprovedSystems/Handlers/BulkUnapprovedSystemDeleteHandler.cs:82), and compares a policy
-// gateway's system ID exactly (Policies/Validators/PolicyGatewayValidator.cs:49). The CLI
-// upper-cases a system ID when it reads it, so every request and every duplicate check sees the
-// form the API stores (spec/cli-surface.md "Names and IDs").
+// The API makes system IDs from upper-case letters and digits (portal HashIdProvider; the sdk
+// repository's SecurityConstants.cs, CertificateConstants.CertificateNameKeyspaceAlphabet). Its
+// system routes upper-case the ID they are given, but other checks compare it exactly (portal
+// PolicyGatewayValidator), so the CLI upper-cases a system ID when it reads it
+// (spec/cli-surface.md "Names and IDs").
 public class SystemIdCaseTests
 {
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
-    // Each command reads the system ID from its argument; enable --for takes one system the way the
-    // bulk verbs take several, so it covers the argument that holds a list. A CLI that sends the ID
-    // as typed asks for systems/abcde.
+    // enable --for reads its system the way the bulk verbs read several, so it covers the argument
+    // that holds a list.
     [TestCase("system show abcde", "GET", "systems/ABCDE")]
     [TestCase("system show abcde --pending", "GET", "unapproved-systems/ABCDE")]
     [TestCase("system update abcde --notes rack", "PATCH", "systems/ABCDE")]
@@ -36,10 +30,9 @@ public class SystemIdCaseTests
         await CliAssert.AcceptedAsync(run, method, path, command.Split(' '));
     }
 
-    // The API upper-cases each ID of a bulk call (portal BulkSystemUpdateHandler.cs:56), so abcde and
-    // ABCDE name one system, and a CLI that sends both reports two requested where one system was
-    // asked for. The duplicate is removed ("Several IDs"). The lower-case form comes first, so a CLI
-    // that removes duplicates ignoring case and keeps the first form sends abcde.
+    // The API upper-cases each ID of a bulk call (portal BulkSystemUpdateHandler.GetResponseAsync),
+    // so abcde and ABCDE name one system. The lower-case form comes first, so a CLI that removes
+    // duplicates ignoring case but keeps the first form sends abcde.
     [Test]
     public async Task System_disable_given_one_id_in_two_cases_sends_it_once_upper_case()
     {
@@ -53,9 +46,8 @@ public class SystemIdCaseTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds("systemIds")), Is.EqualTo("ABCDE"));
     }
 
-    // The policy gateway check finds the gateway system by an exact comparison (portal
-    // PolicyGatewayValidator.cs:49), so a gateway named gw001 is refused with 400 though system
-    // GW001 exists. The ID is sent upper-case.
+    // The API finds a gateway's system by an exact comparison (portal
+    // PolicyGatewayValidator.IsValidGateway), so it refuses gw001 though system GW001 exists.
     [Test]
     public async Task Policy_create_sends_a_gateway_system_id_given_in_lower_case_upper_case()
     {
@@ -69,9 +61,8 @@ public class SystemIdCaseTests
         Assert.That(JsonRead.StringFieldList(request.BodyJson.GetProperty("gateways"), "systemId"), Is.EqualTo("GW001"));
     }
 
-    // A hostname's systems are system IDs too, which the API upper-cases before it looks them up and
-    // stores them (portal Dns/Handlers/DnsRecordPatchHandler.cs:128, DnsRecordCreateHandler.cs:104),
-    // so they are sent in that form.
+    // The API stores a hostname's systems upper-case (portal DnsRecordPatchHandler and
+    // DnsRecordCreateHandler, GetResponseAsync), so the CLI sends them in that form.
     [Test]
     public async Task Dns_update_hostname_sends_the_systems_given_in_lower_case_upper_case()
     {

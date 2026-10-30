@@ -6,19 +6,13 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// --dry-run prints { "dryRun": true, "org": { "id", "name" }, "requests": [ { "method", "url", "body" } ] }
-/// with the requests Enclave.Sdk.Api builds for the change, sends none of them and exits 0
-/// (spec/cli-surface.md "Dry run").
-/// </summary>
+// spec/cli-surface.md "Dry run".
 public class DryRunTests
 {
     private static readonly Dictionary<string, string> NoQuery = new(StringComparer.Ordinal);
 
-    // The reads a change depends on run under --dry-run, such as the zone a hostname belongs to;
-    // only the change is withheld. The change itself is answered by the fake API, so a CLI that
-    // sent it would show it in the requests. The organisation is given by ID (ENCLAVE_ORG_ID), so
-    // no lookup is made and its name is null (spec/cli-surface.md "Dry run").
+    // The fake API answers the change, so a CLI that sent it would show it in the requests. The
+    // organisation comes from ENCLAVE_ORG_ID, so no lookup is made and its name is null.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Dry_run_prints_the_request_a_change_would_send_and_sends_no_change(ChangeCommand command)
     {
@@ -59,8 +53,7 @@ public class DryRunTests
         });
     }
 
-    // The API takes at most 200 IDs per bulk call (portal Enclave.Utilities/HardLimits.cs:22), so a
-    // command over 200 IDs makes several calls, and the dry run shows each of them, in order.
+    // The API takes at most 200 IDs per bulk call (portal HardLimits.MaxBulkIds).
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dry_run_of_a_bulk_command_over_200_items_shows_each_call_it_would_make(BulkCommand command)
     {
@@ -82,8 +75,7 @@ public class DryRunTests
         });
     }
 
-    // An empty list makes no call (spec/cli-surface.md "Several IDs"), so its dry run shows no
-    // request.
+    // An empty list makes no call ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dry_run_given_an_empty_list_on_stdin_shows_no_request(BulkCommand command)
     {
@@ -101,8 +93,7 @@ public class DryRunTests
         });
     }
 
-    // Example 4 in spec/cli-surface.md: a reviewer sees which systems an approval would admit
-    // before it is sent.
+    // Example 4: a reviewer sees which systems an approval would admit before it is sent.
     [Test]
     public async Task Dry_run_of_system_approve_prints_the_ids_of_the_list_on_stdin()
     {
@@ -123,9 +114,8 @@ public class DryRunTests
         });
     }
 
-    // Example 54 in spec/cli-surface.md. The dry run and the delete run in one sandbox, so the
-    // request the dry run prints is compared with the request the delete then sends. A name costs
-    // one lookup in each run, the dry run included, and --id none ("Calls per command", "Dry run").
+    // Example 54. One sandbox runs both, so the printed request is compared with the one the delete
+    // then sends. A name costs one lookup, under --dry-run too ("Calls per command").
     [TestCase(false)]
     [TestCase(true)]
     public async Task Dry_run_of_policy_delete_prints_the_request_policy_delete_then_sends(bool byName)
@@ -164,9 +154,8 @@ public class DryRunTests
         });
     }
 
-    // A named organisation is looked up, one call (spec/cli-surface.md "Calls per command"), so
-    // the CLI has both its ID and its name to print. ENCLAVE_ORG_ID names the other organisation
-    // when the name comes from --org, so the output shows the named one was used.
+    // ENCLAVE_ORG_ID names the other organisation when the name comes from --org, so the output
+    // shows the named one was used.
     [TestCase(false)]
     [TestCase(true)]
     public async Task Dry_run_prints_the_organisation_given_by_name_and_builds_the_url_from_its_id(bool fromEnvironment)
@@ -194,8 +183,7 @@ public class DryRunTests
         });
     }
 
-    // An organisation given by ID needs no lookup, so the dry run makes none and has no name to
-    // print (spec/cli-surface.md "Dry run").
+    // An organisation given by ID needs no lookup ("Dry run").
     [Test]
     public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id_and_prints_a_null_name()
     {
@@ -214,10 +202,9 @@ public class DryRunTests
         });
     }
 
-    // Personal access tokens do not expire (portal Enclave.Accounts/Controllers/Api/
-    // TokensApiController.cs:105), and dry-run output ends up in agent transcripts and CI logs, so
-    // it leaves the Authorization header out, under --verbose too. The organisation is named, so
-    // the lookup carrying the token shows the CLI held the token it left out.
+    // Personal access tokens do not expire (portal TokensApiController.Create), and dry-run output
+    // ends up in agent transcripts and CI logs. The organisation is named, so the lookup carrying
+    // the token shows the CLI held the token it left out.
     [TestCase(false)]
     [TestCase(true)]
     public async Task Dry_run_output_leaves_out_the_authorization_header_and_the_token(bool tokenFromCredentialsFile)
@@ -244,10 +231,8 @@ public class DryRunTests
         });
     }
 
-    // An update sends only the fields given (spec/cli-surface.md "Create and update"), and the
-    // printed body is the one Enclave.Sdk.Api would send, so it holds the description alone.
-    // PatchClient keys the body by the model's property name (Enclave.Sdk.Api,
-    // PatchClient.cs, Set), which JsonAssert.Property matches ignoring case.
+    // "Create and update". Enclave.Sdk.Api PatchClient.Set keys the body by the model's property
+    // name, which JsonAssert.Property matches ignoring case.
     [Test]
     public async Task Dry_run_of_an_update_prints_a_body_holding_only_the_fields_given()
     {
@@ -269,8 +254,7 @@ public class DryRunTests
         });
     }
 
-    // DnsClient.DeleteZoneAsync sends DELETE with no body (Enclave.Sdk.Api), which the dry run
-    // shows as "body": null (spec/cli-surface.md "Dry run").
+    // Enclave.Sdk.Api DnsClient.DeleteZoneAsync sends no body ("Dry run").
     [Test]
     public async Task Dry_run_of_a_request_without_a_body_prints_a_null_body()
     {
@@ -291,8 +275,7 @@ public class DryRunTests
     }
 
     // tag set reads the tag to choose between the API's update and create calls, and that read
-    // runs under --dry-run too (spec/cli-surface.md "Dry run"), so the dry run shows the call
-    // the command would make: an update when the tag exists, a create when it does not.
+    // runs under --dry-run too ("Dry run").
     [TestCase(true, "PATCH", "tags/web")]
     [TestCase(false, "POST", "tags")]
     public async Task Dry_run_of_tag_set_reads_the_tag_and_shows_the_update_or_create_it_chooses(bool tagExists, string method, string pathSuffix)
@@ -325,13 +308,9 @@ public class DryRunTests
         });
     }
 
-    // A flag that replaces a list keeps the label of every entry that stays. A label given with the
-    // flag replaces it, an empty one removes it, and a new entry without a label has none
-    // (spec/cli-surface.md "Command options"). The CLI reads the key to find the labels, a read
-    // the dry run makes too ("Dry run"), and the dry run shows the list it would send.
-    // 172.16.0.0/12 is left out, so it goes. A label can hold a comma, since the flag is repeated.
-    // An empty label is sent as null ("Details"), and Text reads a null or missing label as (none)
-    // and an empty string as (empty), so the check tells them apart.
+    // The read that finds the labels runs under --dry-run too ("Dry run", "Command options"). An
+    // empty label is sent as null ("Details"), and Text reads null as (none) and an empty string as
+    // (empty), so the check tells them apart.
     [Test]
     public async Task Dry_run_of_an_update_that_replaces_a_list_shows_the_labels_it_keeps()
     {
@@ -371,20 +350,17 @@ public class DryRunTests
         });
     }
 
-    // --then revoke is the API's Delete on a system (spec/cli-surface.md "Options on every
-    // command"), --for counts from when the command runs, and the CLI sends the expiry as a UTC
-    // instant ("Details").
+    // --then revoke is the API's Delete on a system ("Options on every command").
     [Test]
     public async Task Dry_run_of_a_timed_enable_prints_the_expiry_and_the_action_taken_then()
     {
         using var run = CliRun.Start();
         var path = TestData.OrgPath("systems/K7P2Q/enable-until");
         run.Stub("PUT", path, 200, ApiJson.System("K7P2Q"));
-        var before = DateTimeOffset.UtcNow;
+        run.Time = TestData.Clock;
 
         var result = await run.RunAsync("system", "enable", "K7P2Q", "--for", "24h", "--then", "revoke", "--dry-run");
 
-        var after = DateTimeOffset.UtcNow;
         var (_, request) = DryRunOutput.ReadOne(result);
         var body = JsonAssert.Property(request, "body");
         var expiry = JsonRead.ExpiryDateTime(body);
@@ -393,15 +369,13 @@ public class DryRunTests
             Assert.That(Text(request, "method"), Is.EqualTo("PUT"));
             Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, path)));
             Assert.That(Text(body, "expiryAction"), Is.EqualTo("Delete"));
-            Assert.That(expiry, Is.InRange(before.AddHours(24).AddMinutes(-1), after.AddHours(24).AddMinutes(1)));
+            Assert.That(expiry, Is.EqualTo(TestData.Clock.GetUtcNow().AddHours(24)));
             Assert.That(expiry.Offset, Is.EqualTo(TimeSpan.Zero));
             Assert.That(run.Requests, Is.Empty);
         });
     }
 
-    // --dry-run exists only on commands that change something through the API, so on a read it is
-    // an unknown option and exits 2 (spec/cli-surface.md "Details"). The second run shows the
-    // command itself works.
+    // The second run shows the command itself works ("Details").
     [TestCaseSource(nameof(ReadOnlyCases))]
     public async Task Dry_run_is_an_unknown_option_on_a_command_that_only_reads(string[] args, string path, string response)
     {
@@ -420,9 +394,7 @@ public class DryRunTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(path));
     }
 
-    // login, logout, org use and partner use change only local files and do not take --dry-run
-    // (spec/cli-surface.md "Dry run"), so it is an unknown option: exit 2, with the file left
-    // as it was. The second run, without it, shows the command changes the file.
+    // The second run shows the command changes the file ("Dry run").
     [TestCaseSource(typeof(LocalCommand), nameof(LocalCommand.All))]
     public async Task Dry_run_is_an_unknown_option_on_a_command_that_changes_only_local_files(LocalCommand command)
     {
@@ -448,6 +420,8 @@ public class DryRunTests
         yield return ReadOnly(["system", "show", "ABCDE"], TestData.OrgPath("systems/ABCDE"), ApiJson.System("ABCDE"));
         yield return ReadOnly(["key", "show", "--id", "12"], TestData.OrgPath("enrolment-keys/12"), ApiJson.Key(12));
         yield return ReadOnly(["policy", "list"], TestData.OrgPath("policies"), ApiJson.Page(ApiJson.Policy(42)));
+        yield return ReadOnly(["policy", "show", "--id", "42"], TestData.OrgPath("policies/42"), ApiJson.Policy(42));
+        yield return ReadOnly(["tag", "list"], TestData.OrgPath("tags"), ApiJson.Page(ApiJson.Tag("web")));
         yield return ReadOnly(["tag", "show", "web"], TestData.OrgPath("tags/web"), ApiJson.Tag("web"));
         yield return ReadOnly(["dns", "show"], TestData.OrgPath("dns"), ApiJson.DnsSummary());
         yield return ReadOnly(["dns", "list-hostnames"], TestData.OrgPath("dns/records"), ApiJson.Page(ApiJson.Record(7, "db")));

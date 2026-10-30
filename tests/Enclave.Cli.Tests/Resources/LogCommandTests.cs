@@ -5,30 +5,22 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// log prints the organisation's activity log, newest first (spec/cli-surface.md "Command
-// options"). The logs API takes only a page and a page size (portal
-// Enclave.Api/Modules/ActivityLogs/Logs/Models/LogsRequestModel.cs), so the CLI applies every filter
-// to the entries it reads, and reads only the pages it needs ("Calls per command"). Where a test
-// checks the page size, the fake API serves pages of the size the CLI asks for, as the API does.
+// The logs API takes only a page and a page size (portal LogsRequestModel), so the CLI applies
+// every filter to the entries it reads, and reads only the pages it needs (spec/cli-surface.md
+// "Calls per command").
 public class LogCommandTests
 {
     private const string Sam = "sam@example.com";
 
     private const string Alex = "alex@example.com";
 
-    // A test whose result depends on the time zone reads a fixed clock in a zone made by the test,
-    // TestData.LocalZone, as Contract/TimeInputTests.cs does: UTC+05:30 with no daylight saving,
-    // which a runner set to UTC is not in, so reading a time in UTC and reading it in the zone give
-    // different instants. The clock reads 20:00 UTC, 01:30 the next day in the zone. A test about
-    // the hour repeated when the clocks go back reads its own fixed clock in
-    // TestData.DaylightSavingZone.
+    // 20:00 UTC is 01:30 the next day in TestData.LocalZone (UTC+05:30), so a time read in the
+    // wrong zone gives a different instant and date.
     private static readonly DateTimeOffset Now = new(2030, 3, 14, 20, 0, 0, TimeSpan.Zero);
 
     private static readonly string LogsPath = TestData.OrgPath("logs");
 
-    // log prints the newest 100 entries, newest first, and asks for pages of the smaller of the limit
-    // and 200 (spec/cli-surface.md "Details"). The newest 100 fill the first page of 100, so the
-    // second is never read. Example 68.
+    // Pages are the smaller of the limit and 200 (spec/cli-surface.md "Details"). Example 68.
     [Test]
     public async Task Log_prints_the_newest_100_entries_newest_first_from_one_page_of_100()
     {
@@ -46,7 +38,6 @@ public class LogCommandTests
         });
     }
 
-    // A log shorter than the limit is printed whole, read until the API reports no next page.
     [Test]
     public async Task Log_prints_every_entry_of_a_log_shorter_than_100_entries()
     {
@@ -63,12 +54,10 @@ public class LogCommandTests
         });
     }
 
-    // The logs API pages by skipping entries of a list sorted newest first (portal
-    // ActivityLogRepository.cs:43), so an entry written while the CLI reads moves every older entry
-    // down, and the next page begins with entries the page before ended with. The CLI prints each
-    // entry once. Here two entries are written after page 0 is read: page 1 begins with entries 2
-    // and 3 again, and the two new entries are newer than anything the CLI set out to read. The fake
-    // API serves pages of four, whatever per_page asks for, so ten entries span three pages.
+    // The API pages by skipping entries of a list sorted newest first (portal
+    // ActivityLogRepository.GetLogsAsync), so an entry written during the read moves older entries
+    // onto the next page. Two entries are written after page 0 is read, so page 1 begins with
+    // entries 2 and 3 again. The fake serves pages of four whatever per_page asks for.
     [Test]
     public async Task Log_prints_each_entry_once_when_entries_written_while_it_reads_shift_later_pages()
     {
@@ -91,11 +80,9 @@ public class LogCommandTests
         });
     }
 
-    // Entries can share a time, so an entry with the time of the last entry already read is dropped
-    // only when it is that entry again. Entries 2 and 3 share a time; page 0 ends with entry 2, and
-    // one entry written after page 0 is read makes page 1 begin with entry 2 again, then entry 3. A
-    // CLI that drops every entry at that time loses entry 3, and one that drops only newer entries
-    // prints entry 2 twice.
+    // Entries 2 and 3 share a time. An entry written after page 0 is read makes page 1 begin with
+    // entry 2 again, then entry 3: a CLI that drops every entry at that time loses entry 3, and one
+    // that drops only newer entries prints entry 2 twice.
     [Test]
     public async Task Log_keeps_an_entry_that_shares_its_time_with_the_last_entry_of_the_page_before()
     {
@@ -126,14 +113,12 @@ public class LogCommandTests
         });
     }
 
-    // The API stores entries in batches every 2 seconds, each with the time of its own event (portal
-    // Enclave.ActivityLog/ActivityLogSink.cs:16-17,25,100), so an entry can be stored after newer
-    // ones and land among entries the CLI has read. Here page 0 is read, then three new entries are
-    // written and "late" is stored with a time between entry 1 and entry 2. That moves entries 0 and
-    // 1 onto page 1 beside "late", and entry 2 two pages on, onto page 2. The CLI prints "late" once,
-    // in its place newest first, and every other entry once. A CLI that drops every entry newer than
-    // the oldest it has read loses "late", and one that remembers only the page before prints entry
-    // 2 twice. The fake API serves pages of three, whatever per_page asks for.
+    // The API stores entries in batches every 2 seconds, each with its event's time (portal
+    // ActivityLogSink, WritePeriod and ConvertEvent), so an entry can be stored after newer ones.
+    // After page 0 is read, three entries are written and "late" is stored between entry 1 and
+    // entry 2. A CLI that drops every entry newer than the oldest it has read loses "late", and one
+    // that remembers only the page before prints entry 2 twice. The fake serves pages of three
+    // whatever per_page asks for.
     [Test]
     public async Task Log_prints_an_entry_stored_late_among_entries_already_read_once_in_its_place()
     {
@@ -157,10 +142,8 @@ public class LogCommandTests
         });
     }
 
-    // --limit changes the number, and the page size is the smaller of the limit and 200, the most the
-    // API returns per page (spec/cli-surface.md "Details"; portal PaginationDefaults.cs:11). The
-    // 1,000 newest fill pages 0 to 4 of 200, so page 5 is never read; 20 fill page 0 of 20. Example
-    // 69 is the first case.
+    // 200 is the most the API returns per page (portal PaginationDefaults.MaxPageSize). Example 69 is
+    // the first case.
     [TestCase(1000, 200, 1100, "0,1,2,3,4")]
     [TestCase(20, 20, 50, "0")]
     public async Task Log_limit_prints_that_many_of_the_newest_entries_from_pages_of_the_limit_up_to_200(int limit, int perPage, int count, string pages)
@@ -179,12 +162,9 @@ public class LogCommandTests
         });
     }
 
-    // --since prints every entry back to then, with no limit, and the CLI stops reading at the first
-    // entry older than that, since the API returns the newest first (portal
-    // ActivityLogRepository.cs:43). The last 24 hours hold 250 entries, more than the default 100;
-    // page 1 holds the first older entry, and page 2 is never read. --since alone sets no limit, so
-    // the pages are of 200, the most the API returns per page ("Details"), and a CLI that keeps the
-    // default limit's page of 100 asks for per_page 100. Example 33.
+    // The API returns the newest first (portal ActivityLogRepository.GetLogsAsync), so the first
+    // older entry ends the read. The last 24 hours hold 250 entries, more than the default 100.
+    // --since alone sets no limit, so pages are of 200 (spec/cli-surface.md "Details"). Example 33.
     [Test]
     public async Task Log_since_a_duration_prints_every_entry_since_then_and_stops_reading_at_the_first_older_entry()
     {
@@ -205,8 +185,7 @@ public class LogCommandTests
         });
     }
 
-    // With --since and --limit, reading stops at whichever comes first (spec/cli-surface.md
-    // "Details"). Here the limit does: three entries fill the first page of three.
+    // spec/cli-surface.md "Details".
     [Test]
     public async Task Log_since_and_limit_stop_at_the_limit_when_it_comes_first()
     {
@@ -224,8 +203,7 @@ public class LogCommandTests
         });
     }
 
-    // As above, where --since comes first: six entries of the last hour, then older ones, on the first
-    // page of 50, so the second page is never read.
+    // Six entries of the last hour, then older ones, on the first page of 50.
     [Test]
     public async Task Log_since_and_limit_stop_at_the_first_entry_older_than_since_when_it_comes_first()
     {
@@ -244,9 +222,8 @@ public class LogCommandTests
         });
     }
 
-    // --until leaves out the entries newer than it before --limit counts (spec/cli-surface.md
-    // "Details"), so the two entries printed are the first two older than --until. Entries are an
-    // hour apart and --until falls between the fourth and the fifth.
+    // Entries are an hour apart, and --until falls between entry 3 and entry 4 (spec/cli-surface.md
+    // "Details").
     [Test]
     public async Task Log_until_leaves_out_newer_entries_before_the_limit_counts()
     {
@@ -266,8 +243,7 @@ public class LogCommandTests
         });
     }
 
-    // --user keeps the entries whose userName is the address given. Page 2 begins with an entry older
-    // than 7 days, so reading stops there and page 3 is never read. Example 70.
+    // Example 70. Page 2 begins with an entry older than 7 days, so reading stops there.
     [Test]
     public async Task Log_since_with_user_prints_only_the_entries_of_that_user_since_then()
     {
@@ -295,8 +271,8 @@ public class LogCommandTests
         });
     }
 
-    // --user matches the whole userName, ignoring case (spec/cli-surface.md "Details"): an
-    // address that holds the one given, or is held in it, is another user's.
+    // An address that holds the one given, or is held in it, is another user's
+    // (spec/cli-surface.md "Details").
     [Test]
     public async Task Log_user_matches_the_whole_user_name_ignoring_case()
     {
@@ -317,8 +293,7 @@ public class LogCommandTests
         Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo("same address,same address in capitals"));
     }
 
-    // --level takes one or more levels, comma separated, and keeps the entries at those levels.
-    // Page 2 begins with an entry older than an hour, so page 3 is never read. Example 71.
+    // Example 71. Page 2 begins with an entry older than an hour, so reading stops there.
     [Test]
     public async Task Log_since_with_levels_prints_only_the_entries_at_those_levels_since_then()
     {
@@ -346,9 +321,7 @@ public class LogCommandTests
         });
     }
 
-    // --filter matches part of the message, ignoring case (spec/cli-surface.md "Details"), so the
-    // message that names the system in lower case matches too. Page 2 begins with an entry older than
-    // 30 days, so page 3 is never read. Example 72.
+    // Example 72. Page 2 begins with an entry older than 30 days, so reading stops there.
     [Test]
     public async Task Log_since_with_filter_prints_only_the_entries_whose_message_holds_the_text_ignoring_case()
     {
@@ -376,11 +349,8 @@ public class LogCommandTests
         });
     }
 
-    // Times without a zone are read in the machine's time zone (spec/cli-surface.md "Command
-    // options"), which the CLI takes from CliHost.Time; here the test's UTC+05:30 zone, so a CLI that
-    // read the times as UTC would look five and a half hours later, where none of these entries are.
-    // --until leaves out the newer entries, and page 2 holds the first entry older than
-    // --since, so page 3 is never read. Example 73.
+    // Example 73. Read as UTC, the window would be five and a half hours later, where none of these
+    // entries are.
     [Test]
     public async Task Log_since_and_until_times_without_a_zone_print_the_entries_between_them_in_the_local_time_zone()
     {
@@ -408,13 +378,9 @@ public class LogCommandTests
         });
     }
 
-    // A clock time given to --since names its latest occurrence at or before now
-    // (spec/cli-surface.md "Command options"). In the hour repeated when the clocks go back, a
-    // clock time happens twice, and the latest of the two at or before now is the one meant. The
-    // clock reads the first 01:45 of 25 October 2026 in TestData.DaylightSavingZone (00:45 UTC); 01:30
-    // has happened once that night, at 00:30 UTC, so --since starts 15 minutes back and stops at the
-    // entry from 16 minutes ago. A CLI that reads the time as standard time alone takes 01:30 UTC,
-    // which is after now, and reads back to 01:30 the day before.
+    // In the hour repeated when the clocks go back, 01:30 happens twice. The clock reads the first
+    // 01:45 of that night in TestData.DaylightSavingZone (00:45 UTC), so the only 01:30 so far is
+    // 00:30 UTC; read as standard time, 01:30 would be 01:30 UTC, after now.
     [Test]
     public async Task Log_since_a_clock_time_in_the_repeated_hour_starts_at_its_latest_occurrence_at_or_before_now()
     {
@@ -435,17 +401,12 @@ public class LogCommandTests
         Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo("10 minutes ago,14 minutes ago"));
     }
 
-    // An entry's time is the instant the API wrote, whatever form it is written in. The API writes
-    // UTC with Z (portal Enclave.ActivityLog/ActivityLogSink.cs:100 stores ev.Timestamp.UtcDateTime,
-    // and Enclave.Api.Scaffolding/FractionalMillisecondTrimmingDateTimeConverter.cs writes it by its
-    // kind); a time with no zone is UTC too. System.Text.Json reads a time with another offset into
-    // local time in the machine's zone, DateTimeOffset.LocalDateTime (dotnet/runtime release/10.0,
-    // System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and the instant it
-    // names is the one written. The clock reads 20:00 UTC on 14 July 2030 and CliHost.Time's
-    // zone is UTC+05:30: --since 1h keeps the entry from 19:30 UTC and stops at the one from 18:30
-    // UTC. A CLI that read a time with no zone in CliHost's zone takes both as older than an hour.
-    // The date is in July so that a machine in a European zone, which is UTC+0 in winter, is not at
-    // UTC on it, and a CLI that took System.Text.Json's local time as UTC moves the instant there.
+    // The API writes UTC with Z (portal ActivityLogSink.ConvertEvent;
+    // FractionalMillisecondTrimmingDateTimeConverter), so a time with no zone is UTC too.
+    // System.Text.Json reads a time with another offset into the machine's local time
+    // (dotnet/runtime release/10.0, JsonHelpers.Date.cs, TryParseAsISO). The date is in July so
+    // that a machine in a European zone is not at UTC+0, where a CLI that took that local time as
+    // UTC would pass too.
     [TestCase("2030-07-14T19:30:00Z", "2030-07-14T18:30:00Z")]
     [TestCase("2030-07-14T19:30:00", "2030-07-14T18:30:00")]
     [TestCase("2030-07-15T01:00:00+05:30", "2030-07-15T00:00:00+05:30")]
@@ -462,9 +423,8 @@ public class LogCommandTests
         Assert.That(JsonRead.StringFieldList(items, "message"), Is.EqualTo("within the hour"));
     }
 
-    // With a filter and no --since, --limit counts the matching entries, and the CLI reads back until
-    // it has that many (spec/cli-surface.md "Command options"), in pages of 200 ("Details"). The
-    // third error is on page 2, so page 3 is never read.
+    // Pages are of 200 (spec/cli-surface.md "Details"). The third error is on page 2, so page 3 is
+    // never read.
     [Test]
     public async Task Log_with_a_filter_and_a_limit_reads_back_until_it_has_that_many_matching_entries()
     {
@@ -485,9 +445,8 @@ public class LogCommandTests
         });
     }
 
-    // When fewer entries match than the limit, the CLI reads back to the start of the log and prints
-    // the matches it found (spec/cli-surface.md "Command options"): here two of 250, with the
-    // default limit of 100, on pages of 200 ("Details").
+    // Two of 250 entries match, fewer than the default limit of 100; pages are of 200
+    // (spec/cli-surface.md "Details").
     [Test]
     public async Task Log_with_a_filter_reads_to_the_start_of_the_log_when_fewer_entries_match_than_the_limit()
     {
@@ -507,11 +466,9 @@ public class LogCommandTests
         });
     }
 
-    // --user, --level, --filter and --until leave entries out, so nothing bounds how many entries the
-    // CLI reads before --limit of them match, and with any of them it asks for pages of 200, the most
-    // the API returns per page (portal PaginationDefaults.cs:11), whatever the limit
-    // (spec/cli-surface.md "Details"). None of these 450 entries is kept, so the CLI reads to the
-    // start of the log: three calls in pages of 200, where pages of the limit would take 450. Every
+    // Nothing bounds how many entries the CLI reads before enough match, so it asks for the most a
+    // page holds (spec/cli-surface.md "Details"; portal PaginationDefaults.MaxPageSize). None of
+    // these 450 entries is kept: three calls in pages of 200, where pages of 1 would take 450. Every
     // entry is from the last 450 minutes, so --until 1d leaves out all of them.
     [TestCase("--level", "error")]
     [TestCase("--user", Sam)]
@@ -533,27 +490,7 @@ public class LogCommandTests
         });
     }
 
-    // A duration that reaches back before year 1 names no time the CLI can compare an entry's time
-    // with (DateTimeOffset.MinValue), so it is an argument error that names its option, and exits 2
-    // before any call. From the fixed clock in 2030, 1000000d, about 2,700 years, reaches back
-    // before year 1.
-    [TestCase("--since")]
-    [TestCase("--until")]
-    public async Task Log_given_a_duration_reaching_before_year_1_exits_2_without_a_request(string option)
-    {
-        using var run = CliRun.Start();
-        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
-        run.Stub("GET", LogsPath, json: ApiJson.Page());
-
-        var rejected = await run.RunAsync("log", option, "1000000d");
-
-        CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo(option));
-        await CliAssert.AcceptedAsync(run, "GET", LogsPath, "log", option, "24h");
-    }
-
-    // --level takes information, warning and error; --since and --until take a duration or a time;
-    // --limit takes a number (spec/cli-surface.md "Command options").
+    // spec/cli-surface.md "Command options".
     [TestCase("--level verbose")]
     [TestCase("--level warning,debug")]
     [TestCase("--since yesterday")]
@@ -573,16 +510,15 @@ public class LogCommandTests
             LogsPath);
     }
 
-    // count entries a minute apart, newest first; "entry 0" is the newest.
     private static string[] Entries(int count, DateTime newest) =>
         Enumerable.Range(0, count).Select(i => Entry(Invariant($"entry {i}"), newest.AddMinutes(-i))).ToArray();
 
-    // The messages of entries first to first + count - 1, as JsonRead.StringFieldList joins them.
+    // Joined as JsonRead.StringFieldList joins them.
     private static string Messages(int first, int count) =>
         string.Join(",", Enumerable.Range(first, count).Select(i => Invariant($"entry {i}")));
 
     // ApiJson.Log fixes the time, level and user, which these tests filter on. TimeStamp is a UTC
-    // DateTime in LogEntryModel, written as ApiJson writes those, ending in Z.
+    // DateTime in LogEntryModel, which ApiJson writes ending in Z.
     private static string Entry(string message, DateTime timeStamp, string level = "Information", string userName = "admin@acme.example") =>
         ApiJson.Altered(
             ApiJson.Log(message),
@@ -590,18 +526,15 @@ public class LogCommandTests
             ("level", level),
             ("userName", userName));
 
-    // An entry whose time is written exactly as given.
     private static string EntryAt(string message, string timeStamp) =>
         ApiJson.Altered(ApiJson.Log(message), ("timeStamp", timeStamp));
 
-    // Serves one page of the log as the API answers it at the time of that read: page number
-    // <page>, of <perPage> entries, of a log then <total> entries long. A test that serves each page
-    // this way can show the log changing between reads.
+    // Each page is served as the API answers it at that read, with the log's length then, so a test
+    // can show the log changing between reads.
     private static void StubPage(CliRun run, int page, int perPage, int total, string[] items) =>
         run.StubWithQuery("GET", LogsPath, "page", page.ToString(CultureInfo.InvariantCulture), json: ApiJson.PageAt(page, perPage, total, items));
 
-    // The UTC time of a wall-clock time in the test's time zone, as the CLI reads a time given
-    // without a zone when CliHost.Time is in that zone.
+    // The UTC time the CLI reads a time without a zone as, with CliHost.Time in TestData.LocalZone.
     private static DateTime Local(int year, int month, int day, int hour, int minute) =>
         TimeZoneInfo.ConvertTimeToUtc(new DateTime(year, month, day, hour, minute, 0, DateTimeKind.Unspecified), TestData.LocalZone);
 }

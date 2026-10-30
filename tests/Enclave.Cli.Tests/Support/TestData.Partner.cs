@@ -2,9 +2,8 @@ using System.Globalization;
 
 namespace Enclave.Cli.Tests.Support;
 
-// The customer, account and email values are the ones the partner examples of
-// spec/cli-surface.md use ("Examples" 34, 65, 66, 85 and 86), so a test command reads as the
-// example it follows. IDs are in the hyphenated form people type.
+// Values from the partner examples in spec/cli-surface.md "Examples", so a test command reads as
+// the example it follows. IDs are hyphenated, as people type them.
 
 /// <summary>
 /// Fixed identities for the partner customer tests.
@@ -43,34 +42,17 @@ internal static partial class TestData
     /// </summary>
     public const int CustomerInviteNumber = 3;
 
-    /// <summary>
-    /// <see cref="PartnerStaffAccountId"/> as a GUID, for the bodies and paths that take one, such
-    /// as an organisation user's.
-    /// </summary>
     public static readonly Guid PartnerStaffAccountGuid = Guid.Parse(PartnerStaffAccountId, CultureInfo.InvariantCulture);
 
-    // Every partner API route is under /partner/{partnerId}/, and Enclave.Sdk.Api builds it from
-    // PartnerId.ToString(), which writes the GUID as 32 hex digits without hyphens (PartnerClient
-    // constructor, Enclave.Sdk.Api, with Enclave.Sdk.Api.Data). Customer and account
-    // IDs are OrganisationGuid and AccountGuid and go into the path in the same form
-    // (CustomersClient.CustomerRoute, AddAdminAsync and RemoveAdminAsync).
-
-    /// <summary>
-    /// The partner API path of the test partner, TestData.PartnerId, with an optional suffix such as
-    /// "customers". CliRun puts a stub for this path on its fake partner API, and a test finds the
-    /// partner requests by it.
-    /// </summary>
+    // Enclave.Sdk.Api writes partner, customer and account IDs into paths as 32 hex digits
+    // (PartnerClient constructor, CustomersClient.CustomerRoute).
     public static string PartnerPath(string suffix = "") => PartnerPathOf(PartnerId, suffix);
 
-    /// <summary>
-    /// The partner API path of any partner, with an optional suffix such as "customers".
-    /// </summary>
     public static string PartnerPathOf(Guid partnerId, string suffix = "") =>
         suffix.Length == 0 ? $"/partner/{partnerId:N}" : $"/partner/{partnerId:N}/{suffix}";
 
     /// <summary>
-    /// The partner API path of one of the test partner's customers, by its organisation ID, with an
-    /// optional suffix such as "admins".
+    /// The path of one of the test partner's customers, by its organisation ID.
     /// </summary>
     public static string CustomerPath(string customerOrgId, string suffix = "")
     {

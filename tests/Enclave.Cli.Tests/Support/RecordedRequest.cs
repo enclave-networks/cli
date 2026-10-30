@@ -5,9 +5,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// One request the fake API received.
-/// </summary>
 internal sealed record RecordedRequest(
     string Method,
     string Path,
@@ -16,7 +13,7 @@ internal sealed record RecordedRequest(
     string? Authorization)
 {
     /// <summary>
-    /// The request body parsed as JSON. Fails the test when there is no body or it is not JSON.
+    /// Fails the test when there is no body or it is not JSON.
     /// </summary>
     public JsonElement BodyJson
     {
@@ -35,27 +32,22 @@ internal sealed record RecordedRequest(
             catch (JsonException ex)
             {
                 // Assert.Fail inside Assert.Multiple records the failure and returns (NUnit 4 docs,
-                // "Multiple Asserts"), and there is no value to return here, so the assertion
-                // exception is thrown directly.
+                // "Multiple Asserts"), and there is no value to return.
                 throw new AssertionException($"Expected the body of {Method} {Path} to be JSON: {ex.Message}{Environment.NewLine}{Body}");
             }
         }
     }
 
     /// <summary>
-    /// The method and path, as "METHOD path", the form CliRun.Calls lists requests in.
+    /// "METHOD path", the form CliRun.Calls lists requests in.
     /// </summary>
     public string Call => $"{Method} {Path}";
 
-    /// <summary>
-    /// The value of a query parameter, or null when the request does not carry it.
-    /// </summary>
     public string? QueryValue(string name) => Query.TryGetValue(name, out var value) ? value : null;
 
     /// <summary>
-    /// The page a list request asks for: its page query parameter, or 0 when it has none, which the
-    /// API reads as page 0 (portal PaginatedRequestModel.Page). Fails the test when the parameter is
-    /// not a whole number.
+    /// The page query parameter, or 0 when there is none, as the API reads it (portal
+    /// PaginatedRequestModel.Page). Fails the test when it is not a whole number.
     /// </summary>
     public int PageNumber
     {
@@ -75,9 +67,8 @@ internal sealed record RecordedRequest(
     }
 
     /// <summary>
-    /// The IDs in an array property of the JSON body, such as a bulk call's systemIds, each as text:
-    /// a string as it is, and a number, which is how typed integer IDs are written, in invariant
-    /// form. Fails the test when the property is missing or is not an array of strings and integers.
+    /// The IDs in an array property of the JSON body, each as text; typed integer IDs are written
+    /// as numbers. Fails the test when the property is not an array of strings and integers.
     /// </summary>
     public string[] BodyIds(string field)
     {
@@ -101,12 +92,11 @@ internal sealed record RecordedRequest(
     /// <summary>
     /// The IDs <see cref="BodyIds"/> reads, sorted and joined with commas.
     /// </summary>
-    // Sorted, since the order of a bulk call's IDs or names does not change what it does.
+    // The order of a bulk call's IDs or names does not change what it does.
     public string SortedBodyIds(string field) => string.Join(",", BodyIds(field).Order(StringComparer.Ordinal));
 
-    // Records print every public property in ToString, and BodyJson fails the test when the body is
-    // not JSON. NUnit calls ToString to describe a value in a failure message, so printing only the
-    // captured fields keeps that message from raising a second failure.
+    // A record's ToString prints every public property, and BodyJson fails the test when the body
+    // is not JSON, so a failure message NUnit builds with ToString would raise a second failure.
     private bool PrintMembers(StringBuilder builder)
     {
         builder.Append(CultureInfo.InvariantCulture, $"Method = {Method}, Path = {Path}, Query = {{ {string.Join(", ", Query.Select(pair => $"{pair.Key}={pair.Value}"))} }}, Body = {Body}, Authorization = {Authorization}");

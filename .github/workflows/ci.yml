@@ -1,8 +1,7 @@
 name: CI
 
-# Pull requests use the pull_request event, under which a pull request from a fork runs with a
-# read-only token and no secrets, so its code cannot write to this repository. The release job is
-# the only job with write access, and it runs only for pushes to main.
+# Under pull_request a fork's pull request runs with a read-only token and no secrets, so its code
+# cannot write to this repository. Only the release job has write access, and only on main.
 
 on:
   pull_request:
@@ -25,14 +24,12 @@ defaults:
     shell: bash
 
 jobs:
-  # YEAR.MONTH.DAY.RUN, the scheme other Enclave products use, without leading zeros. It is worked
-  # out once here so every job, archive and the release tag share it, even across midnight.
-  # "Re-run all jobs" runs this job again with the same run number, which "does not change if you
-  # re-run the workflow run" (github.run_number,
-  # https://docs.github.com/actions/reference/workflows-and-actions/contexts), and that day's date,
-  # so a re-run after midnight UTC gets a new version and publishes a second release of the same
-  # commit. That is accepted: the second release holds the same binaries, and keeping the date
-  # stable across attempts would need a token in this job to read the run's creation time.
+  # YEAR.MONTH.DAY.RUN, the scheme other Enclave products use, worked out once so every job,
+  # archive and the release tag share it, even across midnight. A re-run keeps the run number
+  # (github.run_number, https://docs.github.com/actions/reference/workflows-and-actions/contexts)
+  # but takes that day's date, so after midnight UTC it publishes a second release of the same
+  # commit. Accepted: that release holds the same binaries, and a stable date would need a token
+  # here to read the run's creation time.
   version:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -61,8 +58,8 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Tests in the Pending category state behaviour the CLI does not meet
-      # (tests/Enclave.Cli.Tests/Support/TestCategory.cs), so CI runs every other test.
+      # Pending tests state behaviour the CLI does not meet
+      # (tests/Enclave.Cli.Tests/Support/TestCategory.cs).
       - name: Test
         run: dotnet test enclave-cli.slnx -c Release --filter "TestCategory!=Pending"
 
@@ -116,18 +113,15 @@ jobs:
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
 
-      # The smoke test unpacks the archive this job uploads into an empty directory and runs the
-      # executable from there, so a file the executable needs that the archive leaves out, or an
-      # executable bit the archive loses, fails here. This workflow's default shell is bash, and on
-      # Windows "the bash shell included with Git for Windows is used"
+      # Runs the executable from the archive this job uploads, so a file the archive leaves out, or
+      # an executable bit it loses, fails here. On Windows bash is Git for Windows'
       # (https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsshell),
-      # so there the script runs with Git for Windows' sh, unzip and cygpath.
+      # which gives the script sh, unzip and cygpath.
       - name: Smoke test
         run: sh .github/scripts/smoke-test.sh "$ARCHIVE" "$VERSION"
 
-      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
-      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
-      # an earlier attempt of this job uploaded.
+      # archive: false uploads the archive as-is, so the artifact is the archive itself. overwrite
+      # lets a re-run of the whole workflow replace an earlier attempt's artifact.
       - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.ARCHIVE }}
@@ -136,12 +130,11 @@ jobs:
           if-no-files-found: error
           retention-days: 2
 
-  # Linux. Each binary is built on a runner of its CPU, like the Windows and macOS ones, and smoke
-  # tested inside a stock container of the oldest distribution it supports: AlmaLinux 8 (RHEL 8,
-  # glibc 2.28) for glibc, Alpine 3.22 for musl. A self-contained single-file binary takes its glibc
-  # requirement from Microsoft's runtime (glibc 2.27 or later for .NET 10,
+  # Smoke tested in a stock container of the oldest supported distribution: AlmaLinux 8 (RHEL 8,
+  # glibc 2.28) for glibc, Alpine 3.22 for musl. A self-contained binary takes its glibc requirement
+  # from Microsoft's runtime (2.27 or later for .NET 10,
   # https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md), so the runner's
-  # newer glibc does not raise it; running the binary on the oldest distribution proves that.
+  # newer glibc does not raise it; running on the oldest distribution proves that.
   build-linux:
     name: build (${{ matrix.rid }})
     needs: version
@@ -187,14 +180,11 @@ jobs:
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
 
-      # The smoke test unpacks the archive this job uploads into an empty directory inside the
-      # container and runs the executable from there, as the build job does. Both stock images
-      # have tar and gzip (checked on almalinux:8 at 8.10 and alpine:3.22 in October 2026).
-      # docker run -e with a name and no value passes the variable from this step's environment
-      # (https://docs.docker.com/reference/cli/docker/container/run/#env).
-      #
-      # .NET needs libstdc++ (https://learn.microsoft.com/dotnet/core/install/linux-alpine#dependencies),
-      # which the stock Alpine image lacks and a machine running .NET apps has.
+      # As in the build job, inside the container; both stock images have tar and gzip. docker run
+      # -e with a name and no value passes the variable from this step's environment
+      # (https://docs.docker.com/reference/cli/docker/container/run/#env). .NET needs libstdc++
+      # (https://learn.microsoft.com/dotnet/core/install/linux-alpine#dependencies), which the
+      # stock Alpine image lacks and a machine running .NET apps has.
       - name: Smoke test
         run: |
           docker run --rm -e ARCHIVE -e VERSION -v "$PWD:/src:ro" -w /src "$IMAGE" sh -euc '
@@ -202,9 +192,7 @@ jobs:
             sh .github/scripts/smoke-test.sh "$ARCHIVE" "$VERSION"
           '
 
-      # Uploaded as-is, so downloading the artifact gives the archive itself. The artifact is
-      # named after the file. overwrite lets a re-run of the whole workflow replace the artifact
-      # an earlier attempt of this job uploaded.
+      # As in the build job.
       - uses: actions/upload-artifact@v7
         with:
           path: ${{ env.ARCHIVE }}
@@ -223,9 +211,8 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      # download-artifact v8 unzips an artifact served as a zip, which would unpack the Windows
-      # archives; skip-decompress keeps every artifact as the file that was uploaded
-      # (https://github.com/actions/download-artifact/releases/tag/v8.0.0).
+      # Without skip-decompress, v8 unzips an artifact served as a zip, which would unpack the
+      # Windows archives (https://github.com/actions/download-artifact/releases/tag/v8.0.0).
       - uses: actions/download-artifact@v8
         with:
           pattern: enclave-cli-*
@@ -233,8 +220,7 @@ jobs:
           merge-multiple: true
           skip-decompress: true
 
-      # Checks for the exact file each build job uploads, one per RID in the build matrices, so a
-      # missing or renamed file stops the release.
+      # One file per RID in the build matrices, so a missing or renamed file stops the release.
       - name: Collect release files
         run: |
           mkdir release
@@ -261,10 +247,9 @@ jobs:
           sha256sum enclave-cli-* > SHA256SUMS
           cat SHA256SUMS
 
-      # gh release create stops when a published release already has the tag (cli/cli v2.102.0,
-      # pkg/cmd/release/create/create.go, createRun, and http.go, publishedReleaseExists), so a
-      # re-run on the same UTC day leaves the published release as it was. A re-run on a later day
-      # has a new version and publishes a second release (see the version job).
+      # gh release create stops when a published release has the tag (cli/cli v2.102.0,
+      # pkg/cmd/release/create, createRun and publishedReleaseExists), so a re-run on the same UTC
+      # day leaves the release as it was.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

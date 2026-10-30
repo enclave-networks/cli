@@ -4,9 +4,7 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Auth;
 
-/// <summary>
-/// `logout`: deletes the saved token file (spec/cli-surface.md "Login, logout and status").
-/// </summary>
+// spec/cli-surface.md "Login, logout and status".
 internal static class LogoutCommand
 {
     public static CliVerb Create()
@@ -17,8 +15,7 @@ internal static class LogoutCommand
 
         EnclaveDirectory.RequireHome(verb);
 
-        // logout needs no token, makes no call, and leaves cli.json, which holds settings and says
-        // nothing about who is signed in.
+        // cli.json is left: it holds settings and says nothing about who is signed in.
         verb.SetHandler(async context =>
         {
             var path = CredentialsFile.PathFor(context.Host) ?? throw EnclaveDirectory.NoHome();

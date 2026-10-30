@@ -5,20 +5,11 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Editing;
 
-// Subnet filters, gateway subnets, IP ranges, countries and ACL rules take an optional label after
-// "=", which the API stores with each entry (spec/cli-surface.md "Command options"). The CLI
-// splits at the first "=", so a label can hold "=", and the flags are repeated, never comma lists,
-// so a label can hold a comma. A flag that replaces a list keeps the label of every entry that
-// stays, which needs the item read first ("Calls per command"); a label given replaces it, an empty
-// one is sent as null, and a new entry without a label has none ("Command options", "Details").
-//
-// The rules are checked on policy update --set-subnet-filter, with the policy given by ID and by
-// description, and on system update --enable-gateway-for. A subnet filter's label is the
-// description of its gatewayAllowedIpRanges entry, and a gateway subnet's is the name of its
-// gatewayRoutes entry (portal PolicyGatewayAllowedIpRange.cs, SystemGatewayRouteModel.cs). Which
-// gateway routes stay, and their weights, are tested with system update; here every route the
-// system has is given again, so only labels differ. The labels of ACL rules, examples 24 and 81,
-// are tested with policy update in Resources/PolicyCommandTests.Update.cs.
+// spec/cli-surface.md "Command options" and "Details". Keeping labels needs the item read first
+// ("Calls per command"). A subnet filter's label is its description and a gateway subnet's is its
+// name (portal PolicyGatewayAllowedIpRange, SystemGatewayRouteModel). Every gateway route the
+// system has is given again, so only labels differ; system update's tests cover which routes stay,
+// and Resources/PolicyCommandTests.Update.cs covers ACL labels.
 public class LabelTests
 {
     private const string PolicyById = "policy update --id 64 --set-subnet-filter";
@@ -29,8 +20,7 @@ public class LabelTests
 
     private static readonly string PolicyPath = TestData.OrgPath("policies/64");
 
-    // Example 75 in spec/cli-surface.md. Two entries, each with the label after its "="; the
-    // comma stays in the label because each entry is its own flag.
+    // Example 75. Each entry is its own flag, so the comma stays in the label.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     [TestCase(SystemGateway)]
@@ -41,8 +31,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.1.0.0/16=Warehouse, ground floor"));
     }
 
-    // Example 79 in spec/cli-surface.md. The label of 10.0.0.0/16 is "VLAN=20 (finance)", and
-    // 10.2.0.0/16, given without a label, keeps the one it has.
+    // Example 79.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     [TestCase(SystemGateway)]
@@ -53,8 +42,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=VLAN=20 (finance)|10.2.0.0/16=New lab"));
     }
 
-    // Example 77 in spec/cli-surface.md. The label of 10.0.0.0/16 was set before this update,
-    // as in the portal, and survives it.
+    // Example 77. The label was set before this update, as in the portal.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     [TestCase(SystemGateway)]
@@ -65,8 +53,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.2.0.0/16=New lab"));
     }
 
-    // Example 78 in spec/cli-surface.md. Both ranges stay; one is relabelled, and the other's
-    // empty label is sent as null ("Details").
+    // Example 78.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     [TestCase(SystemGateway)]
@@ -77,8 +64,6 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Head office|10.2.0.0/16"));
     }
 
-    // A new entry without a label has none (spec/cli-surface.md "Command options"), and the entry
-    // that stays keeps its label beside it.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     [TestCase(SystemGateway)]
@@ -89,8 +74,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.3.0.0/16"));
     }
 
-    // Example 80 in spec/cli-surface.md, sent. --set-subnet-filter replaces the list, so
-    // 10.2.0.0/16, left out, goes, and the range that stays keeps its label.
+    // Example 80.
     [TestCase(PolicyById)]
     [TestCase(PolicyByDescription)]
     public async Task Set_subnet_filter_drops_the_ranges_left_out_and_keeps_the_labels_of_those_that_stay(string list)
@@ -100,9 +84,7 @@ public class LabelTests
         Assert.That(entries, Is.EqualTo("10.0.0.0/16=Office LAN|10.3.0.0/16"));
     }
 
-    // Example 80 in spec/cli-surface.md. --dry-run prints the requests and sends none of them,
-    // and the reads the change depends on run ("Dry run"): the lookup and the read that keeps
-    // the labels, so the printed body holds the kept label.
+    // Example 80. The lookup and the read that keeps labels run under --dry-run ("Dry run").
     [Test]
     public async Task Dry_run_reads_the_policy_and_prints_the_entries_with_the_labels_kept_without_sending_the_change()
     {
@@ -123,10 +105,8 @@ public class LabelTests
         });
     }
 
-    // Serves the item with the given entries, runs the flag once for each argument, checks the
-    // update sent one PATCH holding the list alone, and returns that list's entries as Entry writes
-    // them, sorted and joined with "|". The entries are compared without their order, which the
-    // specification does not fix for these lists.
+    // Returns the entries of the one PATCH as Entry writes them, sorted, since the spec does not fix
+    // their order.
     private static async Task<string> PatchedEntriesAsync(string name, (string Value, string? Label)[] existing, params string[] arguments)
     {
         var list = ListNamed(name);
@@ -143,9 +123,8 @@ public class LabelTests
         Assert.That(patches, Has.Count.EqualTo(1));
         Assert.That(run.Requests[^1].Method, Is.EqualTo("PATCH"));
 
-        // Given by ID, the command makes the read that keeps labels and the PATCH, and no lookup
-        // ("Names and IDs", "Calls per command"). Given by description it adds a lookup, which can
-        // also serve as the read, since a policy list item is the whole PolicyModel.
+        // By description the command adds a lookup, which can also serve as the read, since a policy
+        // list item is the whole PolicyModel ("Calls per command").
         if (!list.ByDescription)
         {
             Assert.That(string.Join("|", run.Calls()), Is.EqualTo($"GET {list.Path}|PATCH {list.Path}"));
@@ -188,9 +167,8 @@ public class LabelTests
         _ => throw new ArgumentException($"No labelled list named \"{name}\".", nameof(name)),
     };
 
-    // Policy 64, "staff to office LAN": a gateway policy routing 10.0.0.0/8 through GW001, in the
-    // shape PolicyModel returns (portal PolicyModel.cs, PolicyGatewayDetailModel.cs), with the given
-    // subnet filter entries.
+    // A gateway policy routing 10.0.0.0/8 through GW001 (portal PolicyModel,
+    // PolicyGatewayDetailModel).
     private static string GatewayPolicy((string Value, string? Label)[] ranges)
     {
         var policy = JsonNode.Parse(ApiJson.Policy(64, "staff to office LAN"))!.AsObject();
@@ -215,8 +193,7 @@ public class LabelTests
         return policy.ToJsonString();
     }
 
-    // System GW001 acting as a gateway for the given subnets, each entered by a user, in the shape
-    // SystemModel returns (portal SystemGatewayRouteModel.cs).
+    // Each subnet is entered by a user (portal SystemGatewayRouteModel).
     private static string GatewaySystem((string Value, string? Label)[] subnets)
     {
         var system = JsonNode.Parse(ApiJson.System("GW001", "gateway-01"))!.AsObject();
@@ -231,9 +208,8 @@ public class LabelTests
         return system.ToJsonString();
     }
 
-    // One list a flag replaces: the command up to the flag, the flag, the path the item is read
-    // and patched at, whether the item is given by description, the PATCH field holding the list,
-    // the keys of an entry's value and label, and the item the fake API serves for given entries.
+    // One list a flag replaces. Command is the command line up to the flag, and Item serves the item
+    // with the given entries.
     private sealed record LabelledList(
         string[] Command,
         string Flag,

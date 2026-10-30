@@ -3,11 +3,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Editing;
 
-// An update sends only the fields given, and the rest are left as they are (spec/cli-surface.md
-// "Create and update"). The API changes the fields a patch body holds and leaves the others (portal
-// Enclave.Api.Scaffolding/Models/PatchModel.cs, WasSet), so a field sent that the caller did not give
-// would overwrite what the item has. A field that needs no read is set with the one PATCH call
-// ("Calls per command"). An update with no change flag has nothing to send and exits 2 ("Details").
+// The API changes only the fields a patch body holds (portal PatchModel.WasSet), so a field the
+// caller did not give would overwrite what the item has (spec/cli-surface.md "Create and update").
 public class UpdateFieldsTests
 {
     // The item can also be read, so a CLI that read it first would succeed and the extra request,
@@ -40,9 +37,9 @@ public class UpdateFieldsTests
         });
     }
 
-    // Arguments are checked before any call ("Errors and exit codes"), so an update given by name
-    // with no change flag makes no lookup either. The update with a change flag run next in the same
-    // sandbox shows the command exists and the rejection comes from the missing flag.
+    // Arguments are checked before any call, so an update given by name makes no lookup either
+    // ("Errors and exit codes", "Details"). The second run shows the rejection comes from the
+    // missing flag.
     [TestCase("system update ABCDE", "system update ABCDE --notes Reviewed", "systems/ABCDE")]
     [TestCase("system update XYZ12 --pending", "system update XYZ12 --pending --notes Reviewed", "unapproved-systems/XYZ12")]
     [TestCase("dns update-zone --id 4", "dns update-zone --id 4 --notes Reviewed", "dns/zones/4")]
@@ -64,8 +61,7 @@ public class UpdateFieldsTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected.Split(' '), accepted.Split(' '), "PATCH", TestData.OrgPath(suffix ?? string.Empty));
     }
 
-    // One update with a field that needs no read for each command that is a vehicle for this rule,
-    // and one with two fields; expected is the patch body as Field=value pairs joined with "|".
+    // expected is the patch body as Field=value pairs joined with "|".
     private static IEnumerable<TestCaseData> Updates()
     {
         yield return Update("system update --notes", ["system", "update", "ABCDE", "--notes", "Reviewed by IT"], "systems/ABCDE", ApiJson.System("ABCDE"), "Notes=Reviewed by IT");

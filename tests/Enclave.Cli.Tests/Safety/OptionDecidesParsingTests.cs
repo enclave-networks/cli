@@ -3,16 +3,11 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// The option a value is given with decides how it is read: --id and the --&lt;item&gt;-id options take
-/// IDs, arguments and the --&lt;item&gt; options take names, and the CLI never inspects a value to guess
-/// its type (spec/cli-surface.md "Shape and naming").
-/// </summary>
+// The CLI never inspects a value to guess its type (spec/cli-surface.md "Shape and naming").
 public class OptionDecidesParsingTests
 {
     // 12 is the ID of one key and the description of another, so the systems request shows which
-    // reading the CLI took. --key-id uses the API's enrolment_key parameter (spec/cli-surface.md
-    // "Filters"; SystemsClient.BuildQueryString, Enclave.Sdk.Api).
+    // reading the CLI took ("Filters").
     [Test]
     public async Task Key_id_option_reads_its_value_as_a_key_id_and_makes_no_lookup()
     {
@@ -70,8 +65,7 @@ public class OptionDecidesParsingTests
             Is.EqualTo("5"));
     }
 
-    // --id takes IDs only, so a description after it is refused and never looked up. A policy
-    // described "old vpn" exists, so a lookup would find it; the second run, by ID, makes no lookup.
+    // A policy described "old vpn" exists, so a lookup would find it.
     [Test]
     public async Task Id_option_refuses_a_description_and_never_looks_it_up()
     {
@@ -85,7 +79,6 @@ public class OptionDecidesParsingTests
         Assert.That(string.Join(",", request.BodyIds("policyIds")), Is.EqualTo("17"));
     }
 
-    // --org-id takes a GUID, so an organisation name after it is refused and never looked up.
     [Test]
     public async Task Org_id_option_refuses_a_name_and_never_looks_it_up()
     {
@@ -102,11 +95,9 @@ public class OptionDecidesParsingTests
             otherOrgDisable);
     }
 
-    // --org takes a name. The value is the ID of an organisation the token sees, and no organisation
-    // has it as its name, so it matches nothing: the CLI exits 2 invalid_argument after the lookup,
-    // with no candidates, and changes nothing (spec/cli-surface.md "Errors and exit codes").
-    // Either organisation's change is answered, so a CLI that read the value as an ID, or fell back
-    // to ENCLAVE_ORG_ID, would show a request.
+    // The value is the ID of an organisation the token sees and the name of none, so it matches
+    // nothing ("Errors and exit codes"). Either organisation's change is answered, so a CLI that read
+    // it as an ID, or fell back to ENCLAVE_ORG_ID, would show a request.
     [Test]
     public async Task Org_option_reads_its_value_as_a_name_even_when_it_is_a_guid()
     {
@@ -125,10 +116,7 @@ public class OptionDecidesParsingTests
         });
     }
 
-    // org remove-user takes an email address, and the account ID goes after --id. The value is the
-    // ID of a user in the organisation whose email address is another, so it matches no email
-    // address: exit 2 invalid_argument with no candidates, and nothing is removed. The second run
-    // gives that user's email address and removes them.
+    // The value is the account ID of a user in the organisation, so it matches no email address.
     [Test]
     public async Task Org_remove_user_argument_is_read_as_an_email_address_even_when_it_is_a_guid()
     {
@@ -153,10 +141,8 @@ public class OptionDecidesParsingTests
         Assert.That(run.Requests.Count(request => request.Method == "DELETE"), Is.EqualTo(1));
     }
 
-    // --user-id takes an account ID, a GUID, and neither an email address nor a number. Arguments
-    // are checked before anything else ("Errors and exit codes"), so the refusal comes before the
-    // customer lookup and sends nothing. The second run, with a GUID, passes the check, and the
-    // command calls that account's admin route.
+    // Arguments are checked before the customer lookup ("Errors and exit codes"). The second run
+    // calls that account's admin route.
     [TestCase("add-admin", "alex@example.com", "PUT")]
     [TestCase("remove-admin", "12", "DELETE")]
     public async Task User_id_option_takes_only_a_guid(string verb, string userId, string method)
@@ -175,9 +161,7 @@ public class OptionDecidesParsingTests
         Assert.That(run.Calls().Last(), Is.EqualTo($"{method} {TestData.CustomerAdminPath(TestData.CustomerOrgId, TestData.PartnerStaffAccountId)}"), accepted.ToString());
     }
 
-    // A name and its ID option given together contradict each other, and nothing in the values says
-    // which was meant, so the command exits 2 and sends nothing (spec/cli-surface.md "Details").
-    // The second run gives the ID alone and shows the command works.
+    // Nothing in the values says which was meant ("Details").
     [TestCaseSource(nameof(NameWithIdCases))]
     public async Task Name_given_with_its_id_option_exits_2_and_sends_nothing(string[] rejectedArgs, string[] acceptedArgs, string method, string path, string response)
     {

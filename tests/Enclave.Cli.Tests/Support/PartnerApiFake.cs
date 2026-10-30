@@ -6,10 +6,8 @@ namespace Enclave.Cli.Tests.Support;
 /// The fake partner API that partner customer commands run against, and the check that a run's
 /// calls went to it.
 /// </summary>
-// CliRun serves the partner API from a fake of its own, at its own address, and puts each stub for
-// a partner route on that fake, so these stubs answer only calls sent to the partner API's address.
-// The partner tests and the safety tests that run partner customer commands share this one fake,
-// so they cannot drift apart on what the partner API answers.
+// The partner tests and the safety tests share this fake, so they cannot drift apart on what the
+// partner API answers.
 internal static class PartnerApiFake
 {
     private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";
@@ -28,8 +26,7 @@ internal static class PartnerApiFake
     public static string NewInviteBody => ApiJson.CustomerInvite(TestData.CustomerOrgId, 4, TestData.CustomerInviteEmail);
 
     /// <summary>
-    /// A sandbox with the test partner chosen through ENCLAVE_PARTNER_ID and the fake partner API of
-    /// <see cref="StubPartnerApi"/>.
+    /// A sandbox with the test partner chosen and the answers of <see cref="StubPartnerApi"/>.
     /// </summary>
     public static CliRun StartWithPartner()
     {
@@ -39,7 +36,7 @@ internal static class PartnerApiFake
     }
 
     /// <summary>
-    /// A sandbox with the test partner chosen through ENCLAVE_PARTNER_ID and nothing stubbed.
+    /// A sandbox with the test partner chosen and nothing stubbed.
     /// </summary>
     // For a test that serves a route differently from StubPartnerApi: two stubs for one route at one
     // priority leave WireMock.Net's choice between them unstated.
@@ -51,10 +48,9 @@ internal static class PartnerApiFake
     }
 
     /// <summary>
-    /// Answers every customer route the partner customer commands call, for two customers of the
-    /// test partner: Initech, then Globex Ltd, in that order in the customer list, so a name lookup
-    /// that took the first customer acts on the wrong one. Each customer has an owner, then the admin
-    /// alex@example.com, and pending invites to kim@globex.example, then sam@globex.example.
+    /// Answers every customer route for two customers: Initech, then Globex Ltd, so a name lookup
+    /// that took the first customer acts on the wrong one. Each has an owner, then the admin
+    /// alex@example.com, and invites to kim@globex.example, then sam@globex.example.
     /// </summary>
     public static void StubPartnerApi(CliRun run)
     {
@@ -67,7 +63,7 @@ internal static class PartnerApiFake
     }
 
     /// <summary>
-    /// Answers a GET of this partner's customer list with Initech and Globex Ltd, in that order.
+    /// Answers this partner's customer list with Initech, then Globex Ltd.
     /// </summary>
     public static void StubCustomerList(CliRun run, Guid partnerId)
     {
@@ -81,10 +77,8 @@ internal static class PartnerApiFake
     }
 
     /// <summary>
-    /// Asserts the run exited 0 having sent at least one request to the partner API's address,
-    /// every one of them to this partner's routes (the test partner's when none is given), and none
-    /// to the main API's address: a command that exists, accepted its arguments and made its calls
-    /// where partner calls go.
+    /// Asserts the run exited 0 having sent at least one request, all to this partner's routes (the
+    /// test partner's when none is given) and none to the main API's address.
     /// </summary>
     public static void AssertSentToThePartnerApi(CliRun run, CliResult result, Guid? partnerId = null)
     {
@@ -106,8 +100,7 @@ internal static class PartnerApiFake
     public static string InvitePath(string orgId, int number) =>
         TestData.CustomerPath(orgId, $"invites/{TestData.CustomerInviteId(orgId, number)}");
 
-    // Each customer's own routes. The admins and invites are the same for each customer, with
-    // invite IDs that carry the customer's organisation ID, as the API's do.
+    // Invite IDs carry the customer's organisation ID, as the API's do.
     private static void StubCustomer(CliRun run, string orgId, string name)
     {
         var customer = ApiJson.Customer(orgId, name);

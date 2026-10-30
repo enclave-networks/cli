@@ -4,12 +4,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// A name is looked up in the whole list, read page by page until the API reports no next page
-// (spec/cli-surface.md "Names and IDs", "Calls per command"), so a match on a later page is
-// found, and matches on two pages are two candidates. Each case is one of the five name lookups: a
-// key, policy or trust requirement by its description, a zone by its name, and a hostname by its
-// full name, each through its show command, which reads the item found by its ID. The fake API
-// serves the list two items to a page, so the third item is alone on page 1.
+// Each case is one of the five name lookups. The fake API serves the list two items to a page, so
+// the third item is alone on page 1.
 public class NameLookupAcrossPagesTests
 {
     // The match is the third item, so a lookup that reads page 0 alone finds no match and exits 2.
@@ -38,10 +34,8 @@ public class NameLookupAcrossPagesTests
         });
     }
 
-    // One item on page 0 and one on page 1 have the name, in different cases, and names match
-    // ignoring case ("Names and IDs"), so the name names two items: exit 2 with both as candidates
-    // ("Errors and exit codes"), and no item is read. A lookup that reads page 0 alone finds one
-    // match and prints it.
+    // The two items differ only in case, so the name matches both; a lookup that reads page 0 alone
+    // finds one match and prints it.
     [TestCase("key show", "enrolment-keys", "build agents")]
     [TestCase("policy show", "policies", "web to db")]
     [TestCase("trust show", "trust-requirements", "uk only")]

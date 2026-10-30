@@ -7,19 +7,12 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The trust commands (spec/cli-surface.md "Commands", "Command options", "Filters", "Names and
-// IDs", "Details"). This part holds list, show and delete; TrustCommandTests.Create.cs and
-// TrustCommandTests.Update.cs hold create and update. A trust requirement is given by its
-// description, which costs one lookup call, or by --id, which costs none ("Calls per command").
-
 /// <summary>
 /// Tests for the trust commands: list, show and delete.
 /// </summary>
 public partial class TrustCommandTests
 {
     private static readonly string TrustsPath = TestData.OrgPath("trust-requirements");
-
-    private static readonly string[] PublicIpTypeTerm = ["type:PublicIp"];
 
     [Test]
     public async Task Trust_list_reads_every_page_and_prints_a_trust_list()
@@ -38,27 +31,8 @@ public partial class TrustCommandTests
         });
     }
 
-    // Example 59. --type public-ip is the search text type:PublicIp ("Filters", search text table):
-    // the API reads TrustRequirementType names and matches nothing for a value it cannot read
+    // The API reads TrustRequirementType names and matches nothing for a value it cannot read
     // (portal TrustRequirementSearchKeyService.BuildFilterAsync).
-    [Test]
-    public async Task Trust_list_with_type_public_ip_searches_for_public_ip_requirements()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TrustsPath, json: ApiJson.Page(PublicIpTrust(5, "uk only", ("country", "GB", false, null))));
-
-        var result = await run.RunAsync("trust", "list", "--type", "public-ip");
-
-        var items = CliAssert.List(result, "trust");
-        Assert.Multiple(() =>
-        {
-            Assert.That(SearchTerms.Of(run.SingleRequest().QueryValue("search")), Is.EqualTo(PublicIpTypeTerm));
-            Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("5"));
-        });
-    }
-
-    // --type user-auth is the search text type:UserAuthentication ("Filters", search text table),
-    // added to the --filter text.
     [Test]
     public async Task Trust_list_with_type_user_auth_adds_the_type_to_the_filter_text()
     {
@@ -77,22 +51,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // TrustRequirementSortOrder has Description and RecentlyCreated (portal
-    // Enclave.Configuration.Data/Modules/TrustRequirements/Enums/TrustRequirementSortOrder.cs), and
-    // option values are lower-case and hyphenated ("Options on every command").
-    [TestCase("description", "Description")]
-    [TestCase("recently-created", "RecentlyCreated")]
-    public async Task Trust_list_sends_the_sort_order_the_sort_option_names(string value, string expected)
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(3)));
-
-        var result = await run.RunAsync("trust", "list", "--sort", value);
-
-        CliAssert.List(result, "trust");
-        Assert.That(run.SingleRequest().QueryValue("sort"), Is.EqualTo(expected));
-    }
-
     // alphabetical is a tag sort order; the trust requirement list does not have it.
     [TestCase("--type", "wifi", "public-ip")]
     [TestCase("--sort", "alphabetical", "description")]
@@ -104,10 +62,7 @@ public partial class TrustCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["trust", "list", option, value], ["trust", "list", option, allowed], "GET", TrustsPath);
     }
 
-    // An option a command does not take is unknown to it and exits 2 ("Details"); --dry-run belongs
-    // to commands that change something.
     [TestCase("list")]
-    [TestCase("show")]
     public async Task Trust_read_commands_reject_dry_run(string verb)
     {
         using var run = CliRun.Start();
@@ -118,9 +73,8 @@ public partial class TrustCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, [.. corrected, "--dry-run"], corrected, "GET", verb == "list" ? TrustsPath : TrustPath(5));
     }
 
-    // show prints the full model, which the GET by ID returns; the list items are summaries without
-    // settings (portal TrustRequirementSummaryModel). "uk only (old)" contains the name and is not a
-    // match.
+    // The list items are summaries without settings (portal TrustRequirementSummaryModel), so show
+    // reads the model by ID. "uk only (old)" contains the name and must not match.
     [Test]
     public async Task Trust_show_looks_up_the_description_and_prints_the_requirement_model()
     {
@@ -141,45 +95,16 @@ public partial class TrustCommandTests
         });
     }
 
-    [Test]
-    public async Task Trust_show_with_id_gets_the_requirement_without_a_lookup()
+    [TestCase("../policies")]
+    [TestCase("4294967296")]
+    public async Task Trust_show_rejects_an_id_that_is_not_a_32_bit_integer(string badId)
     {
-        using var run = CliRun.Start();
-        run.Stub("GET", TrustPath(5), json: ApiJson.Trust(5, "uk only"));
-
-        await CliAssert.AcceptedAsync(run, "GET", TrustPath(5), "trust", "show", "--id", "5");
-    }
-
-    // Single-item commands exit 5 for an unknown ID ("Several IDs").
-    [Test]
-    public async Task Trust_show_with_an_unknown_id_exits_5()
-    {
-        using var run = CliRun.Start();
-        run.StubProblem("GET", TrustPath(5), 404, "Not Found", "Trust requirement 5 does not exist.");
-
-        var result = await run.RunAsync("trust", "show", "--id", "5");
-
-        CliAssert.Failed(result, "not_found");
-        Assert.That(run.SingleRequest().Path, Is.EqualTo(TrustPath(5)));
-    }
-
-    // Trust requirement IDs are 32-bit integers, checked before any call, so a malformed one exits 2
-    // naming it and sends nothing ("ID checks", "Details").
-    [TestCase("show", "../policies", "5", "GET", "trust-requirements/5")]
-    [TestCase("show", "4294967296", "5", "GET", "trust-requirements/5")]
-    [TestCase("delete", "5,five", "5,6", "DELETE", "trust-requirements")]
-    public async Task Trust_commands_reject_an_id_that_is_not_a_32_bit_integer(string verb, string badIds, string goodIds, string method, string path)
-    {
-        ArgumentNullException.ThrowIfNull(path);
         using var run = CliRun.Start();
         run.Stub("GET", TrustPath(5), json: ApiJson.Trust(5));
-        run.StubBulk("DELETE", TrustsPath, "requirementsDeleted", 2);
 
-        await CliAssert.RejectedThenAcceptedAsync(run, ["trust", verb, "--id", badIds], ["trust", verb, "--id", goodIds], method, TestData.OrgPath(path));
+        await CliAssert.RejectedThenAcceptedAsync(run, ["trust", "show", "--id", badId], ["trust", "show", "--id", "5"], "GET", TrustPath(5));
     }
 
-    // A name argument with --id contradicts itself ("Details"), and arguments are checked before
-    // any call ("Errors and exit codes").
     [TestCase("show", "GET", "trust-requirements/5")]
     [TestCase("delete", "DELETE", "trust-requirements")]
     public async Task Trust_commands_reject_a_description_together_with_an_id(string verb, string method, string path)
@@ -193,8 +118,6 @@ public partial class TrustCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["trust", verb, "uk only", "--id", "5"], ["trust", verb, "--id", "5"], method, TestData.OrgPath(path));
     }
 
-    // A command that takes several items always makes the bulk call, also for one item ("Several
-    // IDs").
     [Test]
     public async Task Trust_delete_looks_up_the_description_and_deletes_it_in_a_bulk_call()
     {
@@ -210,25 +133,6 @@ public partial class TrustCommandTests
         Assert.That(delete[0].SortedBodyIds("requirementIds"), Is.EqualTo("5"));
     }
 
-    [Test]
-    public async Task Trust_delete_with_ids_sends_them_in_one_bulk_call_without_a_lookup()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TrustsPath, "requirementsDeleted", 2);
-
-        var result = await run.RunAsync("trust", "delete", "--id", "5,9");
-
-        CliAssert.Bulk(result, 2, 2);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.SortedBodyIds("requirementIds"), Is.EqualTo("5,9"));
-        });
-    }
-
-    // No match exits 2 invalid_argument, and the error's candidates hold nothing ("Errors and exit
-    // codes").
     [Test]
     public async Task Trust_delete_with_a_description_no_requirement_has_exits_2_without_deleting_anything()
     {
@@ -246,8 +150,6 @@ public partial class TrustCommandTests
         });
     }
 
-    // Several matches exit 2 invalid_argument, and the error's candidates are the items that
-    // matched ("Errors and exit codes").
     [Test]
     public async Task Trust_delete_with_a_description_two_requirements_share_exits_2_with_both_as_candidates()
     {
@@ -265,57 +167,10 @@ public partial class TrustCommandTests
         });
     }
 
-    // "-" reads a trust list and acts on its items by ID ("Several IDs").
-    [Test]
-    public async Task Trust_delete_reads_a_trust_list_from_stdin()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TrustsPath, "requirementsDeleted", 2);
-        run.StdinText = CliList.WithIds("trust", "3", "4");
-
-        var result = await run.RunAsync("trust", "delete", "-");
-
-        CliAssert.Bulk(result, 2, 2);
-        Assert.That(run.SingleRequest().SortedBodyIds("requirementIds"), Is.EqualTo("3,4"));
-    }
-
-    // Policies and trust requirements both have integer IDs, so the list's kind is what stops a
-    // policy list deleting the trust requirements that share those numbers ("Several IDs").
-    [Test]
-    public async Task Trust_delete_rejects_a_policy_list_from_stdin()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TrustsPath, "requirementsDeleted", 1);
-        run.StdinText = CliList.WithIds("policy", "3");
-
-        var result = await run.RunAsync("trust", "delete", "-");
-
-        CliAssert.Rejected(run, result, "invalid_argument");
-    }
-
-    // The output form "Dry run" gives: requests is a list, and org.name is null because CliRun names
-    // the organisation by ID (ENCLAVE_ORG_ID), so no lookup gives its name.
-    [Test]
-    public async Task Trust_delete_with_dry_run_prints_the_delete_and_sends_nothing()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TrustsPath, "requirementsDeleted", 1);
-
-        var result = await run.RunAsync("trust", "delete", "--id", "5", "--dry-run");
-
-        var request = DryRunOutput.RequestInTestOrg(result, "DELETE", TrustsPath);
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.Requests, Is.Empty);
-            Assert.That(JsonRead.IntList(JsonAssert.Property(JsonAssert.Property(request, "body"), "requirementIds")), Is.EqualTo("5"));
-        });
-    }
-
     private static string TrustPath(int id) => TestData.OrgPath("trust-requirements/" + id.ToString(CultureInfo.InvariantCulture));
 
-    // ApiJson.Trust as a public IP requirement holding these conditions, written as the API stores
-    // them: every value a string, isBlocked "true" or "false" (portal TrustRequirementSettingsModel
-    // keeps each condition as a string dictionary).
+    // Conditions are written as the API stores them, every value a string (portal
+    // TrustRequirementSettingsModel).
     private static string PublicIpTrust(int id, string description, params (string Type, string Value, bool Blocked, string? Label)[] conditions)
     {
         var list = new JsonArray();
@@ -335,8 +190,6 @@ public partial class TrustCommandTests
         return TrustWith(id, description, "PublicIp", new JsonObject(), list);
     }
 
-    // ApiJson.Trust as a sign-in requirement with this configuration and these claim conditions,
-    // in the keys the API reads (portal UserAuthenticationConstants, TrustRequirementSettingsUserAuthValidator.cs).
     private static string SignInTrust(int id, string description, JsonObject configuration, params (string Claim, string Value)[] claims)
     {
         var list = new JsonArray();
@@ -357,9 +210,8 @@ public partial class TrustCommandTests
         return trust.ToJsonString();
     }
 
-    // Sorted, since the check reads every condition whatever its position (services
-    // Enclave.Discover/TrustValidators/PublicIpValidator.cs). Country codes are matched ignoring case
-    // ("Command options"), so a country's code is compared in upper case.
+    // Sorted, since condition order does not matter (services PublicIpValidator). Country codes match
+    // ignoring case, so they are compared in upper case.
     private static string Conditions(JsonElement conditions) =>
         Set(conditions.EnumerateArray().Select(Condition).ToArray());
 

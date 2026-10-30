@@ -2,9 +2,6 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Test cases built from command lines.
-/// </summary>
 internal static class CommandCases
 {
     /// <summary>
@@ -17,8 +14,8 @@ internal static class CommandCases
         new TestCaseData(new object[] { args }).SetArgDisplayNames(description);
 
     /// <summary>
-    /// A case holding a command line the CLI rejects, the corrected line, the request the corrected
-    /// line sends and the body the fake API answers it with, named by the rejected line.
+    /// A case holding a rejected command line, the corrected line, the request the corrected line
+    /// sends and the body the fake API answers it with, named by the rejected line.
     /// </summary>
     public static TestCaseData RejectedThenCorrected(string rejected, string corrected, string method, string path, string json) =>
         new TestCaseData(rejected.Split(' '), corrected.Split(' '), method, path, json).SetArgDisplayNames(rejected);

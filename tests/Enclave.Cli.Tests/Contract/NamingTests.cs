@@ -3,13 +3,11 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// Nouns are singular, and a plural name is accepted as a hidden alias so a guess works; help and
-// `commands` show the singular name only. A noun's own parts take hyphenated verbs, and `partner
-// customer` is the one second-level noun (spec/cli-surface.md "Shape and naming"). Commands
-// the old shape had, such as `dns zone list`, are parse errors, in ParseErrorTests.
+// A plural noun is a hidden alias so a guess works (spec/cli-surface.md "Shape and naming").
+// ParseErrorTests covers the old shape, such as `dns zone list`.
 public class NamingTests
 {
-    // Every noun with a plural (AGENTS.md "Architecture" lists the nouns; dns has no plural).
+    // dns has no plural.
     private static readonly (string Singular, string Plural)[] PluralAliases =
     [
         ("org", "orgs"),
@@ -23,7 +21,7 @@ public class NamingTests
         ("log", "logs"),
     ];
 
-    // The top-level commands of "Commands".
+    // spec/cli-surface.md "Commands".
     private static readonly string[] TopLevelNames =
     [
         "login", "logout", "status", "org", "partner", "system", "key", "policy", "tag", "dns", "trust", "log", "commands",
@@ -85,9 +83,8 @@ public class NamingTests
         });
     }
 
-    // The partner customer list is read from the partner API, which CliRun serves from a fake of its
-    // own (TestData.PartnerPath), so the alias is shown to reach the same command by the same request
-    // and output. An unknown noun would exit 2 with invalid_argument and send nothing.
+    // Partner customer commands call the partner API, which CliRun fakes separately
+    // (TestData.PartnerPath).
     [TestCase("partner customers list")]
     [TestCase("partners customer list")]
     [TestCase("partners customers list")]
@@ -119,9 +116,8 @@ public class NamingTests
         });
     }
 
-    // `partner use --id` saves the partner in ~/.enclave/cli.json, makes no call and prints
-    // { "id" } ("Login, logout and status"), so the alias shows in the output and the file it
-    // writes.
+    // partner use makes no call, so the alias shows in the output and the file it writes ("Login,
+    // logout and status").
     [Test]
     public async Task Partners_use_runs_the_same_command_as_partner_use()
     {
@@ -184,8 +180,6 @@ public class NamingTests
         });
     }
 
-    // `commands` describes the CLI for agents, so it names each command once, by its singular
-    // nouns.
     [Test]
     public async Task Commands_names_every_command_by_its_singular_nouns_only()
     {
@@ -202,9 +196,6 @@ public class NamingTests
         });
     }
 
-    // A command is a noun and a verb, `partner customer` being the one second-level noun: so every
-    // name is one word (login, logout, status, log, commands) or two, and only partner customer
-    // commands have three.
     [Test]
     public async Task Commands_has_partner_customer_as_the_only_second_level_noun()
     {
@@ -244,8 +235,6 @@ public class NamingTests
         await CliAssert.AcceptedAsync(run, "GET", path, command.Split(' '));
     }
 
-    // partner customer takes its own hyphenated verbs: list-admins reads the customer's admins from
-    // the partner API, where an unknown command would exit 2 with invalid_argument and send nothing.
     [Test]
     public async Task Partner_customer_takes_hyphenated_verbs()
     {

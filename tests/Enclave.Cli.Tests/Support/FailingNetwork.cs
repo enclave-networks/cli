@@ -3,13 +3,11 @@ using System.Collections.Concurrent;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// A network that fails every request with the exception it was given, and records each request,
-/// for <see cref="CliRun.NetworkHandler"/>. Set <c>run.NetworkHandler = network.CreateHandler</c>.
+/// A network that fails every request with the given exception and records it. Set
+/// <c>run.NetworkHandler = network.CreateHandler</c>.
 /// </summary>
-// A fake API on loopback answers every request it gets, so a failure that happens before an
-// answer, such as HttpClient's timeout, is made here, beneath the CLI's own handler, where the
-// network would be. The record outlives the handlers, which each command disposes with its
-// ApiRequestHandler.
+// A fake API answers every request, so a failure before an answer, such as a timeout, is made here.
+// The record outlives the handlers, which each command disposes with its ApiRequestHandler.
 internal sealed class FailingNetwork
 {
     private readonly Func<Exception> _failure;
@@ -22,7 +20,7 @@ internal sealed class FailingNetwork
     }
 
     /// <summary>
-    /// The requests the network was given, each as "METHOD path", in the order given.
+    /// Each request as "METHOD path".
     /// </summary>
     public IReadOnlyList<string> Calls => _calls.ToArray();
 

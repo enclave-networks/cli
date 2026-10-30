@@ -4,10 +4,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// "-" in place of the arguments reads a list an enclave-cli list command printed, of the command's
-/// own kind, and acts on its items by ID (spec/cli-surface.md "Several IDs").
-/// </summary>
+// spec/cli-surface.md "Several IDs".
 public class StdinListTests
 {
     private static readonly string[] StdinKeyOnly = ["-"];
@@ -32,11 +29,9 @@ public class StdinListTests
         });
     }
 
-    // Keys, policies, zones, hostnames and trust requirements all have integer IDs, and waiting and
-    // enrolled systems share one ID format, so a list of the wrong kind would act on whatever items
-    // share its IDs. The refused list holds IDs the command would accept, so only the kind check can
-    // refuse it. The second run gives the same IDs in a list of the command's kind and shows the
-    // command reads lists.
+    // Several kinds share an ID format, so a list of the wrong kind would act on whatever items share
+    // its IDs. The refused list holds IDs the command would accept, so only the kind check can
+    // refuse it.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_exits_2_and_sends_nothing_for_a_list_of_another_kind(BulkCommand command)
     {
@@ -56,8 +51,6 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
     }
 
-    // spec/cli-surface.md "Several IDs": the kind is what stops key list | policy delete -
-    // deleting the policies that share the keys' numbers.
     [Test]
     public async Task Policy_delete_refuses_a_key_list_so_key_ids_never_delete_policies()
     {
@@ -77,9 +70,7 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds("policyIds")), Is.EqualTo("12,13"));
     }
 
-    // "Any other kind, or input that is not a list, exits 2" (spec/cli-surface.md "Several
-    // IDs"), and stdin with no bytes is not a list ("Details"). An empty stdin is what a failed list
-    // command leaves in a pipe, since a failed list prints nothing ("Output").
+    // An empty stdin is what a failed list command leaves in a pipe ("Details", "Output").
     [TestCaseSource(nameof(NotAListCases))]
     public async Task Dash_exits_2_and_sends_nothing_for_input_that_is_not_a_list(string stdin)
     {
@@ -99,11 +90,8 @@ public class StdinListTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds("systemIds")), Is.EqualTo("ABCDE,FGHIJ"));
     }
 
-    // The command acts on the items by ID ("Several IDs"), so an item without its kind's ID field
-    // names nothing to act on, and the list is refused as one with a malformed ID is. The item is a
-    // copy of the first with its ID field removed, between two items with IDs, so a CLI that skipped
-    // it and sent the others would show a request. The second run gives the two items alone and
-    // shows the command acts on them.
+    // The item without an ID sits between two with IDs, so a CLI that skipped it and sent the others
+    // would show a request.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_exits_2_and_sends_nothing_when_a_list_item_has_no_id_field(BulkCommand command)
     {
@@ -146,8 +134,7 @@ public class StdinListTests
         CliAssert.Bulk(accepted, requested: 2, affected: 2);
     }
 
-    // A list built or joined with jq can name an item twice. Each item is acted on once and counted
-    // once in requested, and the rest keep the list's order (spec/cli-surface.md "Several IDs").
+    // A list built or joined with jq can name an item twice ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_removes_duplicate_ids_from_the_list_and_keeps_its_order(BulkCommand command)
     {
@@ -163,7 +150,7 @@ public class StdinListTests
     }
 
     // A pipeline fed by an empty list, such as system list --pending with nothing waiting, succeeds
-    // and changes nothing (spec/cli-surface.md "Several IDs").
+    // ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_with_an_empty_list_prints_zero_counts_makes_no_call_and_exits_0(BulkCommand command)
     {
@@ -181,11 +168,9 @@ public class StdinListTests
         });
     }
 
-    // The CLI never waits for input (AGENTS.md "CLI contract"), and an agent driving a terminal
-    // would hang on a read. While stdin is a terminal, any read of it fails the run
-    // (CliRun.StdinIsTerminal), so the rejection shows the command refused without reading; the
-    // second run, with stdin redirected and holding a list of the command's kind, shows the list is
-    // accepted.
+    // An agent driving a terminal would hang on a read (AGENTS.md "CLI contract"). Any read of stdin
+    // fails the run while CliRun.StdinIsTerminal is set, so the rejection shows the command refused
+    // without reading.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_exits_2_without_reading_stdin_when_stdin_is_a_terminal(BulkCommand command)
     {
@@ -205,9 +190,7 @@ public class StdinListTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo(command.Path));
     }
 
-    // Examples 3, 5, 13, 14 and 16 in spec/cli-surface.md pipe a list command into a bulk
-    // command. Each list here is in the form that list command prints, with the API's models as its
-    // items.
+    // Examples 3, 5, 13, 14 and 16. Each list is in the form its list command prints.
     [TestCaseSource(nameof(PipelineExamples))]
     public async Task Example_pipeline_acts_on_every_item_the_list_command_printed(
         string[] args,

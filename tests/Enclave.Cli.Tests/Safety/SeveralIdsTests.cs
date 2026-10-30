@@ -4,18 +4,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// Commands that take several items: the bulk call, the { requested, affected } output, calls of at
-/// most 200 IDs, and the commands that take one item (spec/cli-surface.md "Several IDs").
-/// </summary>
+// spec/cli-surface.md "Several IDs".
 public class SeveralIdsTests
 {
-    private const string Until = "2030-01-01T00:00:00Z";
-
-    // An --until that has passed exits 2 ("Details"), so the timed enables run on a clock fixed
-    // before Until, which keeps their answer the same whatever the date.
-    private static readonly FixedTimeProvider Clock = new(new DateTimeOffset(2026, 10, 8, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Utc);
-
     // A command that accepts several IDs makes the bulk call for one ID too, so its output has one
     // shape whatever the number of IDs, and a caller handles one form.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
@@ -56,9 +47,9 @@ public class SeveralIdsTests
         });
     }
 
-    // The bulk calls return a count only, and the API counts the items it changed: unknown IDs and
-    // items already in that state are left out (portal UnapprovedSystemsController.cs:170-177 for
-    // approve). Exit 0 makes a re-run after a timeout safe, and the counts carry the difference.
+    // The API counts only the items it changed: unknown IDs and items already in that state are left
+    // out (portal UnapprovedSystemsController.ApproveSystems). Exit 0 makes a re-run after a timeout
+    // safe, and the counts carry the difference.
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_exits_0_when_fewer_items_are_affected_than_requested(BulkCommand command)
     {
@@ -75,9 +66,9 @@ public class SeveralIdsTests
         });
     }
 
-    // The API takes at most 200 IDs per bulk call (portal Enclave.Utilities/HardLimits.cs:22,
-    // MaxBulkIds). 201 IDs is the smallest split, and 450 needs a third call that is part full. Each
-    // call answers a different count, so the output shows the CLI added up every call's count.
+    // The API takes at most 200 IDs per bulk call (portal HardLimits.MaxBulkIds). 201 IDs is the
+    // smallest split, and 450 needs a third call that is part full. Each call answers a different
+    // count, so the output shows the CLI added up every call's count.
     [TestCaseSource(nameof(SplitCases))]
     public async Task Bulk_command_sends_more_than_200_items_in_calls_of_200_in_order_and_adds_up_the_counts(BulkCommand command, int count)
     {
@@ -111,9 +102,8 @@ public class SeveralIdsTests
         Assert.That(command.IdsSent(run), Is.EqualTo(BulkCommand.Batches(ids)));
     }
 
-    // A failed call stops the command, so nothing more is sent after a failure. The counts of the
-    // calls that succeeded tell the caller what changed, and since items already in that state are
-    // not counted, running the command again is safe (spec/cli-surface.md "Several IDs").
+    // The counts of the calls that succeeded tell the caller what changed, and a re-run is safe since
+    // items already in that state are not counted ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_stops_at_a_failed_call_and_its_error_carries_the_counts_of_the_calls_that_succeeded(BulkCommand command)
     {
@@ -136,8 +126,6 @@ public class SeveralIdsTests
         });
     }
 
-    // The error is the failed call's own, with the exit code its status maps to (AGENTS.md "CLI
-    // contract"), and carries the counts of the call before it.
     [TestCase(403, "forbidden")]
     [TestCase(429, "transient")]
     public async Task Bulk_command_that_fails_part_way_exits_with_the_code_of_the_failed_call(int status, string code)
@@ -161,7 +149,6 @@ public class SeveralIdsTests
         });
     }
 
-    // With no call succeeded nothing changed, and the counts say so.
     [Test]
     public async Task Bulk_command_whose_first_call_fails_reports_nothing_requested_or_affected()
     {
@@ -180,7 +167,7 @@ public class SeveralIdsTests
         });
     }
 
-    // Example 44 in spec/cli-surface.md.
+    // Example 44.
     [Test]
     public async Task System_disable_disables_three_systems_given_as_arguments_in_one_call()
     {
@@ -200,8 +187,8 @@ public class SeveralIdsTests
         });
     }
 
-    // Example 45 in spec/cli-surface.md: the shell splits $(cat quarantine.txt) at its line
-    // breaks, so each line arrives as an argument, and a long file is sent in calls of 200.
+    // Example 45: the shell splits $(cat quarantine.txt) at its line breaks, so each line arrives as
+    // an argument.
     [Test]
     public async Task System_disable_takes_the_lines_of_a_file_as_system_id_arguments()
     {
@@ -219,7 +206,7 @@ public class SeveralIdsTests
             Is.EqualTo(BulkCommand.Batches(ids)));
     }
 
-    // Example 35 in spec/cli-surface.md. --id gives IDs, so no lookup precedes the call.
+    // Example 35. --id gives IDs, so no lookup precedes the call.
     [Test]
     public async Task Policy_disable_takes_several_ids_after_id_separated_by_commas()
     {
@@ -239,8 +226,7 @@ public class SeveralIdsTests
         });
     }
 
-    // Names are looked up with one list call, and each must match one item, ignoring case
-    // (spec/cli-surface.md "Names and IDs"). The bulk call then carries the IDs the names found.
+    // Names match ignoring case ("Names and IDs").
     [Test]
     public async Task Policy_disable_looks_up_several_names_with_one_list_call_and_disables_them_in_one_call()
     {
@@ -262,11 +248,9 @@ public class SeveralIdsTests
         });
     }
 
-    // One name that matches no policy, or several, stops the whole command: deleting the others
-    // would leave the caller to work out which went. The error carries the candidates, the
-    // policies the name matched, so the caller can pick one by ID without another call
-    // (spec/cli-surface.md "Names and IDs", "Errors and exit codes"). "old vpn" matches two
-    // policies that differ only in case; "no such policy" matches none.
+    // Deleting the others would leave the caller to work out which went. The candidates let the
+    // caller pick one by ID without another call ("Names and IDs"). "old vpn" matches two policies
+    // that differ only in case.
     [TestCase("no such policy", "")]
     [TestCase("old vpn", "17,18")]
     public async Task Policy_delete_exits_2_with_the_candidates_and_deletes_nothing_when_a_name_matches_no_policy_or_several(string name, string candidateIds)
@@ -288,9 +272,7 @@ public class SeveralIdsTests
         Assert.That(NameLookup.CandidateIds(error), Is.EqualTo(candidateIds));
     }
 
-    // Duplicate IDs are removed whether given as arguments, with --id or through "-", and the rest
-    // keep the order given (spec/cli-surface.md "Several IDs"). Each item is acted on once and
-    // counted once in requested.
+    // Each item is acted on once and counted once in requested ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Bulk_command_removes_duplicate_ids_given_as_arguments_and_keeps_the_order_given(BulkCommand command)
     {
@@ -304,9 +286,8 @@ public class SeveralIdsTests
         Assert.That(string.Join(",", run.SingleRequest().BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids[1], ids[0], ids[2])));
     }
 
-    // The API's timed enable has no bulk form (PUT .../{id}/enable-until), so --for and --until take
-    // one item and print its updated model (spec/cli-surface.md "Several IDs"). The second run
-    // shows the command takes the option, so the refusal comes from the number of items.
+    // The API's timed enable has no bulk form ("Several IDs"). The second run shows the command takes
+    // the option, so the refusal comes from the number of items.
     [TestCaseSource(nameof(TimedEnableCases))]
     public async Task Timed_enable_exits_2_for_several_items_and_prints_the_updated_model_for_one(
         string[] several,
@@ -317,7 +298,7 @@ public class SeveralIdsTests
         string id)
     {
         using var run = CliRun.Start();
-        run.Time = Clock;
+        run.Time = TestData.Clock;
         run.Stub("PUT", path, 200, response);
 
         var rejected = await run.RunAsync(several);
@@ -338,8 +319,7 @@ public class SeveralIdsTests
         });
     }
 
-    // The API has no bulk zone delete (portal DnsController.cs:145), so dns delete-zone takes one
-    // zone and prints the deleted zone's model.
+    // The API has no bulk zone delete (portal DnsController.DeleteZone).
     [Test]
     public async Task Dns_delete_zone_exits_2_for_several_zones_and_deletes_one_zone_given_alone()
     {
@@ -364,9 +344,7 @@ public class SeveralIdsTests
         });
     }
 
-    // A bulk call reports unknown IDs through its counts. A command on one item has no count to
-    // report it with, so an unknown ID is an error with its own exit code (spec/cli-surface.md
-    // "Several IDs").
+    // A command on one item has no count to report an unknown ID with ("Several IDs").
     [TestCaseSource(nameof(SingleItemCases))]
     public async Task Single_item_command_exits_5_for_an_unknown_id(string[] args, string method, string path)
     {
@@ -392,7 +370,7 @@ public class SeveralIdsTests
     {
         yield return TimedEnable("system enable --for", ["system", "enable", "ABCDE", "FGHIJ", "--for", "8h"], ["system", "enable", "ABCDE", "--for", "8h"], "systems/ABCDE/enable-until", ApiJson.System("ABCDE"), "systemId", "ABCDE");
         yield return TimedEnable("key enable --for", ["key", "enable", "--id", "12,13", "--for", "8h"], ["key", "enable", "--id", "12", "--for", "8h"], "enrolment-keys/12/enable-until", ApiJson.Key(12), "id", "12");
-        yield return TimedEnable("policy enable --until", ["policy", "enable", "--id", "42,43", "--until", Until], ["policy", "enable", "--id", "42", "--until", Until], "policies/42/enable-until", ApiJson.Policy(42), "id", "42");
+        yield return TimedEnable("policy enable --until", ["policy", "enable", "--id", "42,43", "--until", TestData.FutureUntil], ["policy", "enable", "--id", "42", "--until", TestData.FutureUntil], "policies/42/enable-until", ApiJson.Policy(42), "id", "42");
     }
 
     private static TestCaseData TimedEnable(string name, string[] several, string[] one, string pathSuffix, string response, string idField, string id) =>
@@ -419,8 +397,8 @@ public class SeveralIdsTests
         _ => throw new ArgumentOutOfRangeException(nameof(count), count, "No counts for this number of IDs."),
     };
 
-    // The bulk counts sit in the error object beside "code" (spec/cli-surface.md "Several
-    // IDs"). A count that is missing or not a number reads as null, which no expected count equals.
+    // The bulk counts sit in the error object beside "code" ("Several IDs"). A count that is missing
+    // or not a number reads as null, which no expected count equals.
     private static int? Count(JsonElement error, string name) =>
         error.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number

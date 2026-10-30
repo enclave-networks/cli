@@ -7,22 +7,16 @@ using Enclave.Sdk.Api.Data;
 
 namespace Enclave.Cli.Commands.Describe;
 
-/// <summary>
-/// `commands [&lt;command words&gt;...]`: every command, its arguments and options, the values each
-/// option allows, and the error codes with their exit codes, as JSON (spec/cli-surface.md
-/// "Details"). It is generated from the command tree, so it describes every command the CLI has.
-/// With --search-keys and the words of a list, the list's entry also carries the search keys the
-/// API gives for its --filter.
-/// </summary>
+// Generated from the command tree, so it describes every command the CLI has (spec/cli-surface.md
+// "Details").
 internal static class CommandsCommand
 {
     private const string SystemList = "system list";
 
     private const string ListNames = "system list, key list, policy list or tag list";
 
-    // The lists whose search keys Enclave.Sdk.Api reads, by their command words. Each
-    // GetSearchKeysAsync calls GET /org/{orgId}/<list>/meta/search-keys. system list --pending reads
-    // the unapproved systems' keys, which have their own route (UnapprovedSystemsClient).
+    // system list --pending reads the unapproved systems' keys, which have their own route
+    // (UnapprovedSystemsClient).
     private static readonly Dictionary<string, Func<IOrganisationScopedClient, Task<IReadOnlyList<SearchKey>>>> SearchKeyLists = new(StringComparer.Ordinal)
     {
         [SystemList] = client => client.EnrolledSystems.GetSearchKeysAsync(),
@@ -43,8 +37,8 @@ internal static class CommandsCommand
         var searchKeys = verb.Add(CliOptions.Flag("--search-keys", $"With the words of {ListNames}, add the search keys that list's --filter accepts, as the API gives them. Makes one call, so needs a token and an organisation."));
         var pending = verb.Add(CliOptions.Flag("--pending", "With system list and --search-keys, give the search keys for the systems waiting for approval."));
 
-        // Without --search-keys the command acts within no organisation, so these options would
-        // change nothing; refusing them tells the caller so.
+        // Without --search-keys these options would change nothing; refusing them tells the caller
+        // so.
         verb.Requires(pending, searchKeys);
         verb.Requires(verb.OrgOption!, searchKeys);
         verb.Requires(verb.OrgIdOption!, searchKeys);
@@ -54,8 +48,7 @@ internal static class CommandsCommand
             Command start = context.ParseResult.RootCommandResult.Command;
             var path = new List<string>();
 
-            // A plural noun is accepted here as on the command line, and the description uses the
-            // singular names.
+            // A plural alias is accepted as on the command line; the output uses the singular names.
             foreach (var word in context.Get(words) ?? [])
             {
                 start = start.Subcommands.FirstOrDefault(command => !command.Hidden && (command.Name == word || command.Aliases.Contains(word)))
@@ -64,9 +57,8 @@ internal static class CommandsCommand
                 path.Add(start.Name);
             }
 
-            // The arguments are checked in full before the organisation is asked for, which reads
-            // the token: checks run in the order arguments, token, organisation, call
-            // (spec/cli-surface.md "Errors and exit codes").
+            // Checked in full before the organisation, which reads the token (spec/cli-surface.md
+            // "Errors and exit codes").
             var readSearchKeys = context.Get(searchKeys)
                 ? SearchKeysReader(string.Join(' ', path), context.Get(pending), searchKeys, pending)
                 : null;
@@ -115,7 +107,7 @@ internal static class CommandsCommand
     }
 
     // `partner customer` is a noun inside a noun (spec/cli-surface.md "Shape and naming"), so
-    // `commands partner` reaches the customer verbs only by walking down to the commands that run.
+    // `commands partner` walks down to the commands that run.
     private static IEnumerable<(string Name, Command Command)> Leaves(Command command, List<string> path)
     {
         var subcommands = command.Subcommands.Where(subcommand => !subcommand.Hidden).ToArray();

@@ -3,16 +3,10 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// A list filter given "", only white space, or a list with no entries (",") filters by nothing, so
-// it exits 2 invalid_argument, keyed by the option, with the other argument checks: before the
-// token is read and before any call (spec/cli-surface.md "Details", "Errors and exit codes").
-// It is never read as the filter left out: an empty value usually comes from an unset shell
-// variable, and the list would then hold every item, so `system list --tag "$RETIRED" | enclave-cli
-// system revoke -` would revoke every system.
-//
-// The run with a token answers every list and lookup a filter could lead to, so a CLI that went on
-// shows a request and exits 0, or exits 2 only after a lookup call. The run without a token gives
-// the same error, so a CLI that read the token first exits 3.
+// Read as the filter left out, an empty value from an unset shell variable would list every item,
+// and `system list --tag "$RETIRED" | enclave-cli system revoke -` would revoke every system. The
+// run with a token answers every call a filter could lead to, so a CLI that went on shows a
+// request; the run without a token shows the check comes before the token.
 public class EmptyFilterTests
 {
     private static readonly string[] ListSuffixes =

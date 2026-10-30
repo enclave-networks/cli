@@ -3,16 +3,11 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Safety;
 
-/// <summary>
-/// A command that changes something runs when given: there is no confirmation option and no
-/// prompt, and stdin is read only after "-" (spec/cli-surface.md "Changes run when given";
-/// AGENTS.md "CLI contract").
-/// </summary>
+// spec/cli-surface.md "Changes run when given".
 public class ChangesRunWhenGivenTests
 {
-    // The field that identifies the model each ChangeCommand that takes one item answers with, in
-    // the ApiJson body its change is answered with. A command missing here fails its case, so a
-    // command added to ChangeCommand.All needs its field named.
+    // The field that identifies the model each single-item command prints. A command missing here
+    // fails its case, so one added to ChangeCommand.All needs its field named.
     private static readonly Dictionary<string, string> ModelIdFields = new(StringComparer.Ordinal)
     {
         ["org update"] = "id",
@@ -38,9 +33,8 @@ public class ChangesRunWhenGivenTests
         ["trust update"] = "id",
     };
 
-    // There is no confirmation option, so --yes is an unknown option, a parse error that exits 2
-    // and sends nothing. A parse error alone does not show the command exists, so the second run,
-    // without --yes, shows it sends its change.
+    // A parse error alone does not show the command exists, so the second run, without --yes, shows
+    // it sends its change.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Yes_is_an_unknown_option_on_a_command_that_changes_something(ChangeCommand command)
     {
@@ -57,14 +51,9 @@ public class ChangesRunWhenGivenTests
         Assert.That(command.ChangeRequests(run), Has.Length.EqualTo(1));
     }
 
-    // The CLI never prompts (AGENTS.md "CLI contract"): an agent running a command in a terminal it
-    // does not watch would hang on a question. stdin is a terminal, and any read of it fails the run
-    // (CliRun.StdinIsTerminal), so a CLI that asked fails the test. stdout holds the command's
-    // JSON object alone: the bulk counts for a command that takes several items, and otherwise the
-    // model the API answered the change with (spec/cli-surface.md "Several IDs": single-ID
-    // commands print the model, and org invite prints the invite the API returns). The model is
-    // checked by the field that identifies it, so an output that leaves the model out, such as {},
-    // fails.
+    // An agent running a command in a terminal it does not watch would hang on a question (AGENTS.md
+    // "CLI contract"). Any read of stdin fails the run (CliRun.StdinIsTerminal), so a CLI that asked
+    // fails the test. The model is checked by its identifying field, so an output such as {} fails.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Command_that_changes_something_runs_without_a_prompt_when_stdin_is_a_terminal(ChangeCommand command)
     {
@@ -94,8 +83,8 @@ public class ChangesRunWhenGivenTests
             result.ToString());
     }
 
-    // IDs come from stdin only after "-" (spec/cli-surface.md "Several IDs"). stdin holds a list
-    // of other items of the command's own kind, so a CLI that read it would add them to the call.
+    // stdin holds other items of the command's own kind, so a CLI that read it would add them to the
+    // call ("Several IDs").
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Command_given_ids_as_arguments_leaves_a_list_on_stdin_unread(BulkCommand command)
     {

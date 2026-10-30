@@ -3,9 +3,6 @@ using Enclave.Sdk.Api;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// The token the CLI sends and the API addresses it sends it to.
-/// </summary>
 // A class, not a record: a record's generated ToString lists every property, and the token must
 // never reach output, diagnostics included.
 internal sealed class ApiAccess
@@ -23,12 +20,12 @@ internal sealed class ApiAccess
     }
 
     /// <summary>
-    /// The personal access token. Never printed.
+    /// Never printed.
     /// </summary>
     public string Token { get; }
 
     /// <summary>
-    /// ENCLAVE_TOKEN, or the path of credentials.json.
+    /// ENCLAVE_TOKEN, the path of credentials.json, or stdin (login --token-stdin).
     /// </summary>
     public string TokenSource { get; }
 
@@ -44,11 +41,9 @@ internal sealed class ApiAccess
     public Uri? PartnerApiBaseUrl { get; }
 
     /// <summary>
-    /// The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on
-    /// every command"), each cleaned by <see cref="TokenFrom"/>, and the base URLs from
-    /// credentials.json whichever source gave the token. Exits 3 with token_missing when neither
-    /// holds a token, 3 with token_invalid when the token used holds a character no token holds, and
-    /// 2 when a base URL in the file is not an http or https URL.
+    /// The token from ENCLAVE_TOKEN, then credentials.json (spec/cli-surface.md "Options on every
+    /// command"), with the base URLs from credentials.json whichever source gave the token. Exits 3
+    /// with token_missing or token_invalid, and 2 when a base URL in the file is not http or https.
     /// </summary>
     public static ApiAccess Resolve(CliHost host)
     {
@@ -83,26 +78,17 @@ internal sealed class ApiAccess
     }
 
     /// <summary>
-    /// The token <paramref name="text"/> holds, from any source: without a leading byte order mark,
-    /// then without surrounding white space. Null when nothing else is left, which counts as no
-    /// token. Exits 3 with token_invalid when the token holds any character but printable ASCII
-    /// other than space; the error names <paramref name="source"/> and holds no part of the token.
+    /// Null when nothing is left once a leading byte order mark and surrounding white space are
+    /// dropped. Exits 3 with token_invalid when the token holds anything but printable ASCII other
+    /// than space; the error names <paramref name="source"/> and holds no part of the token.
     /// </summary>
-    // A token file saved with a UTF-8 byte order mark starts with U+FEFF when its reader passes the
-    // mark on (LoginCommand.ReadTokenAsync gives the cases for stdin), and ENCLAVE_TOKEN set from
-    // such a file with $(cat file) holds it too. Trim leaves it, since U+FEFF is not white space
-    // (char.IsWhiteSpace).
-    //
-    // A token is printable ASCII with no space: a bearer token is letters, digits and -._~+/=
-    // (RFC 6750 section 2.1), and an HTTP header value is visible ASCII (RFC 9110 section 5.5).
-    // Sent as it is, another character fails in .NET with no HTTP status: SocketsHttpHandler writes
-    // header values as ASCII and throws HttpRequestException for a character outside it
-    // (dotnet/runtime release/10.0,
-    // src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/HttpConnection.cs,
-    // WriteString), which the CLI reports as transient, and a newline throws FormatException
-    // (Headers/HttpHeaders.cs, CheckContainsNewLineOrNull), which it reports as api_error. A space,
-    // a tab or DEL goes into the header as it is (observed with .NET 10). Checked here, each exits
-    // 3 before any call, which tells an agent that retrying cannot help.
+    // A token file saved with a UTF-8 byte order mark, as Windows PowerShell 5.1's Out-File
+    // -Encoding utf8 writes, gives U+FEFF to a reader that passes the mark on, and to ENCLAVE_TOKEN
+    // set with $(cat file); Trim leaves it (char.IsWhiteSpace). A token is printable ASCII with no
+    // space (RFC 6750 section 2.1, RFC 9110 section 5.5). Another character fails in .NET with no
+    // HTTP status, reported as transient or api_error (dotnet/runtime release/10.0,
+    // HttpConnection.WriteString, HttpHeaders.CheckContainsNewLineOrNull), or goes into the header
+    // as it is. Exiting 3 before any call tells an agent that retrying cannot help.
     public static string? TokenFrom(string? text, string source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -125,8 +111,8 @@ internal sealed class ApiAccess
     }
 
     /// <summary>
-    /// credentials.json's baseUrl, kept whichever source gives the token so that a file pointing
-    /// at another API address keeps pointing there; the default API address when the file has none.
+    /// credentials.json's baseUrl whichever source gives the token, so a file pointing at another
+    /// API address keeps pointing there; the default API address when the file has none.
     /// </summary>
     public static Uri BaseUrlFrom(CliHost host, StoredCredentials? stored)
     {
@@ -136,14 +122,13 @@ internal sealed class ApiAccess
     }
 
     /// <summary>
-    /// credentials.json's partnerApiBaseUrl, kept whichever source gives the token as baseUrl is
-    /// (spec/cli-surface.md "Partner API"); the host's default partner API address when the file
-    /// has none, which is null outside tests.
+    /// credentials.json's partnerApiBaseUrl whichever source gives the token, as baseUrl is
+    /// (spec/cli-surface.md "Partner API"); the host's default when the file has none, which is null
+    /// outside tests.
     /// </summary>
-    // Enclave.Sdk.Api builds the partner API's HttpClient with the EnclaveClient, from
-    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api), so a
-    // value that is not a URL would fail every command with a UriFormatException. It is checked here
-    // so the error names the file and the setting.
+    // Checked here so the error names the file and the setting. Enclave.Sdk.Api builds the partner
+    // HttpClient with every EnclaveClient (EnclaveClient.SetupPartnerHttpClient), so a value that is
+    // not a URL would fail every command with a UriFormatException.
     public static Uri? PartnerApiBaseUrlFrom(CliHost host, StoredCredentials? stored)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -152,9 +137,7 @@ internal sealed class ApiAccess
     }
 
     /// <summary>
-    /// An Enclave.Sdk.Api client that sends this token to these addresses, every request going
-    /// through <paramref name="handler"/> (EnclaveClientOptions.HttpMessageHandler). It makes no
-    /// call, and never disposes the handler.
+    /// Makes no call, and never disposes <paramref name="handler"/>.
     /// </summary>
     public EnclaveClient CreateClient(HttpMessageHandler handler)
     {

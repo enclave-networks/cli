@@ -4,10 +4,7 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Auth;
 
-/// <summary>
-/// `status`: the token source, the organisation and partner a command would use, and the token's
-/// role (spec/cli-surface.md "Login, logout and status").
-/// </summary>
+// spec/cli-surface.md "Login, logout and status".
 internal static class StatusCommand
 {
     public static CliVerb Create()
@@ -21,14 +18,13 @@ internal static class StatusCommand
         {
             var client = context.GetClient();
 
-            // Checks run in the order the token, the organisation and partner, then the call
-            // (spec/cli-surface.md "Errors and exit codes"), so a malformed or contradictory
-            // source exits 2 before the call is made.
+            // A malformed or contradictory source exits 2 before the call (spec/cli-surface.md
+            // "Errors and exit codes").
             var choice = OrganisationResolver.Choose(context);
             var partnerChoice = PartnerResolver.Choose(context);
 
-            // The one call: it proves the token works and gives the names and roles to report. A
-            // name, or the lookup when nothing is chosen, is resolved from this same response.
+            // The one call checks the token, and a name or the only organisation is resolved from
+            // its response.
             var organisations = await client.GetOrganisationsAsync();
             JsonObject? org = null;
 

@@ -4,13 +4,13 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// A file store held in memory, which CliRun gives the CLI so tests never write to disk. It keeps
-/// whether each file was written as private, so a test can check the CLI asked for that.
+/// A file store held in memory. It keeps whether each file was written as private, so a test can
+/// check the CLI asked for that.
 /// </summary>
 internal sealed class MemoryFileStore : IFileStore
 {
-    // Paths are compared exactly. The CLI and the tests both build paths from CliRun.Home, so the
-    // same file always has the same spelling.
+    // The CLI and the tests both build paths from CliRun.Home, so the same file always has the same
+    // spelling.
     private readonly Dictionary<string, (string Text, bool Private)> _files = new(StringComparer.Ordinal);
 
     private readonly HashSet<string> _read = new(StringComparer.Ordinal);
@@ -48,7 +48,6 @@ internal sealed class MemoryFileStore : IFileStore
             ? file.Private
             : throw new AssertionException($"Expected a file at {path}; the store holds: {string.Join(", ", _files.Keys)}");
 
-    // GetFullPath only rewrites the string (separators, "." and ".." segments); it does not touch
-    // the disk.
+    // GetFullPath does not touch the disk.
     private static string Normalise(string path) => Path.GetFullPath(path);
 }

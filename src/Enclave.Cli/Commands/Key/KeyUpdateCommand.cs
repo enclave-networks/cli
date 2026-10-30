@@ -4,10 +4,6 @@ using Enclave.Configuration.Data.Modules.EnrolmentKeys.Enums;
 
 namespace Enclave.Cli.Commands.Key;
 
-/// <summary>
-/// `key update`: changes the settings given, leaves the rest as they are, and prints the key
-/// (spec/cli-surface.md "Command options", "Create and update").
-/// </summary>
 internal static class KeyUpdateCommand
 {
     public static CliVerb Create()
@@ -15,10 +11,8 @@ internal static class KeyUpdateCommand
         var verb = new CliVerb("update", "Change a key's settings and print the key.", CommandScope.Organisation, changes: true);
         var key = verb.Add(CliArguments.OptionalName("key", "The key's description, matched whole and ignoring case.", "a key's description"));
         var id = verb.Add(CliOptions.Id("--id", "The key's ID.", IdFormats.Int32));
-        // The API refuses a blank description (portal
-        // Enclave.Api/Modules/SystemManagement/EnrolmentKeys/Validators/EnrolmentKeyPatchModelValidator.cs:14,
-        // NotEmpty when set) and takes empty notes (same file, 25, MaximumLength only), which clear
-        // them.
+        // The API refuses a blank description and takes empty notes, which clear them (portal
+        // EnrolmentKeyPatchModelValidator).
         var description = verb.Add(CliOptions.NonBlank("--description", "The key's description.", "a key's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The key's notes."));
         var autoApprove = verb.Add(CliOptions.Flag("--auto-approve", "Approve systems that enrol with the key automatically."));
@@ -47,10 +41,8 @@ internal static class KeyUpdateCommand
             var allow = context.Get(setAllowIp);
             var clearsAllowIp = ListValues.Clears(allow);
 
-            // The patch takes whole lists, so --add-tags and --remove-tags read the key to keep the
-            // tags it has, and --set-allow-ip reads it to keep the labels of ranges that stay
-            // ("Create and update", "Calls per command"). --set-allow-ip "" clears the ranges, which
-            // leaves no labels to keep, so it makes no read ("Details").
+            // The patch takes whole lists, so keeping tags or labels needs a read; --set-allow-ip ""
+            // keeps nothing and makes none ("Calls per command").
             var current = TagEdits.NeedsCurrentTags(set, add, remove) || (allow is not null && !clearsAllowIp)
                 ? await SingleItem.CallAsync(() => org.Client.EnrolmentKeys.GetAsync(keyId))
                 : null;

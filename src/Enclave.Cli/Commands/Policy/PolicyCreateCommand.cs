@@ -1,9 +1,6 @@
-using System.Globalization;
-using Enclave.Api.Modules.SystemManagement.Common.Models;
 using Enclave.Api.Modules.SystemManagement.Policies.Models;
 using Enclave.Cli.Commands.Trust;
 using Enclave.Cli.Core;
-using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 using Enclave.Configuration.Data.Modules.Policies.Models;
 using Enclave.Configuration.Data.Modules.Systems.Enums;
@@ -11,10 +8,6 @@ using Enclave.Sdk.Network.NetworkPolicy;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// `policy create &lt;description&gt;`: sends every setting of the policy, with the documented value
-/// for each flag left out (spec/cli-surface.md "Command options", "Create and update").
-/// </summary>
 internal static class PolicyCreateCommand
 {
     public static CliVerb Create()
@@ -30,16 +23,13 @@ internal static class PolicyCreateCommand
         var mode = verb.Add(CliOptions.Choice("--mode", "With --gateway: which of several gateways carries a system's traffic; balanced when left out.", PolicyGateways.Modes));
         var subnetFilter = verb.Add(CliOptions.Labelled("--subnet-filter", "With --gateway: narrow the addresses the senders may reach through the gateway.", "range"));
         var activeHours = verb.Add(CliOptions.Text("--active-hours", "Days, times and an IANA time zone when the policy applies: \"mon-fri 08:00-18:00 Europe/London\".", "hours"));
-        var forOption = verb.Add(CliOptions.Duration("--for", "Keep the policy for this long."));
-        var untilOption = verb.Add(CliOptions.Time("--until", "Keep the policy until this time."));
-        var then = verb.Add(CliOptions.Choice("--then", "What happens when the time is up: disable the policy (the default), or delete it.", ("disable", ExpiryAction.Disable), ("delete", ExpiryAction.Delete)));
+        var timing = Timing.AddTo(verb, "Keep the policy", "policy");
         var notes = verb.Add(CliOptions.Text("--notes", "The policy's notes."));
         var disabled = verb.Add(CliOptions.Flag("--disabled", "Create the policy disabled."));
 
         // The API accepts a policy with no ACLs, and the agent then lets no traffic through it
-        // (fabric StateTracker.cs:909-921; the API reports it as InactiveNoAcls, portal
-        // PolicyModelExtensions.cs:25-29), so the command requires one and always states what
-        // traffic the policy allows ("Command options").
+        // (fabric StateTracker.DoesPolicyAllowTraffic; portal PolicyModelExtensions.ToModel reports
+        // it InactiveNoAcls).
         verb.Check(context =>
         {
             if (!context.IsGiven(acls))
@@ -51,9 +41,9 @@ internal static class PolicyCreateCommand
         verb.Exclusive(trust, trustIds);
 
         // The API refuses sender tags, receiver tags or trust requirements that hold a value twice
-        // (portal PolicyCreateModelValidator.cs:26,28,39). Trust requirement names match ignoring
-        // case ("Names and IDs"), so two that differ only in case name one requirement. The API
-        // stores a repeated ACL, gateway system or subnet filter, and those are sent as given.
+        // (portal PolicyCreateModelValidator, MustNotHaveDuplicates); trust requirement names match
+        // ignoring case ("Names and IDs"). It stores a repeated ACL, gateway or subnet filter, so
+        // those are sent as given.
         verb.Check(context =>
         {
             ListValues.CheckNoRepeats(senders.Name, context.Get(senders), StringComparer.Ordinal);
@@ -62,8 +52,8 @@ internal static class PolicyCreateCommand
             ListValues.CheckNoRepeats(trustIds.Name, context.Get(trustIds));
         });
 
-        // The senders of a gateway policy reach the gateway's routes, and the API rejects receiver
-        // tags on an exit gateway policy (portal PolicyCreateModelValidator.cs:61).
+        // The API refuses receiver tags on an exit gateway policy (portal PolicyCreateModelValidator,
+        // the ReceiverTags rules).
         verb.Check(context =>
         {
             if (context.IsGiven(gateways) && context.IsGiven(receivers))
@@ -73,19 +63,16 @@ internal static class PolicyCreateCommand
         });
         verb.Check(context => PolicyGateways.Check(gateways.Name, context.Get(gateways)));
 
-        // The API refuses a subnet filter on a general policy (portal
-        // PolicyCreateModelValidator.cs:47-48). It accepts a mode there, checking it on gateway
-        // policies only (58), but a mode orders a policy's gateways and a general policy has none, so
-        // the API leaves it out of the policy it returns (PolicyModelExtensions.cs:46).
+        // The API refuses a subnet filter on a general policy (portal PolicyCreateModelValidator). It
+        // accepts a mode there but drops it, since a general policy has no gateways to order
+        // (PolicyModelExtensions.ToModel).
         verb.Requires(mode, gateways);
         verb.Requires(subnetFilter, gateways);
         verb.Check(context => PolicyActiveHours.Check(activeHours.Name, context.Get(activeHours)));
-        verb.Exclusive(forOption, untilOption);
-        verb.Requires(then, forOption, untilOption);
 
         verb.SetHandler(async context =>
         {
-            var expiry = context.ExpiryFrom(forOption, untilOption);
+            var autoExpire = timing.AutoExpire(context);
             var gatewayList = context.Get(gateways)?.Select(gateway => PolicyGateways.Parse(gateway)!).ToArray();
             GatewayPriorityType? priority = gatewayList is null ? null : context.Get(mode) ?? GatewayPriorityType.Balanced;
 
@@ -102,12 +89,11 @@ internal static class PolicyCreateCommand
                 Acls = PolicyAcl.FromGiven(context.Get(acls)!),
                 SenderTrustRequirements = [.. trustRequirements.Select(TrustRequirementId.FromInt)],
                 Notes = context.Get(notes),
-                AutoExpire = expiry is { } until ? new AutoExpireModel(null, until.ToString("o", CultureInfo.InvariantCulture), context.Get(then) ?? ExpiryAction.Disable) : null,
+                AutoExpire = autoExpire,
                 ActiveHours = context.Get(activeHours) is { } hours ? PolicyActiveHours.Parse(hours) : null,
 
-                // Exit is the only traffic direction the API accepts (portal
-                // PolicyCreateModelValidator.cs:56 rejects Entry). A general policy sends no gateway
-                // settings, which the API requires of it (same file, 47-52).
+                // The API refuses Entry, and refuses gateway settings on a general policy (portal
+                // PolicyCreateModelValidator).
                 Gateways = gatewayList ?? [],
                 GatewayTrafficDirection = gatewayList is null ? null : GatewayTrafficDirection.Exit,
                 GatewayPriority = priority,

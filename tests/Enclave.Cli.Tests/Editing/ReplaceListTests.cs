@@ -3,12 +3,9 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Editing;
 
-// --set-tags replaces the whole tag list, and any --set- list flag given "" clears its list;
-// --add-tags and --remove-tags change the list in place: the CLI reads the item, then patches the
-// whole list (spec/cli-surface.md "Create and update" and "Details"). The patch models take the
-// whole list (portal SystemPatchModel.Tags, DnsRecordPatchModel.Tags), so the API has no call that
-// adds or removes one tag, and the read is what keeps the tags the item has. --set- flags need no
-// read; the add and remove flags add one ("Calls per command").
+// The patch models take the whole tag list (portal SystemPatchModel.Tags,
+// DnsRecordPatchModel.Tags), so --add-tags and --remove-tags read the item to keep the tags it has
+// (spec/cli-surface.md "Create and update", "Calls per command").
 public class ReplaceListTests
 {
     [TestCaseSource(nameof(TagLists))]
@@ -32,9 +29,8 @@ public class ReplaceListTests
         });
     }
 
-    // Any --set- list flag given "" clears its list (spec/cli-surface.md "Details"). The patch
-    // clears it by sending the field as an empty list; a patch without the field leaves the list as
-    // it is (portal Enclave.Api.Scaffolding/Models/PatchModel.cs, WasSet).
+    // A patch without the field leaves the list as it is (portal PatchModel.WasSet), so clearing
+    // sends an empty list ("Details").
     [TestCaseSource(nameof(ClearedLists))]
     public async Task Set_list_flag_given_an_empty_value_sends_an_empty_list(string[] command, string path, string item, string field)
     {
@@ -56,8 +52,7 @@ public class ReplaceListTests
         });
     }
 
-    // Example 10 in spec/cli-surface.md, on each command with the tag flags. The item has the
-    // tags web, legacy and prod, which the patch keeps.
+    // Example 10.
     [TestCaseSource(nameof(TagLists))]
     public async Task Add_tags_reads_the_item_then_patches_the_whole_list_with_the_tag_added(string[] command, string path, string item)
     {
@@ -78,7 +73,7 @@ public class ReplaceListTests
         });
     }
 
-    // Example 42 in spec/cli-surface.md, on each command with the tag flags.
+    // Example 42.
     [TestCaseSource(nameof(TagLists))]
     public async Task Remove_tags_reads_the_item_then_patches_the_whole_list_without_the_tag(string[] command, string path, string item)
     {
@@ -99,11 +94,9 @@ public class ReplaceListTests
         });
     }
 
-    // The API refuses a tag list that holds a tag twice (portal
-    // Enclave.Api/Modules/SystemManagement/Systems/Validators/SystemPatchModelValidator.cs:20,
-    // UnapprovedSystemPatchModelValidator.cs:16), and the tag flags send the list with each tag once
-    // (spec/cli-surface.md "Command options"), so web given twice to --set-tags is sent once. The
-    // tags are compared as a collection that counts each copy, so a list with web twice fails.
+    // The API refuses a tag list that holds a tag twice (portal SystemPatchModelValidator,
+    // UnapprovedSystemPatchModelValidator). The tags are compared as a collection that counts each
+    // copy, so a list with web twice fails.
     [TestCaseSource(nameof(TagLists))]
     public async Task Set_tags_given_a_tag_twice_sends_it_once(string[] command, string path, string item)
     {
@@ -124,8 +117,7 @@ public class ReplaceListTests
         });
     }
 
-    // As above, for a tag added that the item already has: the item is tagged web, legacy and prod,
-    // and --add-tags web leaves each of them once.
+    // As above, for a tag the item already has.
     [TestCaseSource(nameof(TagLists))]
     public async Task Add_tags_given_a_tag_the_item_has_sends_it_once(string[] command, string path, string item)
     {
@@ -141,8 +133,7 @@ public class ReplaceListTests
         Assert.That(JsonAssert.Strings(JsonAssert.Property(run.Requests[^1].BodyJson, "Tags")), Is.EquivalentTo(tags));
     }
 
-    // update is a single-ID command, which exits 5 for an unknown ID (spec/cli-surface.md
-    // "Several IDs"). The read fails, so there is no list to patch.
+    // update is a single-ID command ("Several IDs"), and the failed read leaves no list to patch.
     [Test]
     public async Task Add_tags_on_a_system_the_api_does_not_know_exits_5_and_patches_nothing()
     {
@@ -157,9 +148,8 @@ public class ReplaceListTests
         Assert.That(run.RequestsTo("PATCH", path), Is.Empty);
     }
 
-    // --dry-run prints the requests and sends none of them, and the reads a change depends on run
-    // (spec/cli-surface.md "Dry run"): the read gives the whole list, so the printed body holds
-    // every tag the patch would send.
+    // The read runs under --dry-run ("Dry run"), so the printed body holds every tag the patch would
+    // send.
     [Test]
     public async Task Add_tags_with_dry_run_reads_the_item_and_prints_the_whole_list_it_would_send()
     {
@@ -180,9 +170,8 @@ public class ReplaceListTests
         });
     }
 
-    // The update commands with the tag flags (spec/cli-surface.md "Command options") that are
-    // the vehicles for these rules, with the path each reads and patches and the item the fake API
-    // answers with, tagged web, legacy and prod.
+    // The update commands with the tag flags ("Command options"), each item tagged web, legacy and
+    // prod.
     private static IEnumerable<TestCaseData> TagLists()
     {
         yield return TagList("system update", ["system", "update", "ABCDE"], "systems/ABCDE", ApiJson.System("ABCDE"));

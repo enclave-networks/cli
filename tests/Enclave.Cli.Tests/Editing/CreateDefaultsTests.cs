@@ -3,18 +3,15 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Editing;
 
-// A create sends a value for every setting that changes behaviour, so a change to the API's own
-// defaults does not change what a command does, and --dry-run shows every value sent
-// (spec/cli-surface.md "Create and update"). A list flag left out is sent as an empty list
-// ("Details"). The values each noun documents for its other settings are tested with that noun.
+// A create sends every setting that changes behaviour, so a change to the API's defaults does not
+// change what a command does (spec/cli-surface.md "Create and update", "Details"). Each noun's own
+// tests cover its other settings.
 public class CreateDefaultsTests
 {
     private static readonly string Zones = TestData.OrgPath("dns/zones");
 
     private static readonly string Records = TestData.OrgPath("dns/records");
 
-    // The create carries the field with an empty list, so what the command sends does not rest on
-    // the API's default for a field left out.
     [TestCase("dns create-zone internal", "dns/zones", "autoDnsTags")]
     [TestCase("dns create-hostname db.internal", "dns/records", "tags")]
     [TestCase("dns create-hostname db.internal", "dns/records", "systems")]
@@ -37,8 +34,7 @@ public class CreateDefaultsTests
         Assert.That(JsonAssert.Strings(JsonAssert.Property(posts[0].BodyJson, field)), Is.Empty);
     }
 
-    // --dry-run shows every value sent ("Create and update"), the values for flags left out
-    // included, and the zone lookup the create depends on runs ("Dry run").
+    // The zone lookup the create depends on runs under --dry-run ("Dry run").
     [Test]
     public async Task Create_with_dry_run_prints_every_value_it_would_send()
     {

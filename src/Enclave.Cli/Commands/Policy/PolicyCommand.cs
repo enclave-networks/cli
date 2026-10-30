@@ -2,10 +2,6 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// The `policy` noun (spec/cli-surface.md "Commands"). A policy is given by its description, or
-/// by --id.
-/// </summary>
 internal static class PolicyCommand
 {
     public static CliNoun Create()

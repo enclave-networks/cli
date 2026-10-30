@@ -4,21 +4,16 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// Option values that name an API enum (--sort, --type, --approval, --then, --state, --os, --level,
-// --mode) take lower-case, hyphenated names, matched ignoring case. A value is renamed where the
-// API's name does not say what it does: --then revoke for Delete on a system. JSON output keeps the
-// API's own names (spec/cli-surface.md "Options on every command").
+// spec/cli-surface.md "Options on every command". A value is renamed where the API's name does not
+// say what it does (--then revoke for Delete on a system); JSON output keeps the API's names.
 public class OptionValueTests
 {
     private static readonly string SystemEnableUntilPath = TestData.OrgPath("systems/ABCDE/enable-until");
 
     private static readonly string PolicyEnableUntilPath = TestData.OrgPath("policies/42/enable-until");
 
-    // Each --sort value with the API enum member it names: SystemQuerySortMode,
-    // EnrolmentKeySortOrder, PolicySortOrder, TagQuerySortOrder and TrustRequirementSortOrder in the
-    // portal's Enclave.Configuration.Data/Modules/*/Enums, and UnapprovedSystemQuerySortMode in
-    // Enclave.Api/Modules/SystemManagement/UnapprovedSystems/Models. Enclave.Sdk.Api writes
-    // the member name into the sort parameter (each list client's BuildQueryString).
+    // Enclave.Sdk.Api writes the API enum member name into the sort parameter (each list client's
+    // BuildQueryString).
     public static IEnumerable<TestCaseData> SortValues()
     {
         yield return Sort("system list", "systems", "recently-enrolled", "RecentlyEnrolled");
@@ -46,16 +41,15 @@ public class OptionValueTests
         yield return Sort("trust list", "trust-requirements", "recently-created", "RecentlyCreated");
     }
 
-    // Each case gives a value in lower case and in another casing; the second run must send exactly
-    // what the first does, and the parameter must hold the API's value: sort carries the API's
-    // member name, and a search key goes into the search text as the API's search value, which is
-    // not always the CLI's ("Filters": manual is gated, no-uses is nouses, windows is Windows,
-    // public-ip is PublicIp).
+    // A search key goes into the search text as the API's search value, which is not always the
+    // CLI's: manual is gated, no-uses is nouses ("Filters").
     public static IEnumerable<TestCaseData> CaseVariants()
     {
         yield return Variant("system list --sort recently-connected", "system list --sort Recently-Connected", "systems", "sort", "RecentlyConnected");
         yield return Variant("system list --sort recently-connected", "system list --sort RECENTLY-CONNECTED", "systems", "sort", "RecentlyConnected");
         yield return Variant("key list --sort last-used", "key list --sort Last-Used", "enrolment-keys", "sort", "LastUsed");
+        yield return Variant("tag list --sort recently-used", "tag list --sort Recently-Used", "tags", "sort", "RecentlyUsed");
+        yield return Variant("policy list --sort recently-created", "policy list --sort Recently-Created", "policies", "sort", "RecentlyCreated");
         yield return Variant("system list --state disconnected", "system list --state DISCONNECTED", "systems", "search", "state:disconnected");
         yield return Variant("system list --os windows", "system list --os WINDOWS", "systems", "search", "os:Windows");
         yield return Variant("system list --os mac", "system list --os Mac", "systems", "search", "os:Mac");
@@ -67,10 +61,8 @@ public class OptionValueTests
         yield return Variant("trust list --type user-auth", "trust list --type USER-AUTH", "trust-requirements", "search", "type:UserAuthentication");
     }
 
-    // Each case is a value outside the option's allowed set, with the command corrected. revoke is
-    // the name --then takes for a system's Delete, so it is not a value for a policy, and a system
-    // takes revoke in place of delete. With --pending, --sort takes the waiting systems' values
-    // ("Details"), and UnapprovedSystemQuerySortMode has no RecentlyConnected.
+    // revoke is a system's name for Delete, so a policy does not take it and a system does not take
+    // delete. UnapprovedSystemQuerySortMode has no RecentlyConnected.
     public static IEnumerable<TestCaseData> ValuesOutsideTheSet()
     {
         var systems = TestData.OrgPath("systems");
@@ -141,9 +133,7 @@ public class OptionValueTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected, corrected, method, path);
     }
 
-    // The API's ExpiryAction has Disable and Delete (portal
-    // Enclave.Configuration.Data/Enums/ExpiryAction.cs). For a system, Delete revokes it, and the
-    // CLI names it revoke; for keys and policies the CLI keeps the name delete.
+    // ExpiryAction.Delete revokes a system, so the CLI names it revoke (portal ExpiryAction).
     [TestCase("revoke", "Delete")]
     [TestCase("REVOKE", "Delete")]
     [TestCase("disable", "Disable")]
@@ -171,8 +161,6 @@ public class OptionValueTests
         Assert.That(JsonAssert.Property(request.BodyJson, "expiryAction").GetString(), Is.EqualTo(expiryAction));
     }
 
-    // The option takes revoke, and the system the API returns says Delete: output is the model
-    // unchanged, so it keeps the API's name.
     [Test]
     public async Task Json_output_keeps_the_api_name_of_a_value_the_cli_renames()
     {
@@ -196,9 +184,7 @@ public class OptionValueTests
         });
     }
 
-    // The values the options take are the CLI's; the items printed are the API's models, so their
-    // enum fields carry the API's member names (ApiJson.System: state Connected, systemType
-    // GeneralPurpose).
+    // ApiJson.System gives state Connected and systemType GeneralPurpose.
     [Test]
     public async Task Json_output_keeps_the_api_enum_names_whatever_the_option_values_given()
     {

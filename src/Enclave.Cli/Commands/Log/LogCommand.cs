@@ -5,13 +5,9 @@ using Enclave.Sdk.Api.Clients.Interfaces;
 
 namespace Enclave.Cli.Commands.Log;
 
-/// <summary>
-/// `log`: the organisation's activity log, a noun with no verbs (spec/cli-surface.md
-/// "Commands", "Command options").
-/// </summary>
+// log is a noun with no verbs (spec/cli-surface.md "Commands", "Command options").
 internal static class LogCommand
 {
-    // The entries log prints when neither --limit nor --since is given ("Command options").
     private const int DefaultLimit = 100;
 
     public static CliVerb Create()
@@ -33,13 +29,12 @@ internal static class LogCommand
 
         verb.SetHandler(async context =>
         {
-            // --until, like --since, names a time in the log's past, so a duration or a clock time
-            // counts back from now: --until 1h leaves out the last hour.
+            // --until, like --since, names a time in the log's past: --until 1h leaves out the last
+            // hour.
             var from = context.Get(since) is { } sinceTime ? context.PastInstant(sinceTime, since) : (DateTimeOffset?)null;
             var to = context.Get(until) is { } untilTime ? context.PastInstant(untilTime, until) : (DateTimeOffset?)null;
 
-            // --since prints every entry back to then, with no limit unless --limit is given
-            // ("Command options", "Details").
+            // --since has no limit unless --limit is given ("Command options").
             var count = context.Get(limit) ?? (from is null ? DefaultLimit : null);
             var matches = Matcher(context.Get(user), context.Get(level), context.Get(filter));
             var leavesOut = to is not null || context.IsGiven(user) || context.IsGiven(level) || context.IsGiven(filter);
@@ -53,34 +48,25 @@ internal static class LogCommand
         return verb;
     }
 
-    // Pages of 200, the most the API returns per page (portal PaginationDefaults.cs:11), or of the
-    // limit when that is smaller, so the newest 100 take one page of 100 ("Details"). --until,
-    // --user, --level and --filter leave entries out, so nothing bounds how many entries are read
-    // before the limit is met, and pages of a small limit could take one call per entry read: with
-    // any of them the pages are 200.
+    // A limit under 200, the API's largest page (portal PaginationDefaults.MaxPageSize), is the page
+    // size, so the newest 100 take one call ("Details"). --until and the filters leave out an
+    // unbounded number of entries, and pages of a small limit could then take one call per entry
+    // read, so with any of them the pages are 200.
     private static int PageSize(int? limit, bool leavesOut) =>
         limit is { } count && !leavesOut ? Math.Min(count, Paging.PageSize) : Paging.PageSize;
 
-    // The logs API takes only a page and a page size (portal LogsRequestModel.cs) and returns the
-    // newest entries first (portal ActivityLogRepository.cs:43), so the CLI reads page after page
-    // and stops once it has what it prints: the limit, the first entry older than --since, or the
-    // start of the log. --until and the filters leave entries out before the limit counts
-    // ("Details").
+    // The logs API takes only a page and a page size (portal LogsRequestModel) and returns the
+    // newest entries first (ActivityLogRepository.GetLogsAsync), so the CLI reads pages until it
+    // has the limit, an entry older than --since, or the start of the log. --until and the filters
+    // leave entries out before the limit counts ("Details").
     //
-    // A page is the entries after skipping those on the pages before it, so an entry written while
-    // the CLI reads moves the older entries down, and a later page can begin with entries already
-    // read. The API also stores entries in batches every 2 seconds, each with the time of its own
-    // event (portal Enclave.ActivityLog/ActivityLogSink.cs:16-17,25,100), so an entry stored late can
-    // land among the entries already read, newer than the oldest of them. An entry on a later page
-    // is dropped only when it is one already read; every other entry is printed, and the entries
-    // print newest first, so one stored late takes its place by time. The keys of every page read
-    // are kept, since enough entries written during a read move an entry more than a page on, and
-    // they take memory in step with the entries read. The log entry model has no ID (portal
-    // LogEntryModel.cs), so an entry is known by all its fields: two distinct entries alike in every
-    // field and in time, to the millisecond the API keeps, that fall on different pages print once.
-    // That takes the same message for the same user from the same address twice in one
-    // millisecond, and losing the second copy is acceptable where printing entries twice whenever
-    // the log is written to during a read is not.
+    // Pages are offsets, so entries written during a read push older ones onto later pages, and the
+    // API stores entries in batches every 2 seconds with their event's time
+    // (ActivityLogSink.WritePeriod and ConvertEvent), so one stored late can land among those
+    // already read. An entry read on any earlier page is dropped, and the rest sorted newest first.
+    // The model has no ID (LogEntryModel), so an entry is keyed on all its fields: two alike to the
+    // millisecond on different pages print once, which is acceptable where printing entries twice
+    // whenever the log is written to during a read is not.
     private static async Task<List<LogEntryModel>> ReadAsync(
         ILogsClient logs,
         DateTimeOffset? since,
@@ -143,34 +129,18 @@ internal static class LogCommand
 
     // A stable sort, so entries with one time keep the order the API gave them.
     private static List<LogEntryModel> NewestFirst(List<LogEntryModel> entries) =>
-        [.. entries.OrderByDescending(entry => AsUtc(entry.TimeStamp))];
+        [.. entries.OrderByDescending(entry => CliJson.ToUtc(entry.TimeStamp))];
 
-    // The logs API has no filters, so --user, --level and --filter apply to the entries read
-    // ("Command options"): --user matches the whole userName and --filter part of the message, each
-    // ignoring case ("Details").
+    // The logs API has no filters, so these apply to the entries read ("Command options").
     private static Func<LogEntryModel, bool> Matcher(string? user, IReadOnlyList<ActivityLogLevel>? levels, string? text) =>
         entry =>
             (user is null || string.Equals(entry.UserName, user, StringComparison.OrdinalIgnoreCase))
             && (levels is null || levels.Contains(entry.Level))
             && (text is null || (entry.Message?.Contains(text, StringComparison.OrdinalIgnoreCase) ?? false));
 
-    // LogEntryModel.TimeStamp is a DateTime the API writes in UTC; one read without a zone is taken
-    // as UTC too. The API writes it with Z (portal Enclave.ActivityLog/ActivityLogSink.cs:100 stores
-    // the UTC time, and Enclave.Api.Scaffolding/FractionalMillisecondTrimmingDateTimeConverter.cs
-    // writes a DateTime by its kind), which System.Text.Json reads as DateTimeKind.Utc. A time
-    // written with another offset System.Text.Json reads as local time in the machine's zone
-    // (dotnet/runtime release/10.0, System.Text.Json JsonHelpers.Date.cs, TryParseAsISO, returns
-    // DateTimeOffset.LocalDateTime). ToUniversalTime converts back with that same zone and gives the
-    // instant written on any machine, which is why it reads the machine's zone outside CliHost:
-    // converting with CliHost.Time's zone, which tests fix, would move the instant by the difference
-    // between the two zones.
-    private static DateTimeOffset AsUtc(DateTime time) =>
-        new(time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : DateTime.SpecifyKind(time, DateTimeKind.Utc));
-
-    // An entry as the CLI tells entries apart: its time and every field the API gives it.
     private readonly record struct EntryKey(DateTimeOffset Time, ActivityLogLevel Level, string? Message, string? UserName, string? IpAddress)
     {
         public static EntryKey Of(LogEntryModel entry) =>
-            new(AsUtc(entry.TimeStamp), entry.Level, entry.Message, entry.UserName, entry.IpAddress);
+            new(CliJson.ToUtc(entry.TimeStamp), entry.Level, entry.Message, entry.UserName, entry.IpAddress);
     }
 }

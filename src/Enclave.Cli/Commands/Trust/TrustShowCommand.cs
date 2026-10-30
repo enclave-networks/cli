@@ -3,10 +3,6 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// `trust show`: one trust requirement with its settings, as the API's GET by ID returns it; the
-/// list items are summaries without settings (portal TrustRequirementSummaryModel).
-/// </summary>
 internal static class TrustShowCommand
 {
     public static CliVerb Create()
@@ -22,7 +18,8 @@ internal static class TrustShowCommand
             var org = await context.GetOrganisationAsync();
             var requirementId = await TrustLookup.IdAsync(context, org, context.Get(id), context.Get(description), description.Name);
 
-            // One trust requirement named: a 404 means it does not exist, exit 5 ("Several IDs").
+            // The list a name is looked up in holds summaries without settings (portal
+            // TrustRequirementSummaryModel), so show reads the requirement by ID.
             var requirement = await SingleItem.CallAsync(() => org.Client.TrustRequirements.GetAsync(TrustRequirementId.FromInt(requirementId)));
             await context.Output.WriteAsync(requirement, context.CancellationToken);
         });

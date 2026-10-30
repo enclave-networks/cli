@@ -4,14 +4,11 @@ using System.Text.RegularExpressions;
 namespace Enclave.Cli.Core;
 
 /// <summary>
-/// A time as a command line gives it, read into an instant against the clock and local time zone
-/// in <see cref="CliHost.Time"/>.
+/// A time in the forms of spec/cli-surface.md "Command options".
 /// </summary>
-// The forms are those of spec/cli-surface.md "Command options": a duration (30m, 8h, 14d), an
-// RFC 3339 time with its zone, a date and time without a zone, or a clock time (18:00), the last
-// two read in the machine's time zone. Each is parsed with the invariant culture and an exact
-// pattern, so a command means the same on every machine whatever its locale and calendar; forms a
-// locale would also read, such as "10/09/2030" or "5:30 PM", are refused.
+// Each form is parsed with the invariant culture and an exact pattern, so a command means the same
+// whatever the machine's locale and calendar; forms a locale would also read, such as "10/09/2030"
+// or "5:30 PM", are refused.
 internal sealed partial class TimeInput
 {
     private static readonly string[] ZonedFormats =
@@ -54,9 +51,6 @@ internal sealed partial class TimeInput
         Clock,
     }
 
-    /// <summary>
-    /// Reads a duration: a whole number above zero followed by m (minutes), h (hours) or d (days).
-    /// </summary>
     public static bool TryParseDuration(string text, out TimeSpan duration)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -86,10 +80,6 @@ internal sealed partial class TimeInput
         return true;
     }
 
-    /// <summary>
-    /// Reads a time in one of the forms the CLI takes; a duration only when
-    /// <paramref name="allowDuration"/> is set.
-    /// </summary>
     public static bool TryParse(string text, bool allowDuration, out TimeInput? input)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -132,10 +122,8 @@ internal sealed partial class TimeInput
     }
 
     /// <summary>
-    /// The instant this time names, read forwards from now, as UTC: a duration counts from now, and
-    /// a clock time is its next occurrence after now. Exits 2, naming the option
-    /// <paramref name="name"/>, when a time without a zone does not exist in the local time zone (it
-    /// falls in a daylight saving gap), or a duration reaches past the latest time the CLI holds.
+    /// A clock time is its next occurrence after now. Exits 2 naming <paramref name="name"/> for a
+    /// time in a daylight saving gap, or a duration that reaches past year 9999.
     /// </summary>
     public DateTimeOffset Forwards(TimeProvider time, string name)
     {
@@ -153,10 +141,8 @@ internal sealed partial class TimeInput
     }
 
     /// <summary>
-    /// The instant this time names, read backwards from now, as UTC: a duration counts back from
-    /// now, and a clock time is its latest occurrence at or before now. Exits 2 as
-    /// <see cref="Forwards"/> does, and when a duration reaches back before the earliest time the
-    /// CLI holds.
+    /// A clock time is its latest occurrence at or before now. Exits 2 naming <paramref name="name"/>
+    /// for a time in a daylight saving gap, or a duration that reaches back before year 1.
     /// </summary>
     public DateTimeOffset Backwards(TimeProvider time, string name)
     {
@@ -173,16 +159,9 @@ internal sealed partial class TimeInput
         };
     }
 
-    /// <summary>
-    /// The instant <paramref name="duration"/> after <paramref name="now"/>, as UTC. Exits 2,
-    /// naming the option <paramref name="name"/>, when it is past the end of year 9999.
-    /// </summary>
-    // DateTimeOffset holds the years 1 to 9999 (DateTimeOffset.MinValue and MaxValue,
-    // https://learn.microsoft.com/dotnet/api/system.datetimeoffset.maxvalue), and arithmetic beyond
-    // them throws ArgumentOutOfRangeException, which no option check would name. A duration of up to
-    // about 29,000 years parses (TimeSpan.MaxValue), so the instant is checked against the range
-    // here. The difference of two DateTimeOffset values is at most 10,000 years, so the check itself
-    // cannot overflow.
+    // A duration of up to about 29,000 years parses, and DateTimeOffset arithmetic past
+    // DateTimeOffset.MaxValue throws an ArgumentOutOfRangeException that names no option. The
+    // difference of two DateTimeOffset values is at most 10,000 years, so the check cannot overflow.
     public static DateTimeOffset After(DateTimeOffset now, TimeSpan duration, string name)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(duration, TimeSpan.Zero);
@@ -192,10 +171,6 @@ internal sealed partial class TimeInput
             : throw CliErrors.InvalidArgument(name, $"The duration given to {name} reaches past the end of year 9999, the latest time the CLI holds.");
     }
 
-    /// <summary>
-    /// The instant <paramref name="duration"/> before <paramref name="now"/>, as UTC. Exits 2,
-    /// naming the option <paramref name="name"/>, when it is before the start of year 1.
-    /// </summary>
     // After gives the reason for the range check.
     public static DateTimeOffset Before(DateTimeOffset now, TimeSpan duration, string name)
     {
@@ -217,8 +192,7 @@ internal sealed partial class TimeInput
         }
 
         // An ambiguous local time (the hour repeated when daylight saving ends) is read as standard
-        // time, which TimeZoneInfo.ConvertTimeToUtc chooses: "If dateTime is ambiguous, this method
-        // assumes that it is the standard time of the source time zone"
+        // time, as TimeZoneInfo.ConvertTimeToUtc assumes
         // (https://learn.microsoft.com/dotnet/api/system.timezoneinfo.converttimetoutc, .NET 10).
         return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, zone), TimeSpan.Zero);
     }
@@ -246,14 +220,12 @@ internal sealed partial class TimeInput
         return null;
     }
 
-    // A clock time names its next occurrence, or its latest at or before now, so in the hour repeated
-    // when daylight saving ends both of its occurrences are candidates: at 01:15 on the night the
-    // clocks go back from 02:00, the next 01:30 is the one 15 minutes away, which reading the time as
-    // standard time alone would skip. TimeZoneInfo.GetAmbiguousTimeOffsets gives the UTC offsets an
-    // ambiguous time can have, in no defined order, and reads a DateTime of DateTimeKind.Unspecified
-    // as a time in the zone it is called on
+    // In the hour repeated when daylight saving ends, both occurrences are candidates: at 01:15 on
+    // the night the clocks go back from 02:00, the next 01:30 is 15 minutes away, which reading it as
+    // standard time alone would skip. GetAmbiguousTimeOffsets returns the offsets in no defined order
+    // and reads an Unspecified DateTime as a time in its zone
     // (https://learn.microsoft.com/dotnet/api/system.timezoneinfo.getambiguoustimeoffsets, .NET 10,
-    // Remarks). A time in a daylight saving gap has no occurrence.
+    // Remarks).
     private static IEnumerable<DateTimeOffset> Occurrences(DateTime local, TimeZoneInfo zone)
     {
         if (zone.IsInvalidTime(local))

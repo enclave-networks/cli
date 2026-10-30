@@ -2,11 +2,8 @@ using System.CommandLine;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// A noun, such as `system`, which holds verbs. Its plural is accepted as a hidden alias, so a guess
-/// such as `systems list` runs `system list`; help and `commands` show the singular name only
-/// (spec/cli-surface.md "Shape and naming"). Given without a verb it exits 2.
-/// </summary>
+// The plural is a hidden alias, so a guess such as `systems list` runs (spec/cli-surface.md "Shape
+// and naming").
 internal sealed class CliNoun : Command
 {
     public CliNoun(string name, string? plural, string description)
@@ -26,10 +23,6 @@ internal sealed class CliNoun : Command
         });
     }
 
-    /// <summary>
-    /// Adds a verb, or a second-level noun, and returns it.
-    /// </summary>
-    /// <typeparam name="TCommand">The command's type, kept for the caller.</typeparam>
     public TCommand Add<TCommand>(TCommand command)
         where TCommand : Command
     {

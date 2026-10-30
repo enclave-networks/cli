@@ -6,8 +6,7 @@ using Enclave.Configuration.Data;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// Reads --active-hours and --set-active-hours: "&lt;days&gt; &lt;start&gt;-&lt;end&gt; [&lt;zone&gt;]"
-/// (spec/cli-surface.md "Command options", "Details").
+/// Reads --active-hours and --set-active-hours (spec/cli-surface.md "Details").
 /// </summary>
 internal static partial class PolicyActiveHours
 {
@@ -24,13 +23,10 @@ internal static partial class PolicyActiveHours
     ];
 
     /// <summary>
-    /// The active hours the text gives, or null when it is not in the documented form. Days are mon
-    /// to sun, a range (mon-fri) or a comma list (mon,wed,fri); times are 24-hour HH:MM; the zone is
-    /// an IANA time zone, UTC when left out.
+    /// Null when the text is not in the documented form ("Details"). The zone is UTC when left out.
     /// </summary>
-    // The zone is sent as given, and the API checks it against the zones it knows (portal
-    // ActiveHoursValidator.cs, TimeZoneIdValidator), since the zones the local machine knows can
-    // differ from the API's.
+    // The zone is sent as given for the API to check (portal ActiveHoursValidator,
+    // TimeZoneIdValidator), since the zones the local machine knows can differ from the API's.
     public static ActiveHours? Parse(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -56,8 +52,7 @@ internal static partial class PolicyActiveHours
     }
 
     /// <summary>
-    /// Checks an active hours option, exiting 2 when its value is not in the documented form or
-    /// starts and ends at the same time.
+    /// Exits 2 for a value not in the documented form, or hours that start and end at the same time.
     /// </summary>
     public static void Check(string option, string? text)
     {
@@ -71,10 +66,8 @@ internal static partial class PolicyActiveHours
             throw CliErrors.InvalidArgument(option, $"{option} takes days, a start and end time, and an optional IANA time zone: \"mon-fri 08:00-18:00 Europe/London\". Days are mon to sun, a range or a comma list; times are 24-hour HH:MM.");
         }
 
-        // Hours that start and end at the same time are never active: the agent's check needs a
-        // local time at or after the start and before the end (services
-        // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), and 00:00-00:00 is no
-        // exception.
+        // The check needs a local time at or after the start and before the end, so 00:00-00:00 is
+        // never active either (services SystemIsopActiveHoursExtensions.IsWithinActiveHours).
         if (hours.StartTime.Equals(hours.EndTime))
         {
             throw CliErrors.InvalidArgument(option, $"{option} takes a start and an end that differ; hours that start and end at the same time are never active.");

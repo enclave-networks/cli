@@ -9,7 +9,6 @@ namespace Enclave.Cli.Tests.Support;
 /// </summary>
 internal static class DryRunOutput
 {
-    // Each request's fields, sorted and joined with commas.
     private const string RequestFields = "body,method,url";
 
     private static readonly string[] OutputFields = ["dryRun", "org", "requests"];
@@ -53,8 +52,7 @@ internal static class DryRunOutput
     }
 
     /// <summary>
-    /// The output of a command that makes one call, checked as <see cref="Read"/> checks it, holding
-    /// exactly one request.
+    /// As <see cref="Read"/>, for output holding exactly one request.
     /// </summary>
     public static (JsonElement Org, JsonElement Request) ReadOne(CliResult result)
     {
@@ -68,8 +66,7 @@ internal static class DryRunOutput
     /// The one request of a dry run in the test organisation, checked to have this method and a URL
     /// ending in this path.
     /// </summary>
-    // CliRun names the organisation by ID (ENCLAVE_ORG_ID), and then no lookup gives its name, which
-    // is null.
+    // CliRun names the organisation by ID, so no lookup gives its name, which is null.
     public static JsonElement RequestInTestOrg(CliResult result, string method, string path)
     {
         var (org, request) = ReadOne(result);

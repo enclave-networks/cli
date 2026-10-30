@@ -3,9 +3,6 @@ using System.Text.Json;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Reads JSON into forms that are easy to assert on.
-/// </summary>
 // The *List methods join values with commas. Comparing a joined string keeps constant arrays out of
 // assertions (CA1861) and prints both sides readably when a test fails.
 internal static class JsonRead
@@ -19,36 +16,24 @@ internal static class JsonRead
         return document.RootElement.Clone();
     }
 
-    /// <summary>
-    /// The property names of a JSON object, in order.
-    /// </summary>
     public static string[] PropertyNames(JsonElement obj) =>
         obj.EnumerateObject().Select(property => property.Name).ToArray();
 
-    /// <summary>
-    /// The property names of a JSON object, in order, joined with commas.
-    /// </summary>
     public static string PropertyNameList(JsonElement obj) => string.Join(",", PropertyNames(obj));
 
-    /// <summary>
-    /// The items of a JSON array of strings, joined with commas.
-    /// </summary>
     public static string StringList(JsonElement array) => string.Join(",", JsonAssert.Strings(array));
 
-    /// <summary>
-    /// The items of a JSON array of integers, joined with commas.
-    /// </summary>
     public static string IntList(JsonElement array) =>
         string.Join(",", array.EnumerateArray().Select(item => item.GetInt32().ToString(CultureInfo.InvariantCulture)));
 
     /// <summary>
-    /// One string property of each object in a JSON array, joined with commas.
+    /// One string property of each object in an array.
     /// </summary>
     public static string StringFieldList(JsonElement array, string name) =>
         string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetString()));
 
     /// <summary>
-    /// One integer property of each object in a JSON array, joined with commas.
+    /// One integer property of each object in an array.
     /// </summary>
     public static string IntFieldList(JsonElement array, string name) =>
         string.Join(",", array.EnumerateArray().Select(item => JsonAssert.Property(item, name).GetInt32().ToString(CultureInfo.InvariantCulture)));
@@ -62,8 +47,7 @@ internal static class JsonRead
         value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), CultureInfo.InvariantCulture, out var guid) ? guid : null;
 
     /// <summary>
-    /// The GUID in the "id" property of a JSON object, as <see cref="GuidOf"/> reads it, or null when
-    /// the value is not an object or has no "id".
+    /// The GUID in the "id" property of a JSON object, as <see cref="GuidOf"/> reads it.
     /// </summary>
     public static Guid? IdOf(JsonElement obj) =>
         obj.ValueKind == JsonValueKind.Object && obj.TryGetProperty("id", out var id) ? GuidOf(id) : null;

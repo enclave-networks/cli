@@ -4,10 +4,6 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// `policy update`: patches only the settings given (spec/cli-surface.md "Command options",
-/// "Create and update").
-/// </summary>
 internal static class PolicyUpdateCommand
 {
     public static CliVerb Create()
@@ -15,10 +11,8 @@ internal static class PolicyUpdateCommand
         var verb = new CliVerb("update", "Change a policy's settings and print the policy.", CommandScope.Organisation, changes: true);
         var policy = verb.Add(CliArguments.OptionalName("policy", "The policy's description, matched whole and ignoring case.", "a policy's description"));
         var id = verb.Add(CliOptions.Id("--id", "The policy's ID.", IdFormats.Int32));
-        // The API refuses a blank description (portal
-        // Enclave.Api/Modules/SystemManagement/Policies/Validators/PolicyPatchModelValidator.cs:21,
-        // NotEmpty when set) and takes empty notes (same file, 45, MaximumLength only), which clear
-        // them.
+        // The API refuses a blank description and takes empty notes, which clear them (portal
+        // PolicyPatchModelValidator).
         var description = verb.Add(CliOptions.NonBlank("--description", "The policy's description.", "a policy's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The policy's notes."));
         var senders = verb.Add(CliOptions.TagList("--set-senders", "Replace the sender tags."));
@@ -36,8 +30,8 @@ internal static class PolicyUpdateCommand
         verb.Exclusive(trust, trustIds);
 
         // The API refuses sender tags, receiver tags or trust requirements that hold a value twice
-        // (portal PolicyPatchModelValidator.cs:27-28,42). Trust requirement names match ignoring
-        // case ("Names and IDs"), so two that differ only in case name one requirement.
+        // (portal PolicyPatchModelValidator, MustNotHaveDuplicates); trust requirement names match
+        // ignoring case ("Names and IDs").
         verb.Check(context =>
         {
             ListValues.CheckNoRepeats(senders.Name, context.Get(senders), StringComparer.Ordinal);
@@ -72,9 +66,8 @@ internal static class PolicyUpdateCommand
             var org = await context.GetOrganisationAsync();
             var policyId = PolicyId.FromInt(await PolicyLookup.IdAsync(context, org, context.Get(id), context.Get(policy), policy.Name));
 
-            // The patch takes whole lists, so --set-acl and --set-subnet-filter read the policy
-            // first, and the entries that stay keep their labels ("Calls per command"). A flag
-            // given "" clears its list and has no labels to keep ("Details").
+            // The read keeps the labels of entries that stay; a flag given "" keeps nothing and makes
+            // none ("Calls per command").
             var aclValues = context.Get(acls);
             var rangeValues = context.Get(subnetFilter);
             var current = (aclValues is not null && !ListValues.Clears(aclValues)) || (rangeValues is not null && !ListValues.Clears(rangeValues))
@@ -131,17 +124,14 @@ internal static class PolicyUpdateCommand
                 patch.Set(model => model.GatewayAllowedIpRanges, ListValues.Clears(rangeValues) ? [] : PolicyGateways.KeepRanges(rangeValues, current!.GatewayAllowedIpRanges));
             }
 
-            // "" removes the restriction ("Command options") by patching ActiveHours to null, and
-            // only white space reads as "" does ("Details").
-            // Enclave.Sdk.Api sends a null patch value as JSON null, and the API applies every
-            // field the body holds, a null one included (Data/PatchClient.cs, Set, citing portal
-            // Enclave.Api.Scaffolding PatchModel.WasSet).
+            // Enclave.Sdk.Api sends a null patch value as JSON null, which the API applies
+            // (PatchClient.Set; portal PatchModel.WasSet), so "" or white space removes the
+            // restriction ("Details").
             if (context.Get(activeHours) is { } hours)
             {
                 patch.Set(model => model.ActiveHours, string.IsNullOrWhiteSpace(hours) ? null : PolicyActiveHours.Parse(hours)!);
             }
 
-            // One policy named: a 404 means it does not exist, exit 5 ("Several IDs").
             var updated = await SingleItem.CallAsync(() => patch.ApplyAsync());
             await context.Output.WriteAsync(updated, context.CancellationToken);
         });

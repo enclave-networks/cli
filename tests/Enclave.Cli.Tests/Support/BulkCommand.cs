@@ -23,22 +23,15 @@ public readonly record struct BulkCommand(
     string OtherKind,
     string MalformedId)
 {
-    // Routes, body fields and result fields are those of Enclave.Sdk.Api (SystemsClient,
-    // UnapprovedSystemsClient, EnrolmentKeysClient, PoliciesClient, TagsClient, DnsClient,
-    // TrustRequirementsClient) and of the portal's bulk result models. Key delete is
-    // EnrolmentKeysClient.BulkDeleteAsync, which reads keysDeleted, where the bulk enable and
-    // disable read keysModified (portal EnrolmentKeysController.cs:295, DeleteBulkEnrolmentKeys,
-    // BulkKeyActionModel and BulkEnrolmentKeyDeleteResult).
+    // Routes and fields are Enclave.Sdk.Api's clients' and the portal's bulk result models'. Key
+    // delete reads keysDeleted where key enable and disable read keysModified (portal
+    // EnrolmentKeysController.DeleteBulkEnrolmentKeys, BulkEnrolmentKeyDeleteResult).
     //
-    // approve and decline act on systems waiting for approval, so they read the output of
-    // system list --pending and refuse that of system list; the other system verbs take the reverse
-    // (spec/cli-surface.md "Several IDs"). Every other kind here has IDs the command would also
-    // accept: system IDs share one format, the integer IDs are all integers, and a key ID is a valid
-    // tag name. Only the kind check can then refuse the list.
+    // OtherKind's IDs are ones the command would also accept, so only the kind check can refuse the
+    // list (spec/cli-surface.md "Several IDs").
     //
-    // Each malformed ID breaks the format the "ID checks" table gives for its kind; some would
-    // rewrite a URL path if they reached one. Integer IDs are 32-bit ("Details"; portal
-    // Enclave.Configuration.Data/Identifiers, IdBackingType.Int), so 99999999999 is refused.
+    // Each malformed ID breaks the format of the "ID checks" table; some would rewrite a URL path.
+    // Integer IDs are 32-bit (portal IdBackingType.Int), so 99999999999 is refused.
     public static IReadOnlyList<BulkCommand> All { get; } =
     [
         new("system approve", "PUT", "unapproved-systems/approve", "systemIds", "systemsApproved", "pending-system", "system", "AB CD"),
@@ -62,20 +55,12 @@ public readonly record struct BulkCommand(
     /// </summary>
     public string Path => TestData.OrgPath(PathSuffix);
 
-    // Systems take IDs as arguments, since they have no names, and tags are given by name only. The
-    // arguments of key, policy, hostname and trust requirement commands are names, so their IDs go
-    // after --id (spec/cli-surface.md "Shape and naming").
-
-    /// <summary>
-    /// Whether the command takes its IDs as --id a,b,c.
-    /// </summary>
+    // These commands take names as arguments, so their IDs go after --id (spec/cli-surface.md
+    // "Shape and naming").
     public bool TakesIdOption => Kind is "key" or "policy" or "hostname" or "trust";
 
     private string[] Words => Name.Split(' ');
 
-    /// <summary>
-    /// The command line acting on these IDs.
-    /// </summary>
     public string[] Args(params string[] ids)
     {
         ArgumentNullException.ThrowIfNull(ids);
@@ -88,9 +73,6 @@ public readonly record struct BulkCommand(
         return [.. Words, .. ids];
     }
 
-    /// <summary>
-    /// The command line that reads a list from stdin.
-    /// </summary>
     public string[] StdinArgs() => [.. Words, "-"];
 
     /// <summary>
@@ -99,7 +81,7 @@ public readonly record struct BulkCommand(
     public string[] Ids(int count) => TestData.Ids(Kind, count);
 
     /// <summary>
-    /// A list of the command's kind holding one item for each ID, as a list command prints it.
+    /// A list of the command's kind, as a list command prints it, with one item per ID.
     /// </summary>
     public string List(params string[] ids) => CliList.WithIds(Kind, ids);
 
@@ -111,14 +93,10 @@ public readonly record struct BulkCommand(
     /// </summary>
     internal void StubBulk(CliRun run, params int[] affected) => run.StubBulk(Method, Path, ResultField, affected);
 
-    /// <summary>
-    /// The bulk calls the fake API received, in order.
-    /// </summary>
     internal IReadOnlyList<RecordedRequest> BulkCalls(CliRun run) => run.RequestsTo(Method, Path);
 
     /// <summary>
-    /// The IDs of each bulk call, joined with commas, and the calls joined with "|", in the order
-    /// the fake API received them.
+    /// The IDs of each bulk call joined with commas, and the calls joined with "|".
     /// </summary>
     internal string IdsSent(CliRun run)
     {
@@ -129,11 +107,9 @@ public readonly record struct BulkCommand(
     }
 
     /// <summary>
-    /// The IDs of each call joined with commas, and the calls joined with "|", for IDs sent in calls
-    /// of 200 in the order given: the form <see cref="IdsSent"/> reads the requests in.
+    /// The IDs in calls of 200, in the form <see cref="IdsSent"/> gives.
     /// </summary>
-    // The API takes at most 200 IDs per bulk call (spec/cli-surface.md "Several IDs"; portal
-    // Enclave.Utilities/HardLimits.cs:22, MaxBulkIds).
+    // spec/cli-surface.md "Several IDs"; portal HardLimits.MaxBulkIds.
     internal static string Batches(string[] ids) =>
         string.Join("|", ids.Chunk(200).Select(batch => string.Join(",", batch)));
 }

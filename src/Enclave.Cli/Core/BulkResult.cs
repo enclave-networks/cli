@@ -1,8 +1,4 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// The output of a command that takes several items: how many IDs it sent and how many items the
-/// API changed. Fewer affected than requested means some IDs were unknown or already in that state
-/// (spec/cli-surface.md "Several IDs").
-/// </summary>
+// spec/cli-surface.md "Several IDs"
 internal sealed record BulkResult(int Requested, int Affected);

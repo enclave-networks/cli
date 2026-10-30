@@ -2,10 +2,6 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Trust;
 
-/// <summary>
-/// The `trust` noun: trust requirements (spec/cli-surface.md "Commands"). A trust requirement
-/// is given by its description, or by --id.
-/// </summary>
 internal static class TrustCommand
 {
     public static CliNoun Create()

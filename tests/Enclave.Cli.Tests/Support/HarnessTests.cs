@@ -4,7 +4,6 @@ using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 using Enclave.Api.Modules.AccountManagement.PublicAccount.Models;
 using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Scaffolding.Pagination.Models;
@@ -12,7 +11,6 @@ using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 using Enclave.Sdk.Api;
 using Enclave.Sdk.Api.Clients.Interfaces;
-using Enclave.Sdk.Api.Data;
 using Enclave.Sdk.Api.Exceptions;
 using NUnit.Framework;
 using NUnit.Framework.Internal;
@@ -20,28 +18,17 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-// The tests in this project trust three things this fixture proves: that every ApiJson body is JSON
-// Enclave.Sdk.Api reads into the model it names, field for field, that a CliRun confines the
-// CLI to its own environment, home directory, stdin, network and fake APIs, and that the stubs, the
-// request records and the CliAssert and TokenAssert checks behave as their documentation says. A
-// check that passed everything would let every test that relies on it pass, so each check is shown
-// failing on the outputs it rejects.
+// The other tests rely on what this fixture proves: every ApiJson body reads into its model field
+// for field, a CliRun confines the CLI to its sandbox, and the stubs, records and checks behave as
+// documented. A check that passed everything would let every test relying on it pass, so each
+// check is shown failing.
 public class HarnessTests
 {
     private const string SystemId = "ABCDE";
 
     private const int ResourceId = 7;
 
-    // The options Enclave.Sdk.Api reads and writes JSON with (Constants.JsonSerializerOptions,
-    // which is internal to the package): the gateway priority converter goes ahead of the enum
-    // converter, since System.Text.Json uses the first converter that can convert a type.
-    private static readonly JsonSerializerOptions SdkJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
-    };
-
-    // The options EnclaveClient.ReadCredentialsFile reads credentials.json with (Enclave.Sdk.Api).
+    // The options Enclave.Sdk.Api's EnclaveClient.ReadCredentialsFile reads credentials.json with.
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static IEnumerable<TestCaseData> ResourceBodies()
@@ -139,11 +126,7 @@ public class HarnessTests
     public static IEnumerable<TestCaseData> ErrorCodes() =>
         CliAssert.ExitCodes.Select(pair => new TestCaseData(pair.Key, pair.Value).SetArgDisplayNames(pair.Key));
 
-    // The ID property of each model a list prints: SystemSummaryModel and
-    // UnapprovedSystemSummaryModel.SystemId, the integer Id of keys, policies, zones, DNS records and
-    // trust requirements, TagSummaryModel.Tag, AccountOrganisationModel.OrgId, OrganisationUser.Id,
-    // OrganisationInviteModel.EmailAddress, and in the portal's partner API CustomerModel.Id and
-    // CustomerUserModel.Id.
+    // The ID property of the model each kind's list prints, such as SystemSummaryModel.SystemId.
     public static IEnumerable<TestCaseData> ListKindsWithIds()
     {
         yield return IdCase("system", "systemId", JsonValueKind.String);
@@ -163,10 +146,8 @@ public class HarnessTests
 
     public static IEnumerable<string> KindsWithIds() => CliList.Kinds.Where(kind => kind != "log");
 
-    // Each resource body is served as a list item and as the single resource, and read through the
-    // Enclave.Sdk.Api calls a command makes. Writing each model back and comparing it with the body proves every
-    // property name and value type: a misspelt name leaves the model's property at its default,
-    // which the comparison reports, and a wrong value type fails the read.
+    // A misspelt name leaves the model's property at its default, which comparing the model written
+    // back with the body reports, and a wrong value type fails the read.
     [TestCaseSource(nameof(ResourceBodies))]
     public async Task Resource_body_reads_through_the_sdk_list_and_get_calls_and_writes_back_unchanged(
         string body,
@@ -385,12 +366,8 @@ public class HarnessTests
         Assert.Throws<AssertionException>(() => run.SingleRequest());
     }
 
-    // A failed API call completes the CLI's task from inside the catch blocks of the async methods
-    // that awaited it, and on .NET 10.0.0 and 10.0.1 a test resuming inline there loses the failures
-    // Assert.Multiple throws (CliRun.RunAsync gives the details). The CLI's methods on the stack
-    // where the test resumes show whether it resumed inside them. The run's outcome and its one
-    // request prove it took the failed-call path. The checks are plain Assert.That calls, which
-    // throw from the test's body and so are reported wherever the test resumes.
+    // See CliRun.RunAsync. The checks are plain Assert.That calls, which throw from the test's body
+    // and so are reported wherever the test resumes.
     [Test]
     public async Task RunAsync_resumes_the_test_outside_the_cli_call_stack_after_a_failed_api_call()
     {
@@ -428,10 +405,9 @@ public class HarnessTests
         });
     }
 
-    // The expected metadata is worked out by hand from PaginatedQueryHandler.GetResponseAsync in the
-    // portal: lastPage = ceil(total / perPage) - 1, prevPage = page - 1 from page 1 on, and nextPage =
-    // page + 1 before the last page. Five items two to a page give pages 0 to 2, and page 3 is the
-    // page after the last. Four items two to a page fill pages 0 and 1 exactly.
+    // The expected metadata is worked out by hand from portal
+    // PaginatedQueryHandler.GetResponseAsync. Five items two to a page give pages 0 to 2, and page
+    // 3 is the page after the last.
     [TestCase(0, 2, 5, 2, null, 1, 2)]
     [TestCase(1, 2, 5, 2, 0, 2, 2)]
     [TestCase(2, 2, 5, 1, 1, null, 2)]
@@ -463,8 +439,7 @@ public class HarnessTests
         });
     }
 
-    // A page holding more items than its page size, or items past the total, is not a page the API
-    // can send, so a test that asks for one is told at once.
+    // A page with more items than its size, or items past the total, is one the API cannot send.
     [Test]
     public void PageAt_rejects_a_page_the_api_cannot_send()
     {
@@ -479,8 +454,7 @@ public class HarnessTests
     }
 
     // The pages are asked for out of order, so a stub that served pages in the order requests
-    // arrive, and not by page number, gives the wrong items. The request without a page parameter
-    // is how Enclave.Sdk.Api asks when given no page number, which the API reads as page 0.
+    // arrive gives the wrong items.
     [Test]
     public async Task StubPages_serves_each_page_to_the_request_for_its_page_number()
     {
@@ -516,9 +490,7 @@ public class HarnessTests
         Assert.ThrowsAsync<HttpRequestException>(() => systems.GetSystemsAsync(pageNumber: 4));
     }
 
-    // Reading as the CLI reads a list, from page 0 until nextPage is null, must give every item once,
-    // in order, and stop at the last page. 400 items fill two pages exactly, which is where an
-    // off-by-one in the last page would show.
+    // 400 items fill two pages exactly, where an off-by-one in the last page would show.
     [TestCase(450, 200, "0,1,2")]
     [TestCase(400, 200, "0,1")]
     [TestCase(5, 2, "0,1,2")]
@@ -552,8 +524,7 @@ public class HarnessTests
         });
     }
 
-    // A failed page read must reach the CLI as the API's error for that page alone, so a test can
-    // prove the pages before it were read and nothing was printed.
+    // So a test can prove the pages before a failed one were read.
     [Test]
     public async Task StubPageProblem_answers_its_page_with_problem_details_and_leaves_the_other_pages()
     {
@@ -596,9 +567,8 @@ public class HarnessTests
         });
     }
 
-    // Different counts for each call show that the stub answers calls in order, which lets a test
-    // prove the CLI adds up the counts of every call. The fourth call shows the last count repeats,
-    // and a single count answers every call.
+    // Different counts show the stub answers calls in order; the fourth call shows the last count
+    // repeats.
     [TestCase(new[] { 200, 150, 40 }, "200,150,40,40")]
     [TestCase(new[] { 200, 150 }, "200,150,150,150")]
     [TestCase(new[] { 5 }, "5,5,5,5")]
@@ -625,9 +595,8 @@ public class HarnessTests
         });
     }
 
-    // A bulk run that fails part way is served by a success and then an error. The error is problem
-    // details, which Enclave.Sdk.Api turns into EnclaveApiException, as it does the API's errors.
-    // Policy IDs are typed integer IDs, which Enclave.Sdk.Api writes as JSON numbers.
+    // Serves a bulk run that fails part way. Policy IDs are typed integer IDs, which
+    // Enclave.Sdk.Api writes as JSON numbers.
     [Test]
     public async Task StubSequence_answers_in_order_and_sends_an_error_status_as_problem_details()
     {
@@ -654,9 +623,7 @@ public class HarnessTests
         });
     }
 
-    // A proxy in front of the API answers with its own error page, which Enclave.Sdk.Api passes on as
-    // HttpRequestException with the status (it reads problem details from application/problem+json
-    // only, Handlers/ProblemDetailsHttpMessageHandler.cs:29).
+    // A proxy in front of the API answers with its own error page.
     [Test]
     public void StubRaw_reaches_the_sdk_as_an_http_error_without_problem_details()
     {
@@ -712,9 +679,7 @@ public class HarnessTests
         });
     }
 
-    // The CLI must never see the environment of the process running the tests, which on a developer
-    // machine can hold a real token. A variable set in the process environment is invisible to the
-    // host CliRun builds, and the host reads values from CliRun.Environment alone.
+    // The environment of the process running the tests can hold a real token.
     [Test]
     public void Host_sees_only_the_run_environment_home_directory_stdin_and_fake_api()
     {
@@ -759,10 +724,7 @@ public class HarnessTests
         }
     }
 
-    // The partner API runs on its own host (spec/cli-surface.md "Partner API"). A run gives the
-    // CLI a second fake's URL as the partner API address, on loopback at another port, so a partner
-    // call can never reach the live partner API, and a partner call sent to the main API's address
-    // shows. A partner command run through CliRun sends its call there, with the run's token.
+    // The partner API runs on its own host (spec/cli-surface.md "Partner API").
     [Test]
     public async Task Partner_api_calls_of_a_run_reach_its_fake_partner_api_with_the_token()
     {
@@ -783,8 +745,7 @@ public class HarnessTests
         });
     }
 
-    // A run that leaves the partner API at Enclave.Sdk.Api's default would send partner calls to the
-    // live partner API, so the host is refused unless the run also replaces the network.
+    // Enclave.Sdk.Api's default partner API address is the live one.
     [Test]
     public void CreateHost_refuses_a_partner_api_address_other_than_the_fake_without_a_network_handler()
     {
@@ -798,9 +759,8 @@ public class HarnessTests
         Assert.That(run.CreateHost().DefaultPartnerApiUrl, Is.Null);
     }
 
-    // Every read a TextReader offers must fail on a terminal, so no way the CLI reads stdin gets
-    // past it, and RunAsync must fail the run after one, whatever the CLI did with the exception. A
-    // read made here, before the run, stands in for one the CLI makes.
+    // Every read a TextReader offers must fail, so no way the CLI reads stdin gets past. A read
+    // made here, before the run, stands in for one the CLI makes.
     [Test]
     public async Task Stdin_on_a_terminal_fails_every_read_and_RunAsync_fails_the_run_after_one()
     {
@@ -827,7 +787,6 @@ public class HarnessTests
         Assert.That(async () => await run.RunAsync("--version"), Throws.TypeOf<AssertionException>());
     }
 
-    // A run that never reads a terminal stdin passes, so the check fails only a run that read it.
     [Test]
     public async Task RunAsync_passes_a_run_that_does_not_read_stdin_on_a_terminal()
     {
@@ -839,8 +798,6 @@ public class HarnessTests
         Assert.That(result.ExitCode, Is.Zero, result.ToString());
     }
 
-    // The checks the token tests rely on: the token on either stream fails it, and output without
-    // the token passes.
     [Test]
     public void TokenAssert_Absent_fails_the_test_when_the_token_is_on_stdout_or_stderr()
     {
@@ -850,10 +807,8 @@ public class HarnessTests
         AssertFails(() => TokenAssert.Absent(new CliResult(1, string.Empty, $"{{\"verbose\":\"Bearer {TestData.Token}\"}}\n")));
     }
 
-    // A stub goes to the fake that serves its path, and each fake answers the other API's routes
-    // with 421 Misdirected Request, which Enclave.Sdk.Api raises as EnclaveApiException for a
-    // problem details body. The client with the addresses swapped sends each call to the wrong fake;
-    // the client with them right shows both stubs exist.
+    // The client with the addresses swapped sends each call to the wrong fake; the client with them
+    // right shows both stubs exist.
     [Test]
     public async Task Each_fake_api_answers_only_its_own_api_routes()
     {
@@ -877,9 +832,7 @@ public class HarnessTests
         });
     }
 
-    // Requests holds both fakes' requests in the order they arrived, so a test reads a run's calls
-    // in the order the CLI sent them whichever API each went to; ApiRequests and PartnerApiRequests
-    // hold each fake's own.
+    // ApiRequests and PartnerApiRequests hold each fake's own.
     [Test]
     public async Task Requests_holds_the_requests_of_both_fake_apis_in_the_order_received()
     {
@@ -901,8 +854,7 @@ public class HarnessTests
         });
     }
 
-    // The check the partner tests rely on: a partner call at the main API's address fails it, and
-    // so does a run that sent nothing, as well as a run that did not exit 0.
+    // A run that sent nothing, or did not exit 0, fails it too.
     [Test]
     public async Task AssertSentToThePartnerApi_fails_the_test_unless_the_partner_api_address_alone_received_the_calls()
     {
@@ -922,9 +874,6 @@ public class HarnessTests
         AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, success));
     }
 
-    // A test fixes the clock by setting CliRun.Time, which reaches the CLI only if the host carries
-    // that provider. A run that sets nothing gets the system clock, so it sees the time as the CLI
-    // does outside tests.
     [Test]
     public void Host_carries_the_clock_the_run_sets_and_the_system_clock_by_default()
     {
@@ -941,13 +890,9 @@ public class HarnessTests
         });
     }
 
-    // Tests whose answer depends on the time read FixedTimeProvider, so it must give the instant it
-    // was given, in UTC whatever offset that instant was written with (TimeProvider.GetUtcNow
-    // returns a zero offset, .NET 8 documentation), and the local time in the zone it was given
-    // (TimeProvider.GetLocalNow converts GetUtcNow into LocalTimeZone). The zone is the tests' own,
-    // TestData.LocalZone, at UTC+05:30, so the local time differs from UTC in its date and minutes as
-    // well as its hour, whatever zone the runner is in; the instant is written at UTC-04:00 so the
-    // conversion to UTC shows.
+    // At UTC+05:30 the local time differs from UTC in its date and minutes as well as its hour,
+    // whatever zone the runner is in; the instant is written at UTC-04:00 so the conversion to UTC
+    // shows.
     [Test]
     public void FixedTimeProvider_reads_the_given_instant_in_utc_and_the_local_time_in_the_given_zone()
     {
@@ -970,9 +915,6 @@ public class HarnessTests
         });
     }
 
-    // ENCLAVE_ORG takes a name and ENCLAVE_ORG_ID an ID (spec/cli-surface.md "Context"). The
-    // test organisation is given by ID, which needs no lookup call, so a run's requests are the
-    // command's own.
     [Test]
     public void Run_environment_defaults_to_the_test_token_and_the_test_organisation_id()
     {
@@ -988,8 +930,6 @@ public class HarnessTests
         });
     }
 
-    // Tests keep their files in memory, so the harness writes nothing to the disk: the files a test
-    // sets up are in run.Files and no directory appears at the home or work path.
     [Test]
     public void Harness_files_live_in_memory_and_never_on_disk()
     {
@@ -1008,8 +948,7 @@ public class HarnessTests
         });
     }
 
-    // RunAsync fails a run that wrote to the disk under the run's paths, so a CLI that goes around
-    // CliHost.Files cannot pass a test. The directory is made here to stand in for such a write.
+    // The directory made here stands in for a CLI write that went around CliHost.Files.
     [Test]
     public void RunAsync_fails_when_a_directory_appears_on_disk_under_the_run()
     {
@@ -1094,9 +1033,8 @@ public class HarnessTests
     public void List_passes_a_list_of_exactly_the_given_kind(string stdout) =>
         Assert.That(() => CliAssert.List(Output(stdout), "system"), Throws.Nothing);
 
-    // The kind is compared exactly because a command reading the list from stdin rejects any other
-    // kind. The other cases break the envelope { kind, items, total } or the rule that total counts
-    // the items.
+    // A command reading a list from stdin rejects any other kind, so the kind is compared exactly.
+    // The other cases break the envelope or the rule that total counts the items.
     [TestCase(0, """{ "kind": "pending-system", "items": [], "total": 0 }""")]
     [TestCase(0, """{ "kind": "System", "items": [], "total": 0 }""")]
     [TestCase(0, """{ "kind": "system", "items": [{ "systemId": "A" }], "total": 2 }""")]
@@ -1128,8 +1066,7 @@ public class HarnessTests
     public void Bulk_fails_the_test_unless_the_run_printed_exactly_those_counts(int exitCode, string stdout) =>
         AssertFails(() => CliAssert.Bulk(Output(stdout, exitCode), requested: 3, affected: 2));
 
-    // Each code of the fixed set, given alone, must be checked against the exit code the contract
-    // gives it; one exit code off must fail.
+    // One exit code off must fail.
     [TestCaseSource(nameof(ErrorCodes))]
     public void Failed_takes_the_exit_code_from_the_error_code(string code, int exitCode)
     {
@@ -1148,8 +1085,6 @@ public class HarnessTests
         AssertFails(() => CliAssert.Failed(twoErrors, "not_found"));
     }
 
-    // An error code outside the fixed set, or an exit code the contract does not give that code,
-    // can never be met, so the test is told it is wrong.
     [Test]
     public void Failed_and_Rejected_throw_for_a_code_or_exit_code_outside_the_contract()
     {
@@ -1179,8 +1114,8 @@ public class HarnessTests
         AssertFails(() => CliAssert.Rejected(run, result, "no_org"));
     }
 
-    // The ID field of each kind is stated here from the model a list of that kind prints, so a
-    // CliList that put an ID in the wrong property, or wrote a number as a string, fails.
+    // The ID fields are stated apart from CliList.IdField, so a CliList that put an ID in the wrong
+    // property, or wrote a number as a string, fails.
     [TestCaseSource(nameof(ListKindsWithIds))]
     public void CliList_WithIds_builds_a_list_whose_items_carry_each_id_in_the_kind_id_field(string kind, string field, JsonValueKind valueKind)
     {
@@ -1233,9 +1168,8 @@ public class HarnessTests
         });
     }
 
-    // Each ID must pass the format the proposal's "ID checks" table gives its kind, or a test using
-    // it would see the CLI reject it for the wrong reason. Distinct IDs keep the CLI's removal of
-    // duplicates from changing the count.
+    // An invalid ID would have the CLI reject it for the wrong reason, and the CLI removes
+    // duplicates, which would change the count.
     [TestCaseSource(nameof(KindsWithIds))]
     public void Ids_are_distinct_and_valid_for_their_kind(string kind)
     {
@@ -1263,8 +1197,7 @@ public class HarnessTests
 
     private static EnclaveClient Connect(CliRun run) => Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl);
 
-    // The partner API address is always given: left out, Enclave.Sdk.Api uses production's
-    // (EnclaveClientOptions.PartnerApiBaseUrl).
+    // Left out, the partner API address is production's (EnclaveClientOptions.PartnerApiBaseUrl).
     private static EnclaveClient Connect(string baseUrl, string partnerApiBaseUrl) => new(new EnclaveClientOptions
     {
         BaseUrl = baseUrl,
@@ -1294,9 +1227,8 @@ public class HarnessTests
         throw new AssertionException("Expected at least one item in the page.");
     }
 
-    // Every property each model writes must be in the body with the same value, and every property
-    // in the body must be one that at least one of the models writes. A body serves both the list
-    // item and the single resource, so a property only one of them has is allowed.
+    // A body serves both the list item and the single resource, so a property only one of the
+    // models writes is allowed.
     private static async Task AssertBodyMatchesModelsAsync(string body, IReadOnlyList<object> models)
     {
         var expected = JsonRead.Parse(body);
@@ -1333,9 +1265,8 @@ public class HarnessTests
     private static void AssertSameJson(JsonElement actual, JsonElement expected) =>
         Assert.That(SameJson(actual, expected), Is.True, $"Expected {expected.GetRawText()}{Environment.NewLine}but the model writes {actual.GetRawText()}");
 
-    // Objects compare by property name whatever the order, since a model writes its properties in
-    // declaration order and the bodies list them in their own order. Strings compare by value, so an
-    // escape sequence and the character it stands for are equal.
+    // A model writes its properties in declaration order and the bodies in their own. Strings
+    // compare by value, so an escape sequence equals the character it stands for.
     private static bool SameJson(JsonElement left, JsonElement right)
     {
         if (left.ValueKind != right.ValueKind)
@@ -1369,17 +1300,9 @@ public class HarnessTests
         }
     }
 
-    private static async Task<JsonElement> WriteAsync(object model)
-    {
-        // Some models hold IAsyncEnumerable properties, which only the asynchronous serializer writes.
-        using var stream = new MemoryStream();
-        await JsonSerializer.SerializeAsync(stream, model, model.GetType(), SdkJsonOptions);
-        stream.Position = 0;
-        using var document = await JsonDocument.ParseAsync(stream);
-        return document.RootElement.Clone();
-    }
+    private static Task<JsonElement> WriteAsync(object model) => ApiJson.WriteSdkModelAsync(model, model.GetType());
 
-    private static JsonElement Write<T>(T value) => JsonSerializer.SerializeToElement(value, SdkJsonOptions);
+    private static JsonElement Write<T>(T value) => JsonSerializer.SerializeToElement(value, ApiJson.SdkModelJsonOptions);
 
     private static TestCaseData IdCase(string kind, string field, JsonValueKind valueKind) =>
         new TestCaseData(kind, field, valueKind).SetArgDisplayNames(kind);
@@ -1412,12 +1335,10 @@ public class HarnessTests
     private static CliResult ErrorOutput(int exitCode, string code, string stdout = "") =>
         new(exitCode, stdout, ErrorLine(code) + "\n");
 
-    // A failed NUnit assertion records the failure in the current test's result as well as throwing
-    // AssertionException, or MultipleAssertException at the end of Assert.Multiple. The check runs in
-    // an IsolatedContext, whose result is discarded on leaving it (NUnit 4.4.0 XML docs,
-    // TestExecutionContext.IsolatedContext), so the expected failure does not fail this test. Inside
-    // an outer Assert.Multiple a failed assertion would record and carry on without throwing, so
-    // callers use this outside one.
+    // A failed assertion records the failure in the test's result as well as throwing. An
+    // IsolatedContext discards its result on leaving (NUnit 4.4.0,
+    // TestExecutionContext.IsolatedContext), so the expected failure does not fail this test.
+    // Inside an outer Assert.Multiple the check would not throw, so callers use this outside one.
     private static void AssertFails(TestDelegate check)
     {
         ResultStateException? failure = null;
@@ -1450,13 +1371,12 @@ public class HarnessTests
     private static string IdText(JsonElement value) =>
         value.ValueKind == JsonValueKind.String ? value.GetString()! : value.GetRawText();
 
-    // GUID IDs are given in the hyphenated form people type, and the API writes them as 32 hex
-    // digits (OrganisationGuid and AccountGuid JSON converters), so they are compared in that form.
+    // GUID IDs are given hyphenated, and the API writes them as 32 hex digits.
     private static string Canonical(string id) =>
         Guid.TryParse(id, CultureInfo.InvariantCulture, out var guid) ? guid.ToString("N") : id;
 
-    // The formats of spec/cli-surface.md "ID checks". The tag rule is the API's
-    // ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal TagValidationExtensions.cs:13).
+    // spec/cli-surface.md "ID checks". The tag rule is the API's ^([a-z0-9]+[-.])*[a-z0-9]+$
+    // (portal TagValidationExtensions.MustBeValidTag).
     private static bool IsValidId(string kind, string id) => kind switch
     {
         "system" or "pending-system" => id.Length > 0 && id.All(char.IsAsciiLetterOrDigit),

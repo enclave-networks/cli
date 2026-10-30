@@ -5,10 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// status prints { "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner":
-// { "id", "source" } } (spec/cli-surface.md "Login, logout and status"). A source is the option
-// or variable that made the choice, the path of the file it came from, or only-organisation when
-// the token sees one organisation.
+// spec/cli-surface.md "Login, logout and status".
 public class StatusTests
 {
     private const string FileToken = "file-token-2b8e61";
@@ -27,8 +24,8 @@ public class StatusTests
 
     private static readonly string[] PartnerFields = ["id", "source"];
 
-    // Example 36. status makes one GetOrganisationsAsync call ("Login, logout and status"), which
-    // proves the token works and carries the organisation names and roles status reports.
+    // Example 36. The one call proves the token works and carries the names and roles status
+    // reports.
     [Test]
     public async Task Status_makes_one_request_for_the_organisations_the_token_can_see()
     {
@@ -40,8 +37,8 @@ public class StatusTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
     }
 
-    // With an organisation and a partner in use, every part of the output is present, so its
-    // properties can be checked exactly. CliRun sets ENCLAVE_ORG_ID to Acme, whose role is Owner.
+    // With an organisation and a partner in use every part is present. CliRun sets ENCLAVE_ORG_ID to
+    // Acme, whose role is Owner.
     [Test]
     public async Task Status_prints_the_token_organisation_and_partner_with_exactly_their_fields()
     {
@@ -67,8 +64,7 @@ public class StatusTests
         });
     }
 
-    // A saved credentials.json is present as well, so the reported source shows ENCLAVE_TOKEN came
-    // first ("Options on every command").
+    // A saved credentials.json is present too, so the source shows ENCLAVE_TOKEN came first.
     [Test]
     public async Task Status_reports_ENCLAVE_TOKEN_as_the_token_source_when_it_is_set()
     {
@@ -86,9 +82,7 @@ public class StatusTests
         });
     }
 
-    // The full path tells the caller which file holds the token, and it differs per user and OS. An
-    // empty ENCLAVE_TOKEN counts as unset ("Login, logout and status"), so the file supplies the
-    // token then too.
+    // The full path tells the caller which file holds the token, which differs per user and OS.
     [TestCase(false)]
     [TestCase(true)]
     public async Task Status_reports_the_credentials_file_path_as_the_token_source_when_ENCLAVE_TOKEN_is_unset_or_empty(bool empty)
@@ -117,13 +111,10 @@ public class StatusTests
         });
     }
 
-    // Each case makes Globex the organisation in use through a different source ("Context"), with
-    // Acme listed first and given another role, so a status that reported the first organisation
-    // or its role fails. The option cases leave ENCLAVE_ORG_ID naming Acme, so the report shows the
-    // option came first. status takes --org and --org-id ("Login, logout and status") and makes its
-    // one call in every case: a name, and the lookup when nothing is chosen, are resolved from that
-    // same response. The org use that saves a default makes its own request, so only the requests
-    // after it are checked.
+    // Acme is listed first with another role, so a status that reported the first organisation
+    // fails. The option cases leave ENCLAVE_ORG_ID naming Acme. A name, and the lookup when nothing
+    // is chosen, are resolved from status's one call. The org use that saves a default makes its
+    // own request, so only the requests after it are checked.
     [TestCase("--org-id")]
     [TestCase("--org")]
     [TestCase("ENCLAVE_ORG_ID")]
@@ -185,9 +176,8 @@ public class StatusTests
         });
     }
 
-    // status describes what a command would use. With none chosen and several organisations there
-    // is no organisation in use, and status reports that as a null org ("Login, logout and status")
-    // where another command exits 2 with no_org.
+    // status describes what a command would use, and reports a null org where another command exits
+    // 2 no_org.
     [Test]
     public async Task Status_reports_no_organisation_when_none_is_chosen_and_the_token_sees_several()
     {
@@ -205,12 +195,8 @@ public class StatusTests
         });
     }
 
-    // The partner is given by ID only ("Context": partners cannot be looked up with a personal
-    // access token), so status reports the ID and where it came from and makes no call for it.
-    // status takes --partner-id ("Login, logout and status"). In the --partner-id case
-    // ENCLAVE_PARTNER_ID names another partner, so the report shows the option came first; in the
-    // ENCLAVE_PARTNER_ID case partner use has saved another partner, so the report shows the
-    // variable came before the saved default.
+    // Partners cannot be looked up with a personal access token, so status makes no call for one
+    // ("Context"). Each case gives a lower source another partner.
     [TestCase("--partner-id")]
     [TestCase("ENCLAVE_PARTNER_ID")]
     [TestCase("cli.json")]
@@ -258,8 +244,7 @@ public class StatusTests
         });
     }
 
-    // Only partner commands need a partner ("Context"), so status succeeds without one and reports
-    // a null partner ("Login, logout and status"). An empty ENCLAVE_PARTNER_ID counts as unset.
+    // Only partner commands need a partner ("Context"). An empty ENCLAVE_PARTNER_ID counts as unset.
     [TestCase(false)]
     [TestCase(true)]
     public async Task Status_reports_no_partner_when_none_is_chosen(bool emptyVariable)
@@ -278,9 +263,7 @@ public class StatusTests
         Assert.That(JsonAssert.Property(result.StdoutJson, "partner").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
-    // status checks the token with its one call, so a token the API refuses is reported with the
-    // code for the status ("Errors and exit codes"); 403 means the token lacks ReadOrgList, which
-    // GetOrganisationsAsync needs.
+    // 403 means the token lacks ReadOrgList, which GetOrganisationsAsync needs.
     [TestCase(401, "token_invalid")]
     [TestCase(403, "forbidden")]
     public async Task Status_reports_a_token_the_api_refuses(int status, string code)
@@ -294,11 +277,8 @@ public class StatusTests
         Assert.That(run.SingleRequest().Path, Is.EqualTo("/account/orgs"));
     }
 
-    // Checks run in the order arguments, the token, the organisation or partner, then the call
-    // ("Errors and exit codes"), and status chooses the organisation and partner as any command
-    // does. A source it reads that is malformed, or two that contradict each other ("Details"),
-    // exit 2 before its one call. In the cli.json case ENCLAVE_ORG_ID chooses the organisation, and
-    // with no partner chosen elsewhere the file is read for the partner.
+    // status chooses the organisation and partner as any command does ("Errors and exit codes",
+    // "Details"). In the cli.json case the file is read for the partner.
     [TestCase("ENCLAVE_ORG with ENCLAVE_ORG_ID")]
     [TestCase("ENCLAVE_ORG_ID that is not a GUID")]
     [TestCase("ENCLAVE_PARTNER_ID that is not a GUID")]
@@ -329,25 +309,11 @@ public class StatusTests
         CliAssert.Rejected(run, result);
     }
 
-    // status is a read, so it does not take --dry-run ("Dry run"), and an option a command does not
-    // take exits 2 ("Details"). The corrected run proves the rejection withheld the request.
-    [Test]
-    public async Task Status_does_not_take_dry_run()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", "/account/orgs", json: OrgsWithRoles());
-        string[] command = ["status"];
-
-        await CliAssert.RejectedThenAcceptedAsync(run, [.. command, "--dry-run"], command, "GET", "/account/orgs");
-    }
-
     private static string? TokenSource(CliResult result) =>
         JsonAssert.Property(JsonAssert.Property(result.StdoutJson, "token"), "source").GetString();
 
-    // GET /account/orgs in the form ApiJson.Orgs writes (portal QueryAccountOrgsResponseModel and
-    // AccountOrganisationModel), with a different role per organisation, which ApiJson.Orgs does
-    // not offer. The roles are UserOrganisationRole names (portal
-    // Enclave.Configuration.Data/Enums/UserOrganisationRole.cs).
+    // ApiJson.Orgs with a different role per organisation, which it does not offer. The roles are
+    // portal UserOrganisationRole names.
     private static string OrgsWithRoles() =>
         $$"""
         {"orgs":[

@@ -6,18 +6,12 @@ using Enclave.Sdk.Api.Exceptions;
 
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Turns the exceptions an Enclave.Sdk.Api call can throw into the CLI's errors.
-/// </summary>
 internal static class ApiErrors
 {
     /// <summary>
-    /// The CLI error for an exception thrown by command code or by an Enclave.Sdk.Api call. A
-    /// <see cref="CliException"/> is returned as it is.
+    /// Returns a <see cref="CliException"/> unchanged. With notFoundIsUnknownItem, a 404 means the
+    /// item the command named does not exist (exit 5); without it, a 404 is an API error (exit 1).
     /// </summary>
-    /// <param name="exception">The exception.</param>
-    /// <param name="notFoundIsUnknownItem">Whether a 404 means the item the command named does not
-    /// exist (a single-ID command, exit 5), or is an API error like any other status (exit 1).</param>
     public static CliException ToCliException(Exception exception, bool notFoundIsUnknownItem = false)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -28,8 +22,7 @@ internal static class ApiErrors
                 return cli;
 
             // Enclave.Sdk.Api throws EnclaveApiException only for application/problem+json responses
-            // (Handlers/ProblemDetailsHttpMessageHandler.cs:29), so the API's own
-            // status, title, detail and field errors are passed through.
+            // (ProblemDetailsHttpMessageHandler).
             case EnclaveApiException api:
             {
                 var problem = api.ProblemDetails;
@@ -47,10 +40,9 @@ internal static class ApiErrors
                     api);
             }
 
-            // Any other response that is not a success reaches the CLI as HttpRequestException with
-            // the status, from HttpResponseMessage.EnsureSuccessStatusCode, which Enclave.Sdk.Api calls
-            // (PatchClient.ApplyAsync, HttpClient.GetFromJsonAsync). A proxy in front of the API
-            // answers this way, so its 401 or 502 maps to the same codes as the API's own.
+            // Any other failed response, such as a proxy's 401 or 502, comes from
+            // EnsureSuccessStatusCode (PatchClient.ApplyAsync, HttpClient.GetFromJsonAsync), and maps
+            // to the same codes as the API's own.
             case HttpRequestException { StatusCode: { } statusCode } http:
             {
                 var status = (int)statusCode;
@@ -63,34 +55,25 @@ internal static class ApiErrors
                     innerException: http);
             }
 
-            // No status means no response: the connection was refused or dropped, or name
-            // resolution failed. Retrying can succeed. A TLS failure, such as a certificate the
-            // machine does not trust, also has no status (HttpRequestError.SecureConnectionError,
-            // .NET 8 and later, https://learn.microsoft.com/dotnet/api/system.net.http.httprequesterror)
-            // and gets the same code, though a retry does not fix it; that is accepted
-            // (spec/cli-surface.md "Accepted for now").
+            // No status means no response, which a retry can fix. A TLS failure also has no status
+            // (HttpRequestError.SecureConnectionError) and gets the same code, though a retry does
+            // not fix it (spec/cli-surface.md "Accepted for now").
             case HttpRequestException http:
                 return new CliException(ErrorCode.Transient, $"The Enclave API could not be reached: {http.Message}", innerException: http);
 
-            // A connection that fails once the headers have arrived fails while the body is read,
-            // after SendAsync has returned, so no HttpRequestException wraps it: Enclave.Sdk.Api
-            // reads with HttpClient.GetFromJsonAsync, which returns from SendAsync at the headers
-            // (HttpCompletionOption.ResponseHeadersRead). .NET reports a body that ends early as
-            // HttpIOException, "thrown when an error occurs while reading the response" (.NET 8 and
-            // later, https://learn.microsoft.com/dotnet/api/system.net.http.httpioexception), and a
-            // reset as the IOException NetworkStream wraps the SocketException in
-            // (https://learn.microsoft.com/dotnet/api/system.net.sockets.networkstream.readasync);
-            // observed with .NET 10.0.1 on Windows and Linux. Retrying can succeed. Any other
-            // IOException, such as a write to a closed stdout pipe, is not a network failure and is
-            // reported as api_error.
+            // A failure while the body is read comes after SendAsync has returned
+            // (HttpClient.GetFromJsonAsync reads with ResponseHeadersRead), so no HttpRequestException
+            // wraps it: .NET throws HttpIOException for a body that ends early, and an IOException
+            // around a SocketException for a reset (NetworkStream.ReadAsync; seen with .NET 10.0.1).
+            // Another IOException, such as a write to a closed stdout pipe, stays api_error.
             case HttpIOException io:
                 return new CliException(ErrorCode.Transient, $"The connection to the Enclave API failed while its response was read: {io.Message}", innerException: io);
 
             case IOException { InnerException: SocketException } io:
                 return new CliException(ErrorCode.Transient, $"The connection to the Enclave API failed while its response was read: {io.Message}", innerException: io);
 
-            // HttpClient reports its timeout (HttpClient.Timeout, 100 seconds by default) as a
-            // TaskCanceledException whose inner exception is a TimeoutException (.NET 5 and later).
+            // HttpClient reports its timeout as a TaskCanceledException around a TimeoutException
+            // (.NET 5 and later).
             case TaskCanceledException { InnerException: TimeoutException } timeout:
                 return new CliException(ErrorCode.Transient, "The Enclave API did not answer in time.", innerException: timeout);
 
@@ -103,9 +86,7 @@ internal static class ApiErrors
     }
 
     /// <summary>
-    /// Whether an Enclave.Sdk.Api call failed because the API answered 404, with problem details or
-    /// without: for a read whose 404 decides what to do next, such as `tag set` choosing between
-    /// the API's update and create calls.
+    /// True when the API answered 404, with problem details or without.
     /// </summary>
     public static bool IsNotFound(Exception exception) => exception switch
     {
@@ -114,10 +95,7 @@ internal static class ApiErrors
         _ => false,
     };
 
-    /// <summary>
-    /// The error code for an HTTP status the API answered with (spec/cli-surface.md "Errors and
-    /// exit codes").
-    /// </summary>
+    // spec/cli-surface.md "Errors and exit codes"
     public static ErrorCode ForStatus(int status, bool notFoundIsUnknownItem = false) => status switch
     {
         (int)HttpStatusCode.Unauthorized => ErrorCode.TokenInvalid,

@@ -4,15 +4,13 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// The CLI reads stdin and writes stdout in one encoding, UTF-8, so a list one run prints and the
-// next reads with "-" holds the same text on every OS, non-ASCII names included, and a token file
-// saved with a byte order mark gives the token (spec/cli-surface.md "Several IDs", "Login,
-// logout and status"). Console's own encodings differ by OS and by setting: the console code pages
-// on Windows (dotnet/runtime release/10.0, src/libraries/System.Console/src/System/
-// ConsolePal.Windows.cs, InputEncoding and OutputEncoding, from GetConsoleCP and
-// GetConsoleOutputCP), and the charset LANG names on Linux and macOS (ConsolePal.Unix.cs,
-// GetConsoleEncoding). A test cannot set the process's console, so these tests give the reader and
-// writer the CLI builds for the process (CliHost.FromProcess) bytes of their own.
+// stdin and stdout are UTF-8 on every OS, so a list one run prints and the next reads with "-"
+// keeps non-ASCII names, and a token file saved with a byte order mark gives the token
+// (spec/cli-surface.md "Several IDs", "Login, logout and status"). Console's own encodings follow
+// the code page on Windows and LANG on Linux and macOS (dotnet/runtime release/10.0,
+// ConsolePal.Windows.cs InputEncoding and OutputEncoding, ConsolePal.Unix.cs GetConsoleEncoding).
+// A test cannot set the process's console, so these tests give the reader and writer that
+// CliHost.FromProcess builds bytes of their own.
 public class EncodingTests
 {
     private const string Token = "stdin-token-3f0d2a";
@@ -32,8 +30,6 @@ public class EncodingTests
         yield return new TestCaseData(new UnicodeEncoding(bigEndian: false, byteOrderMark: true)).SetArgDisplayNames("UTF-16 LE");
     }
 
-    // The mark says how the file is encoded and is no part of its text, so the token read is the
-    // one saved.
     [TestCaseSource(nameof(EncodingsWithAByteOrderMark))]
     public void Stdin_saved_with_a_byte_order_mark_reads_as_its_text_without_the_mark(Encoding encoding)
     {
@@ -44,7 +40,7 @@ public class EncodingTests
         Assert.That(reader.ReadToEnd(), Is.EqualTo(Token + "\n"));
     }
 
-    // Without a mark stdin is read as UTF-8, the encoding the CLI writes.
+    // UTF-8 is the encoding the CLI writes.
     [Test]
     public void Stdin_without_a_byte_order_mark_reads_as_utf8()
     {
@@ -53,8 +49,7 @@ public class EncodingTests
         Assert.That(reader.ReadToEnd(), Is.EqualTo(NonAsciiName));
     }
 
-    // JSON exchanged between systems is UTF-8 (RFC 8259, section 8.1), with no byte order mark
-    // before it (same section), which jq and the JSON readers agents use read.
+    // JSON exchanged between systems is UTF-8 with no byte order mark (RFC 8259, section 8.1).
     [Test]
     public void Redirected_output_is_written_as_utf8_without_a_byte_order_mark()
     {
@@ -66,10 +61,8 @@ public class EncodingTests
         Assert.That(stream.ToArray(), Is.EqualTo(Encoding.UTF8.GetBytes(NonAsciiName)));
     }
 
-    // A list goes from one run to the next as bytes: the first run's writer encodes it and the
-    // second run's reader decodes it ("Several IDs"). The keys' descriptions are non-ASCII, so a
-    // writer and reader that disagree, or a writer for a single-byte code page, change the text the
-    // second run reads. That run then deletes the keys the list holds.
+    // The list passes between runs as bytes through the CLI's own writer and reader, so a writer
+    // and reader that disagree, or a single-byte code page, change the names the second run reads.
     [Test]
     public async Task A_list_printed_and_piped_into_another_run_reads_back_unchanged_with_non_ascii_names()
     {

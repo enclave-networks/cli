@@ -1,26 +1,17 @@
 namespace Enclave.Cli.Core;
 
-/// <summary>
-/// Sends the bulk calls of a command that takes several items (spec/cli-surface.md "Several IDs").
-/// </summary>
+// spec/cli-surface.md "Several IDs"
 internal static class Bulk
 {
-    /// <summary>
-    /// The most IDs the API takes in one bulk call (portal Enclave.Utilities/HardLimits.cs:22,
-    /// MaxBulkIds).
-    /// </summary>
+    // The API's limit (portal Enclave.Utilities/HardLimits.cs, MaxBulkIds).
     public const int MaxIdsPerCall = 200;
 
     /// <summary>
-    /// Sends the IDs in calls of <see cref="MaxIdsPerCall"/>, in order, and adds up the counts. An
-    /// empty list makes no call and gives { 0, 0 }. A failed call stops the command: its error
-    /// carries requested and affected for the calls that succeeded before it, and running the
-    /// command again is safe, since the API does not count items already in that state.
+    /// Takes IDs with duplicates removed. An empty list makes no call. A failed call stops the
+    /// command, and its error carries the counts of the calls before it; running the command again
+    /// is safe, since the API does not count items already in that state.
     /// </summary>
-    /// <typeparam name="TId">The ID type: string for system IDs and tag names, int for integer IDs.</typeparam>
-    /// <param name="ids">The IDs, duplicates already removed.</param>
-    /// <param name="call">One bulk call, returning the count the API answers with, as in
-    /// <c>batch => org.Client.Policies.DisablePoliciesAsync(batch.Select(PolicyId.FromInt))</c>.</param>
+    /// <typeparam name="TId">string for system IDs and tag names, int for integer IDs.</typeparam>
     public static async Task<BulkResult> RunAsync<TId>(IReadOnlyList<TId> ids, Func<IReadOnlyList<TId>, Task<int>> call)
     {
         ArgumentNullException.ThrowIfNull(ids);
@@ -47,5 +38,24 @@ internal static class Bulk
         }
 
         return new BulkResult(requested, affected);
+    }
+
+    /// <summary>
+    /// For an empty list, prints { 0, 0 } and returns true: the command makes no call. Under --dry-run
+    /// it returns false, and the command goes on to print its dry run output.
+    /// </summary>
+    // An empty list needs no token or organisation, so a pipeline fed by one succeeds ("Several IDs").
+    // A dry run goes on because its output names the organisation ("Dry run").
+    public static async Task<bool> WroteEmptyAsync(CliContext context, int count)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (count > 0 || context.IsDryRun)
+        {
+            return false;
+        }
+
+        await context.Output.WriteBulkAsync(new BulkResult(0, 0), context.CancellationToken);
+        return true;
     }
 }

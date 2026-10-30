@@ -4,21 +4,18 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// ~/.enclave/credentials.json, which holds the token and the API's base URL, and the partner API's
-/// base URL where it is not production's. The file belongs to Enclave.Sdk.Api, which reads
-/// personalAccessToken, baseUrl and partnerApiBaseUrl from it, ignoring case
-/// (EnclaveClient.ReadCredentialsFile); the CLI keeps that format.
-/// </summary>
+// ~/.enclave/credentials.json belongs to Enclave.Sdk.Api, which reads personalAccessToken, baseUrl
+// and partnerApiBaseUrl from it ignoring case (EnclaveClient.ReadCredentialsFile), so the CLI keeps
+// that format.
 internal static class CredentialsFile
 {
     /// <summary>
-    /// The file's path, or null when there is no home directory (EnclaveDirectory.HomeFrom).
+    /// Null when there is no home directory.
     /// </summary>
     public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "credentials.json");
 
     /// <summary>
-    /// What the file holds, or null when there is no file or no home directory.
+    /// Null when there is no file or no home directory.
     /// </summary>
     public static StoredCredentials? Read(CliHost host)
     {
@@ -43,8 +40,7 @@ internal static class CredentialsFile
     }
 
     /// <summary>
-    /// Writes the file with the token and base URL, and the partner API's base URL when one is
-    /// given, readable by the current user only. Exits 2 when there is no home directory.
+    /// Readable by the current user only. Exits 2 when there is no home directory.
     /// </summary>
     public static void Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
     {

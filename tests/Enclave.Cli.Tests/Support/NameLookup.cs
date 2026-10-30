@@ -4,25 +4,20 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Support;
 
-/// <summary>
-/// Gives an item by its description or by --id, and reads the candidates a name lookup error
-/// carries (spec/cli-surface.md "Names and IDs").
-/// </summary>
 internal static class NameLookup
 {
     /// <summary>
-    /// The arguments that give an item by its description, or by --id.
+    /// The arguments that give an item by its description, or by --id. A command must send the
+    /// same change either way (spec/cli-surface.md "Names and IDs").
     /// </summary>
-    // Examples give an item both ways, by its description and by --id ("Names and IDs"), and the
-    // command must send the same change either way.
     public static string[] Target(bool byDescription, string description, int id) =>
         byDescription ? [description] : ["--id", id.ToString(CultureInfo.InvariantCulture)];
 
     /// <summary>
     /// The IDs of the candidates a name lookup error carries, sorted and joined with commas.
     /// </summary>
-    // The error carries candidates, an empty list for no match ("Errors and exit codes"), so a
-    // missing or null list fails the test, and an empty one reads as "".
+    // The error carries candidates even when there are none (spec/cli-surface.md "Errors and exit
+    // codes"), so a missing list fails the test.
     public static string CandidateIds(JsonElement error)
     {
         if (!error.TryGetProperty("candidates", out var candidates) || candidates.ValueKind != JsonValueKind.Array)

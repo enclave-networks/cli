@@ -1,21 +1,16 @@
-using System.Text.Json.Nodes;
 using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Context;
 
-/// <summary>
-/// Chooses the partner a partner command acts for (spec/cli-surface.md "Context"). Partners
-/// are given by ID only: looking them up needs the ReadPartnerList scope, which personal access
-/// tokens cannot carry ("Partner API").
-/// </summary>
+// Partners are given by ID only: looking them up needs the ReadPartnerList scope, which personal
+// access tokens cannot carry (spec/cli-surface.md "Partner API").
 internal static class PartnerResolver
 {
     public const string IdVariable = "ENCLAVE_PARTNER_ID";
 
     /// <summary>
-    /// The partner --partner-id, ENCLAVE_PARTNER_ID or cli.json chooses, in that order, reading a
-    /// lower source only when no higher one gives a value; null when none does. An empty variable
-    /// counts as unset, and a malformed source that is read exits 2.
+    /// Null when no source chooses one. A lower source is read only when no higher one gives a
+    /// value. An empty variable counts as unset, and a malformed source that is read exits 2.
     /// </summary>
     public static PartnerChoice? Choose(CliContext context)
     {
@@ -35,24 +30,13 @@ internal static class PartnerResolver
                 : throw CliErrors.InvalidArgument(IdVariable, $"{IdVariable} takes a partner ID: {IdFormats.Guid.Describe}.");
         }
 
-        if (SettingsFile.PathFor(host) is not { } path || SettingsFile.Read(host)?["partner"] is not { } saved)
-        {
-            return null;
-        }
-
-        // A default in a shape partner use does not save names no partner, so it exits 2 naming
-        // the file, as a malformed ID does. Only a missing default means none is chosen.
-        return saved is JsonObject savedPartner
-            && savedPartner["id"] is JsonValue value
-            && value.TryGetValue(out string? savedId)
-            && IdFormats.Guid.TryParse(savedId, out var savedGuid)
-            ? new PartnerChoice(savedGuid, path)
-            : throw CliErrors.InvalidArgument($"The default partner in {path} has no valid ID. Save it again with `enclave-cli partner use --id <partnerId>`.");
+        return SettingsFile.ReadDefault(host, "partner", "partner", "enclave-cli partner use --id <partnerId>") is { } saved
+            ? new PartnerChoice(saved.Id, saved.Path)
+            : null;
     }
 
     /// <summary>
-    /// The partner for a partner command; exits 2 with no_partner, naming both ways to choose one,
-    /// when none is chosen.
+    /// Exits 2 with no_partner when none is chosen.
     /// </summary>
     public static PartnerChoice Resolve(CliContext context) =>
         Choose(context)

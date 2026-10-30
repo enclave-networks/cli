@@ -23,11 +23,10 @@ internal static class FieldText
     /// <see cref="Empty"/>, or json:&lt;raw&gt; for any other kind. Fails the test when the value is
     /// not an object.
     /// </summary>
-    // Names match ignoring case, since PATCH bodies key the top level in PascalCase
-    // (JsonAssert.Property). Missing and null read as (none), an unset label; an empty string reads
-    // as (empty), since an empty label is sent as null ("Details"); any other JSON kind reads as
-    // json:<raw>, so a boolean or number never passes for text, such as the string "true" the API
-    // reads in a trust requirement's condition (portal TrustRequirementSettingsModel).
+    // Names match ignoring case for PATCH bodies' PascalCase keys. An empty string reads apart
+    // from null, since an empty label is sent as null (spec/cli-surface.md "Details"). json:<raw>
+    // keeps a boolean from passing for the string "true" a trust requirement's condition takes
+    // (portal TrustRequirementSettingsModel).
     public static string Text(JsonElement obj, string name)
     {
         if (obj.ValueKind != JsonValueKind.Object)
@@ -59,8 +58,8 @@ internal static class FieldText
     public static string Set(params string[] entries) => string.Join("; ", entries.Order(StringComparer.Ordinal));
 
     /// <summary>
-    /// The property names of a body as <see cref="Set"/> joins them.
+    /// The property names of a body as <see cref="Set"/> joins them, so a test can state the exact
+    /// set of fields an update sends.
     /// </summary>
-    // Sorted, so a test can state the exact set of fields an update sends.
     public static string Keys(JsonElement body) => Set(JsonRead.PropertyNames(body));
 }

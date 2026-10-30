@@ -6,31 +6,21 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// policy create <description> (spec/cli-surface.md "Command options" and "Create and update").
-// A create sends every setting that changes behaviour, with the documented value when a flag is
-// left out, so a change to the API's defaults does not change what the command does. The body is
-// the API's PolicyCreateModel, which the portal fills the same way (portal-spa
-// redux/sagas/business/policies/createPolicySaga.ts, createPolicyDetailsSaga.ts).
-
 /// <summary>
 /// Tests for policy create.
 /// </summary>
 public partial class PolicyCommandTests
 {
-    // Every field of PolicyCreateModel (portal Enclave.Api/Modules/SystemManagement/Policies/Models/PolicyCreateModel.cs),
-    // each a setting that changes behaviour or names the policy: the description, the type, the
-    // flags of "Command options" and the traffic direction the CLI sends for a gateway policy.
+    // Every field of the API's PolicyCreateModel.
     private static readonly string[] PolicyCreateFields =
     [
         "type", "description", "isEnabled", "senderTags", "receiverTags", "acls", "gatewayAllowedIpRanges", "gateways",
         "gatewayTrafficDirection", "gatewayPriority", "notes", "senderTrustRequirements", "autoExpire", "activeHours",
     ];
 
-    // Example 21. A create sends every setting, with the documented value for a flag left out
-    // ("Create and update"): an empty list for a list flag ("Details"), and null for a setting with
-    // no list. A general policy has no gateway settings, and the API rejects a general policy that
-    // has any (portal PolicyCreateModelValidator.cs:47-52); --mode and --subnet-filter apply to
-    // gateway policies only ("Command options"), so the gateway priority is null too.
+    // Example 21. A flag left out is sent as an empty list or null ("Create and update"). The API
+    // rejects gateway settings on a general policy (portal PolicyCreateModelValidator), and --mode
+    // applies to gateway policies only, so every gateway field is empty or null.
     [Test]
     public async Task Policy_create_sends_every_setting_of_a_general_policy()
     {
@@ -76,8 +66,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 21, checked first: --dry-run prints the POST with every value it would send and sends
-    // nothing ("Dry run", "Create and update").
+    // Example 21, checked first.
     [Test]
     public async Task Policy_create_with_dry_run_prints_the_create_and_sends_nothing()
     {
@@ -121,9 +110,9 @@ public partial class PolicyCommandTests
         Assert.That(Text(request.BodyJson, "notes"), Is.EqualTo("Ticket 1234, primary path"));
     }
 
-    // policy create requires at least one --acl, so the command always states what traffic the
-    // policy allows; the API accepts a policy with no ACLs, and it then carries no traffic (fabric
-    // StateTracker.cs:909-921, portal PolicyModelExtensions.cs:25-29).
+    // The API accepts a policy with no ACLs, which then carries no traffic (portal
+    // PolicyModelExtensions.ToModel, state InactiveNoAcls; fabric
+    // StateTracker.DoesPolicyAllowTraffic).
     [Test]
     public async Task Policy_create_without_an_acl_exits_2()
     {
@@ -138,8 +127,7 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // --acl takes a protocol and, for TCP and UDP, a port or range ("Command options"). The API
-    // names the protocols Any, Tcp, Udp and Icmp (PolicyAclProtocol, Enclave.Sdk.Api.Data).
+    // The API names the protocols Any, Tcp, Udp and Icmp (PolicyAclProtocol, Enclave.Sdk.Api.Data).
     [TestCase("any", "Any|(none)|(none)")]
     [TestCase("icmp", "Icmp|(none)|(none)")]
     [TestCase("tcp:22", "Tcp|22|(none)")]
@@ -157,9 +145,8 @@ public partial class PolicyCommandTests
         Assert.That(Acls(JsonAssert.Property(request.BodyJson, "acls")), Is.EqualTo(expected));
     }
 
-    // any and icmp take no ports, tcp and udp need a port or range (portal
-    // PolicyAclModelValidator.cs), and the protocols are any, tcp, udp and icmp ("Command options").
-    // A port is 1 to 65535, and a range low-high has low no greater than high ("Details").
+    // any and icmp take no ports and tcp and udp need one (portal PolicyAclModelValidator); a port
+    // is 1 to 65535, and a range's low end is no greater than its high end ("Details").
     [TestCase("tcp")]
     [TestCase("udp")]
     [TestCase("icmp:80")]
@@ -202,8 +189,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 74. The label after "=" is the ACL's description, and --acl repeats, so a label can
-    // hold a comma ("Command options").
+    // Example 74. --acl repeats in place of a comma list, so a label can hold a comma.
     [Test]
     public async Task Policy_create_sends_each_acl_label_as_its_description()
     {
@@ -216,9 +202,7 @@ public partial class PolicyCommandTests
         Assert.That(Acls(JsonAssert.Property(request.BodyJson, "acls")), Is.EqualTo(Set("Tcp|5432|PostgreSQL", "Icmp|(none)|Ping, for monitoring")));
     }
 
-    // Example 23. --trust takes trust requirement descriptions, looked up like any name, and the
-    // API takes their IDs as senderTrustRequirements ("Names and IDs"). "entra staff (old)"
-    // contains the name and is not a match.
+    // Example 23. "entra staff (old)" contains the name and must not match.
     [Test]
     public async Task Policy_create_looks_up_the_trust_requirement_named_and_sends_its_id()
     {
@@ -241,7 +225,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 23, by ID: --trust-id makes no lookup ("Names and IDs").
+    // Example 23, by ID.
     [Test]
     public async Task Policy_create_with_trust_ids_sends_them_without_a_lookup()
     {
@@ -254,7 +238,6 @@ public partial class PolicyCommandTests
         Assert.That(string.Join(",", request.BodyIds("senderTrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo("3,8"));
     }
 
-    // Trust requirement IDs are integers, and every ID is checked before any call ("ID checks").
     [Test]
     public async Task Policy_create_rejects_a_trust_id_that_is_not_an_integer()
     {
@@ -301,11 +284,9 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 25. --gateway makes a gateway policy whose senders reach the routes through that
-    // system, with the traffic direction Exit, the only one the API accepts (portal
-    // PolicyCreateModelValidator.cs:56), and the mode Balanced when --mode is left out ("Command
-    // options"). The API rejects receiver tags on an exit gateway policy (same file, 61), and the
-    // list flags left out are sent as empty lists ("Details").
+    // Example 25. Exit is the only traffic direction the API accepts, and it rejects receiver tags on
+    // an exit gateway policy (portal PolicyCreateModelValidator, the rules on
+    // GatewayTrafficDirection and ReceiverTags). --mode defaults to balanced ("Command options").
     [Test]
     public async Task Policy_create_with_a_gateway_sends_a_gateway_policy_with_every_gateway_setting()
     {
@@ -344,10 +325,8 @@ public partial class PolicyCommandTests
         Assert.That(Gateways(JsonAssert.Property(request.BodyJson, "gateways")), Is.EqualTo("GW001:10.0.0.0/16,10.1.0.0/16"));
     }
 
-    // Example 53. --mode takes the API's GatewayPriority values, matched ignoring case, and the
-    // CLI writes Ordered where Enclave.Sdk.Api.Data names the value Prioritised
-    // ("`Enclave.Sdk.Api` changes", item 9; sdk
-    // Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs).
+    // Example 53. The CLI sends Ordered where Enclave.Sdk.Api.Data names the value Prioritised
+    // (spec/cli-surface.md "`Enclave.Sdk.Api` changes", item 9; sdk GatewayPriorityType).
     [TestCase("balanced", "Balanced")]
     [TestCase("ordered", "Ordered")]
     [TestCase("geographic", "Geographic")]
@@ -384,9 +363,8 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // --mode and --subnet-filter apply to gateway policies only, and the API accepts allowed ranges
-    // on gateway policies only (portal PolicyCreateModelValidator.cs:47), so without --gateway they
-    // exit 2 ("Command options").
+    // The API rejects allowed ranges on a general policy (portal PolicyCreateModelValidator, the rule
+    // on GatewayAllowedIpRanges).
     [TestCase("--mode", "ordered")]
     [TestCase("--subnet-filter", "10.0.0.0/16")]
     public async Task Policy_create_rejects_a_gateway_option_without_a_gateway(string option, string value)
@@ -402,9 +380,8 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // The senders of a gateway policy reach the gateway's routes, and the API rejects receiver tags
-    // on it (portal PolicyCreateModelValidator.cs:61), so --gateway with --receivers exits 2
-    // ("Command options").
+    // The API rejects receiver tags on an exit gateway policy (portal PolicyCreateModelValidator, the
+    // rule on ReceiverTags).
     [Test]
     public async Task Policy_create_rejects_a_gateway_with_receivers()
     {
@@ -419,8 +396,6 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // The label after "=" is the range's description in gatewayAllowedIpRanges ("Command options");
-    // the flag repeats, and the API sets no limit on how many there are.
     [Test]
     public async Task Policy_create_sends_each_subnet_filter_with_its_label()
     {
@@ -448,11 +423,8 @@ public partial class PolicyCommandTests
         Assert.That(Ranges(JsonAssert.Property(request.BodyJson, "gatewayAllowedIpRanges")), Is.EqualTo(Set("104.47.0.0/17|Exchange Online", "40.92.0.0/15|(none)")));
     }
 
-    // Example 30 is the first case. --active-hours takes <days> <start>-<end> [<zone>]: days are mon
-    // to sun, a range or a comma list, and times are 24-hour HH:MM ("Details"). The API's
-    // ActiveHours holds the days as DayOfWeek names, the start and end as hours and minutes, and an
-    // IANA or Windows time zone ID (portal Enclave.Configuration.Data/ActiveHours.cs,
-    // HoursMinutes.cs; portal-spa types/api.ts ActiveHours, DayOfWeek).
+    // Example 30 is the first case. The API holds the days as DayOfWeek names and the times as hours
+    // and minutes (portal ActiveHours, HoursMinutes).
     [TestCase("mon-fri 08:00-18:00 Europe/London", "Monday,Tuesday,Wednesday,Thursday,Friday", "08:00", "18:00", "Europe/London")]
     [TestCase("sat-sun 10:00-16:00 Europe/Dublin", "Saturday,Sunday", "10:00", "16:00", "Europe/Dublin")]
     [TestCase("mon,wed,fri 09:00-17:30 America/New_York", "Monday,Wednesday,Friday", "09:00", "17:30", "America/New_York")]
@@ -477,8 +449,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // The time zone is UTC when left out ("Command options"); "UTC" and "Etc/UTC" both name it in
-    // the IANA database.
+    // "UTC" and "Etc/UTC" both name UTC in the IANA database.
     [Test]
     public async Task Policy_create_sends_active_hours_in_utc_when_no_time_zone_is_given()
     {
@@ -497,9 +468,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Anything outside <days> <start>-<end> [<zone>], with days mon to sun and 24-hour HH:MM times,
-    // exits 2 ("Details"). "" and only white space set no hours, and a create has no restriction to
-    // remove, so there an empty value means nothing and exits 2 as well.
+    // A create has no restriction to remove, so "" and white space mean nothing here ("Details").
     [TestCase("")]
     [TestCase(" ")]
     [TestCase("mon-fri")]
@@ -522,10 +491,9 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // Active hours that start and end at the same time are never active: the check needs a time at
-    // or after the start and before the end (services
-    // Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs:39-44), so such a value exits 2
-    // ("Command options"). 00:00-00:00 is not read as the whole day.
+    // Such hours are never active: the check needs a time at or after the start and before the end
+    // (services SystemIsopActiveHoursExtensions.IsWithinActiveHours), so 00:00-00:00 is not the
+    // whole day.
     [TestCase("mon 08:00-08:00")]
     [TestCase("mon-fri 00:00-00:00 Europe/London")]
     public async Task Policy_create_rejects_active_hours_that_start_and_end_at_the_same_time(string activeHours)
@@ -541,10 +509,8 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // The API refuses sender tags, receiver tags or trust requirement IDs with a value twice (portal
-    // PolicyCreateModelValidator.cs:26,28,39), so a repeat exits 2 before any call ("Command
-    // options"). A repeated flag adds to its list as a comma does. The policy with each value once,
-    // run next, shows the rejection comes from the repeat.
+    // The API refuses a repeated sender tag, receiver tag or trust requirement ID (portal
+    // PolicyCreateModelValidator, MustNotHaveDuplicates).
     [TestCase("--senders", "web,api,web", "web,api")]
     [TestCase("--receivers", "db,db", "db")]
     [TestCase("--trust-id", "3,8,3", "3,8")]
@@ -571,9 +537,7 @@ public partial class PolicyCommandTests
             PoliciesPath);
     }
 
-    // Trust requirement names match ignoring case ("Names and IDs"), so "Entra Staff" names the same
-    // requirement as "entra staff", and the API would get its ID twice. The repeat exits 2 before
-    // the lookup; the names once each, run next, look up and create.
+    // Names match ignoring case, so "Entra Staff" repeats "entra staff" and would send its ID twice.
     [Test]
     public async Task Policy_create_with_a_trust_requirement_named_twice_exits_2_without_a_request()
     {
@@ -590,9 +554,8 @@ public partial class PolicyCommandTests
         Assert.That(string.Join(",", posts[0].BodyIds("senderTrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo("3,9"));
     }
 
-    // The API stores a repeated ACL, gateway system or subnet filter as given: neither its validators
-    // nor its create handler refuse one (portal PolicyCreateModelValidator.cs, PolicyGatewayValidator.cs,
-    // PolicyCreateHandler.cs), so the CLI sends both entries ("Command options").
+    // The API accepts a repeated ACL, gateway system or subnet filter (portal
+    // PolicyCreateModelValidator, PolicyGatewayValidator, PolicyCreateHandler), so the CLI sends both.
     [TestCase("--senders web --receivers db --acl tcp:443 --acl tcp:443", "acls")]
     [TestCase("--senders staff --gateway GW001:10.0.0.0/16 --gateway GW001:10.1.0.0/16 --acl any", "gateways")]
     [TestCase("--senders staff --gateway GW001:10.0.0.0/16 --subnet-filter 10.0.0.0/16 --subnet-filter 10.0.0.0/16 --acl any", "gatewayAllowedIpRanges")]
@@ -607,12 +570,9 @@ public partial class PolicyCommandTests
         Assert.That(JsonAssert.Property(request.BodyJson, field).GetArrayLength(), Is.EqualTo(2));
     }
 
-    // Example 22. A clock time without a zone means its next occurrence in the machine's time zone,
-    // and the policy is disabled then unless --then says otherwise ("Command options", --until); the
-    // expiry is sent as a UTC instant ("Details"). The clock is fixed at 20:00 UTC on 14 January
-    // 2030, which is 01:30 on the 15th in the test's UTC+05:30 zone, so 18:00 is later that day,
-    // 12:30 UTC. A CLI that read the clock time in UTC sends 18:00 UTC on the 15th, and one that read
-    // the system's clock or zone in place of the ones it is given sends neither instant.
+    // Example 22. The clock reads 01:30 on the 15th in the test zone (UTC+05:30), so 18:00 is later
+    // that day, 12:30 UTC; reading 18:00 as UTC, or using the system's clock or zone, gives another
+    // instant.
     [Test]
     public async Task Policy_create_until_a_clock_time_expires_at_its_next_local_occurrence_and_disables_the_policy()
     {
@@ -652,8 +612,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // RFC 3339 with a zone is that instant, whatever the machine's zone ("Command options"), sent as
-    // a UTC instant ("Details").
     [Test]
     public async Task Policy_create_until_a_time_with_a_zone_expires_at_that_instant_in_utc()
     {
@@ -674,8 +632,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // --for with --until, and --then without either, contradict each other, and a time in the past
-    // cannot be an expiry ("Details").
     [TestCase("--for", "8h", "--until", "2030-01-15T09:30:00Z")]
     [TestCase("--then", "delete", null, null)]
     [TestCase("--until", "2020-01-15T09:30:00Z", null, null)]
@@ -690,8 +646,8 @@ public partial class PolicyCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, rejected, [.. create, "--until", "2030-01-15T09:30:00Z"], "POST", PoliciesPath);
     }
 
-    // A create sends an empty list for a list flag left out ("Details"), so the API's own default
-    // never decides who the policy applies to.
+    // The CLI sends the empty lists itself, so the API's defaults never decide who the policy applies
+    // to.
     [Test]
     public async Task Policy_create_sends_an_empty_list_for_each_list_flag_left_out()
     {
@@ -708,7 +664,6 @@ public partial class PolicyCommandTests
         });
     }
 
-    // --then takes disable or delete on policies ("Command options").
     [Test]
     public async Task Policy_create_rejects_then_revoke()
     {

@@ -10,10 +10,9 @@ namespace Enclave.Cli.Tests.Support;
 /// promise more body than it sends, then ends the connection: with a FIN, or with a RST when made
 /// with reset set.
 /// </summary>
-// WireMock.Net cannot send this: it sets Content-Length from the body it holds and leaves out a
-// Content-Length header given with a body, and its faults (FaultType.EMPTY_RESPONSE,
-// MALFORMED_RESPONSE_CHUNK) send a complete response whose body is empty or garbled, which reaches
-// the CLI as a JSON error (observed with WireMock.Net 2.18.0; OwinResponseMapper).
+// WireMock.Net cannot send this: it sets Content-Length from the body it holds, and its faults
+// send a complete response whose body is empty or garbled (WireMock.Net 2.18.0,
+// OwinResponseMapper).
 internal sealed class BrokenBodyApi : IDisposable
 {
     private static readonly byte[] Answer = Encoding.ASCII.GetBytes(
@@ -38,7 +37,7 @@ internal sealed class BrokenBodyApi : IDisposable
     public string Url { get; }
 
     /// <summary>
-    /// Each request received, as "METHOD path" without the query, in the order received.
+    /// Each request as "METHOD path", without the query.
     /// </summary>
     public IReadOnlyList<string> Requests => [.. _requests];
 

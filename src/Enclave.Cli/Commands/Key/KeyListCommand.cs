@@ -3,10 +3,6 @@ using Enclave.Configuration.Data.Modules.EnrolmentKeys.Enums;
 
 namespace Enclave.Cli.Commands.Key;
 
-/// <summary>
-/// `key list`: the enrolment keys, with their secrets (spec/cli-surface.md "Command options",
-/// "Filters", "Output").
-/// </summary>
 internal static class KeyListCommand
 {
     private const string Disabled = "disabled";
@@ -18,9 +14,8 @@ internal static class KeyListCommand
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var tags = verb.Add(CliOptions.TagFilter("--tag", "Keys with every tag given."));
 
-        // The values each flag stands for are the API's search values ("Filters"): the approval key
-        // reads "gated" as Manual and matches nothing for "manual", and the state key reads "nouses"
-        // (portal EnrolmentKeySearchKeyService.cs, BuildFilterAsync).
+        // The API's approval key reads "gated" as Manual and matches nothing for "manual" (portal
+        // EnrolmentKeySearchKeyService.BuildFilterAsync; "Filters").
         var approval = verb.Add(CliOptions.ChoiceText("--approval", "Keys whose systems are approved automatically, or need approval.", ("automatic", "automatic"), ("manual", "gated")));
         var state = verb.Add(CliOptions.ChoiceText("--state", "Enabled keys, disabled keys, or keys with no uses left.", ("enabled", "enabled"), (Disabled, Disabled), ("no-uses", "nouses")));
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled keys."));
@@ -43,8 +38,7 @@ internal static class KeyListCommand
                 .ToSearchTerm();
 
             // The API leaves disabled keys out unless include_disabled is true, whatever the search
-            // (portal EnrolmentKeyRepository.cs, BuildFilterAsync), so --state disabled asks for them
-            // too and lists them without --include-disabled ("Filters").
+            // (portal EnrolmentKeyRepository.BuildFilterAsync).
             bool? withDisabled = context.Get(includeDisabled) || context.Get(state) == Disabled ? true : null;
 
             var keys = await Paging.ReadAllAsync(

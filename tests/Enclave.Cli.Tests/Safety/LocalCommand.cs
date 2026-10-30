@@ -18,9 +18,7 @@ public readonly record struct LocalCommand(
     bool WritesCredentials,
     bool FileExistsAfter)
 {
-    // spec/cli-surface.md "Login, logout and status": login saves the token to
-    // credentials.json, logout deletes that file, and org use and partner use save a default in
-    // cli.json. None of them takes --dry-run ("Dry run").
+    // spec/cli-surface.md "Login, logout and status".
     public static IReadOnlyList<LocalCommand> All { get; } =
     [
         new("login", ["login"], true, true),
@@ -54,8 +52,5 @@ public readonly record struct LocalCommand(
         }
     }
 
-    /// <summary>
-    /// The path of the file the command writes or deletes.
-    /// </summary>
     internal string FilePath(CliRun run) => WritesCredentials ? run.CredentialsPath : run.CliConfigPath;
 }

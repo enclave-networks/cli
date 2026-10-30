@@ -5,17 +5,13 @@ using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
 
-// Property names are the camelCase names of the Enclave.Sdk.Api.Data models, and enums
-// are written as the names Enclave.Sdk.Api reads them by (Constants.JsonSerializerOptions):
-// their member names, and Ordered for the gateway priority Prioritised. GUID identifiers (OrganisationGuid, AccountGuid) are 32 hex
-// digits without hyphens, the only form their JSON converters read and the form they write. Each
-// body carries every property of the model it represents, with DateTime values ending in Z and
-// DateTimeOffset values ending in +00:00, so a model read from a body and written back with the
-// Enclave.Sdk.Api's options gives the same JSON. HarnessTests checks both.
+// Each body carries every property of its Enclave.Sdk.Api.Data model in the form Enclave.Sdk.Api
+// writes (Constants.JsonSerializerOptions), so a model read from a body and written back gives the
+// same JSON, which HarnessTests checks: enums by member name, with Ordered for the gateway priority
+// Prioritised; GUID IDs as 32 hex digits, the only form their converters read; DateTime ending in Z
+// and DateTimeOffset in +00:00.
 //
-// The class is partial so that tests for one area of the API can add their bodies in their own
-// file, Support/ApiJson.<Area>.cs, without editing a file other tests share. StyleCop SA1601
-// requires a <summary> on every part.
+// StyleCop SA1601 requires a <summary> on every part of this partial class.
 
 /// <summary>
 /// Response bodies in the Enclave API's JSON, for the fake API to serve.
@@ -33,8 +29,7 @@ internal static partial class ApiJson
     private const string LastSeenOffset = "2026-01-02T09:30:00+00:00";
 
     /// <summary>
-    /// A PaginatedResponseModel holding the given items as the only page, with metadata.total equal
-    /// to the item count.
+    /// A PaginatedResponseModel with the items as its only page.
     /// </summary>
     public static string Page(params string[] items) => PageAt(0, items.Length, items.Length, items);
 
@@ -45,11 +40,9 @@ internal static partial class ApiJson
     public static string PageOf(int total, params string[] items) => PageAt(0, items.Length, total, items);
 
     /// <summary>
-    /// A PaginatedResponseModel for page <paramref name="page"/> (numbered from 0) of a list of
-    /// <paramref name="total"/> items read <paramref name="perPage"/> at a time, holding the given
-    /// items. The metadata is what PaginatedQueryHandler.GetResponseAsync in the portal
-    /// (Enclave.Api.Scaffolding) writes for that request: the first page has no prevPage, the last
-    /// has no nextPage, and a page after the last has no items and no nextPage.
+    /// Page <paramref name="page"/>, from 0, of <paramref name="total"/> items read
+    /// <paramref name="perPage"/> at a time, with the metadata the API writes (portal
+    /// PaginatedQueryHandler.GetResponseAsync): a page after the last has no items and no nextPage.
     /// </summary>
     public static string PageAt(int page, int perPage, int total, params string[] items)
     {
@@ -74,10 +67,9 @@ internal static partial class ApiJson
             array.Add(JsonNode.Parse(item));
         }
 
-        // The API writes each link as an absolute URL repeating the request's query
-        // (PaginatedQueryHandler.CreatePageLinkUri). Enclave.Sdk.Api reads links as Uri, which also takes a
-        // relative reference, and a list is read by following metadata.nextPage, so a link here
-        // carries the page number alone.
+        // The API writes absolute links that repeat the request's query (portal
+        // PaginatedQueryHandler.CreatePageLinkUri). Enclave.Sdk.Api reads a link as a Uri, which
+        // takes a relative reference too, and lists follow metadata.nextPage.
         return new JsonObject
         {
             ["metadata"] = new JsonObject
@@ -111,8 +103,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// A QueryAccountOrgsResponseModel, the GET /account/orgs body, whose orgs are
-    /// AccountOrganisationModel with role Owner and partnerAccess false.
+    /// A QueryAccountOrgsResponseModel, the GET /account/orgs body, of <see cref="Org"/> items.
     /// </summary>
     public static string Orgs(params (Guid Id, string Name)[] orgs)
     {
@@ -126,8 +117,7 @@ internal static partial class ApiJson
     }
 
     /// <summary>
-    /// One item of <see cref="Orgs"/>: an AccountOrganisationModel with role Owner and partnerAccess
-    /// false.
+    /// An AccountOrganisationModel with role Owner and partnerAccess false.
     /// </summary>
     public static string Org(Guid id, string name) => new JsonObject
     {
@@ -250,8 +240,8 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// A TagModel, which also reads as a TagSummaryModel list item. The ref is derived from the
-    /// tag name, so the same name always gives the same ref.
+    /// A TagModel, which also reads as a TagSummaryModel list item. The same name always gives the
+    /// same ref.
     /// </summary>
     public static string Tag(string tag) => new JsonObject
     {
@@ -271,7 +261,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// The ref ApiJson.Tag gives a tag name, in the API's "ref:" plus 32 hex digits form.
+    /// The ref <see cref="Tag"/> gives a tag name, "ref:" and 32 hex digits as the API writes it.
     /// </summary>
     public static string TagRef(string tag) =>
         "ref:" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(tag)))[..32];
@@ -367,8 +357,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// An OrganisationUsersModel, the GET /org/{orgId}/users body, whose users are
-    /// OrganisationUser with role Admin.
+    /// An OrganisationUsersModel, the GET /org/{orgId}/users body, of <see cref="User"/> items.
     /// </summary>
     public static string Users(params (Guid Id, string Email)[] users)
     {
@@ -382,7 +371,7 @@ internal static partial class ApiJson
     }
 
     /// <summary>
-    /// One item of <see cref="Users"/>: an OrganisationUser with role Admin.
+    /// An OrganisationUser with role Admin.
     /// </summary>
     public static string User(Guid id, string email) => new JsonObject
     {
@@ -394,8 +383,7 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     /// <summary>
-    /// An OrganisationPendingInvitesModel, the GET /org/{orgId}/invites body, whose invites are
-    /// OrganisationInviteModel.
+    /// An OrganisationPendingInvitesModel, the GET /org/{orgId}/invites body.
     /// </summary>
     public static string Invites(params string[] emails)
     {
@@ -409,7 +397,7 @@ internal static partial class ApiJson
     }
 
     /// <summary>
-    /// One item of <see cref="Invites"/>: an OrganisationInviteModel.
+    /// An OrganisationInviteModel.
     /// </summary>
     public static string Invite(string email) => new JsonObject { ["emailAddress"] = email }.ToJsonString();
 

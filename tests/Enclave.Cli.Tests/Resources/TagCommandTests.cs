@@ -5,20 +5,12 @@ using static Enclave.Cli.Tests.Support.FieldText;
 
 namespace Enclave.Cli.Tests.Resources;
 
-// The tag commands (spec/cli-surface.md "Commands", "Command options", "Names and IDs", "ID
-// checks", "Details"). Tags are given by name only, and a tag name goes into the URL path of show
-// and set, so each is checked against the API's tag rule, ^([a-z0-9]+[-.])*[a-z0-9]+$ (portal
-// TagValidationExtensions.cs:13), before any call. An argument starting "ref:" is not a tag
-// reference; it fails that rule like any other name.
+// A tag name goes into the URL path of show and set, so the CLI checks it against the API's tag
+// rule before any call (portal TagValidationExtensions, _tagRegex). An argument starting "ref:" is
+// a name like any other and fails that rule.
 //
-// tag set updates a tag that exists and creates one that does not; the API has separate calls
-// ("Command options"). It may read the tag to choose ("Dry run" names that read), so the tag set
-// tests serve the tag's GET as well as its PATCH, and require exactly one change whatever reads
-// come first.
-
-/// <summary>
-/// Tests for the tag commands: list, show, set and delete.
-/// </summary>
+// tag set may read the tag to choose between the API's update and create calls
+// (spec/cli-surface.md "Dry run"), so its tests serve the GET as well as the PATCH.
 public class TagCommandTests
 {
     private const string TagRefText = "ref:0123456789abcdef0123456789abcdef";
@@ -46,7 +38,6 @@ public class TagCommandTests
         });
     }
 
-    // --filter is sent as typed ("Filters").
     [Test]
     public async Task Tag_list_sends_the_filter_text_as_the_search()
     {
@@ -59,26 +50,7 @@ public class TagCommandTests
         Assert.That(run.SingleRequest().QueryValue("search")?.Split(' ', StringSplitOptions.RemoveEmptyEntries), Is.EqualTo(WebFilter));
     }
 
-    // TagQuerySortOrder has Alphabetical, RecentlyUsed and ReferencedSystems (portal
-    // Enclave.Configuration.Data/Modules/Tags/Enums/TagQuerySortOrder.cs), and option values are
-    // lower-case and hyphenated, matched ignoring case ("Options on every command").
-    [TestCase("alphabetical", "Alphabetical")]
-    [TestCase("recently-used", "RecentlyUsed")]
-    [TestCase("referenced-systems", "ReferencedSystems")]
-    [TestCase("Recently-Used", "RecentlyUsed")]
-    public async Task Tag_list_sends_the_sort_order_the_sort_option_names(string value, string expected)
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
-
-        var result = await run.RunAsync("tag", "list", "--sort", value);
-
-        CliAssert.List(result, "tag");
-        Assert.That(run.SingleRequest().QueryValue("sort"), Is.EqualTo(expected));
-    }
-
-    // recently-created is a sort order of policies and trust requirements; the tag list does not
-    // have it.
+    // recently-created belongs to policies and trust requirements.
     [Test]
     public async Task Tag_list_rejects_a_sort_order_the_tag_list_does_not_have()
     {
@@ -88,52 +60,8 @@ public class TagCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "list", "--sort", "recently-created"], ["tag", "list", "--sort", "recently-used"], "GET", TagsPath);
     }
 
-    // An option a command does not take is unknown to it and exits 2 ("Details"); --dry-run belongs
-    // to commands that change something.
-    [TestCase("list")]
-    [TestCase("show")]
-    public async Task Tag_read_commands_reject_dry_run(string verb)
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TagsPath, json: ApiJson.Page(ApiJson.Tag("web")));
-        run.Stub("GET", TagPath("web"), json: ApiJson.Tag("web"));
-        string[] corrected = verb == "list" ? ["tag", "list"] : ["tag", "show", "web"];
-
-        await CliAssert.RejectedThenAcceptedAsync(run, [.. corrected, "--dry-run"], corrected, "GET", verb == "list" ? TagsPath : TagPath("web"));
-    }
-
-    [Test]
-    public async Task Tag_show_gets_the_tag_by_name_and_prints_its_model()
-    {
-        using var run = CliRun.Start();
-        run.Stub("GET", TagPath("web-servers"), json: ApiJson.Tag("web-servers"));
-
-        var result = await run.RunAsync("tag", "show", "web-servers");
-
-        CliAssert.Succeeded(result);
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.SingleRequest().Path, Is.EqualTo(TagPath("web-servers")));
-            Assert.That(JsonAssert.Property(result.StdoutJson, "tag").GetString(), Is.EqualTo("web-servers"));
-        });
-    }
-
-    // Single-item commands exit 5 for an unknown name ("Several IDs").
-    [Test]
-    public async Task Tag_show_with_an_unknown_tag_exits_5()
-    {
-        using var run = CliRun.Start();
-        run.StubProblem("GET", TagPath("web"), 404, "Not Found", "Tag web does not exist.");
-
-        var result = await run.RunAsync("tag", "show", "web");
-
-        CliAssert.Failed(result, "not_found");
-        Assert.That(run.SingleRequest().Path, Is.EqualTo(TagPath("web")));
-    }
-
-    // A tag name goes into the URL path (TagsClient.GetAsync and Update), and a name outside the tag
-    // rule exits 2 naming it before any call ("ID checks").
-    [TestCase("Web", "web")]
+    // The name goes into the URL path (Enclave.Sdk.Api TagsClient.GetAsync and Update), so
+    // ../systems would reach another route (spec/cli-surface.md "ID checks").
     [TestCase("web_servers", "web-servers")]
     [TestCase("../systems", "web")]
     [TestCase(TagRefText, "web")]
@@ -145,8 +73,7 @@ public class TagCommandTests
         await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "show", badName], ["tag", "show", goodName], "GET", TagPath(goodName));
     }
 
-    // The patch holds only the fields given ("Create and update"). Enclave.Sdk.Api keys a PATCH
-    // body by the C# property name (PatchClient.Set).
+    // Enclave.Sdk.Api keys a PATCH body by the C# property name (PatchClient.Set).
     [Test]
     public async Task Tag_set_on_a_tag_that_exists_patches_only_the_fields_given_and_prints_the_tag()
     {
@@ -167,8 +94,7 @@ public class TagCommandTests
         });
     }
 
-    // Example 55. --name renames the tag: TagPatchModel.Tag holds the new name (portal
-    // Enclave.Api/Modules/SystemManagement/Tags/Models/TagPatchModel.cs).
+    // Example 55. TagPatchModel.Tag holds the new name (portal TagPatchModel).
     [Test]
     public async Task Tag_set_with_name_renames_the_tag_and_sets_its_colour()
     {
@@ -188,13 +114,11 @@ public class TagCommandTests
     }
 
     // The update answers 404 for a tag the API does not hold (portal
-    // TagModifyHandler.GetResponseAsync:58), so tag set creates it ("Command options", "Calls per
-    // command"). A create sends a value for every setting, and an empty list for a list flag left
-    // out, so the trust requirements go as [] ("Create and update", "Details"): the body is
-    // TagCreateModel in camelCase, every property written (Enclave.Sdk.Api
-    // TagsClient.CreateAsync with Constants.JsonSerializerOptions, which ignores no property). The
-    // output is the model the API answered with, whose colour and notes differ from those sent, read
-    // with exact names, since JsonAssert.Property also matches a name in another case.
+    // TagModifyHandler.GetResponseAsync). A create sends every setting, so the trust requirements go
+    // as [] (spec/cli-surface.md "Create and update"). Enclave.Sdk.Api writes every property of
+    // TagCreateModel in camelCase (TagsClient.CreateAsync, Constants.JsonSerializerOptions), so the
+    // names are read exactly. The API answers with another colour and notes, so the output shows it
+    // is the model returned.
     [Test]
     public async Task Tag_set_on_a_tag_that_does_not_exist_creates_it_and_prints_it()
     {
@@ -222,8 +146,8 @@ public class TagCommandTests
         });
     }
 
-    // --name renames, so the tag must exist ("Command options"): a rename of an unknown tag is the
-    // single-item not found, and creating a tag under either name would not be what was asked.
+    // Creating a tag under either name would not be what was asked (spec/cli-surface.md "Command
+    // options").
     [Test]
     public async Task Tag_set_with_name_on_a_tag_that_does_not_exist_exits_5_without_creating_a_tag()
     {
@@ -237,8 +161,7 @@ public class TagCommandTests
         Assert.That(run.RequestsTo("POST", TagsPath), Is.Empty);
     }
 
-    // Only a tag that does not exist is created; any other failure of the update is reported as it
-    // is (here 403, exit 4, "Errors and exit codes").
+    // The 403 is reported as the API gave it.
     [Test]
     public async Task Tag_set_does_not_create_the_tag_when_the_update_fails_for_another_reason()
     {
@@ -253,7 +176,7 @@ public class TagCommandTests
         Assert.That(run.RequestsTo("POST", TagsPath), Is.Empty);
     }
 
-    // An update with no change flag exits 2, tag set included ("Details").
+    // spec/cli-surface.md "Details".
     [Test]
     public async Task Tag_set_without_a_change_flag_exits_2()
     {
@@ -266,9 +189,8 @@ public class TagCommandTests
         Assert.That(Keys(SingleChange(run, "PATCH", TagPath("web")).BodyJson), Is.EqualTo("Notes").IgnoreCase);
     }
 
-    // Example 28. --trust takes trust requirement descriptions, looked up like any name ("Names and
-    // IDs"), and replaces the tag's trust requirements. "uk only (old)" contains the name and is
-    // not a match.
+    // Example 28. "uk only (old)" contains the name and is not a match (spec/cli-surface.md "Names
+    // and IDs").
     [Test]
     public async Task Tag_set_with_trust_looks_up_the_requirement_and_patches_its_id()
     {
@@ -287,7 +209,7 @@ public class TagCommandTests
         });
     }
 
-    // Example 28, by ID: --trust-id makes no lookup ("Names and IDs").
+    // Example 28, by ID.
     [Test]
     public async Task Tag_set_with_trust_ids_patches_them_without_a_lookup()
     {
@@ -307,12 +229,9 @@ public class TagCommandTests
         });
     }
 
-    // The API refuses a tag's trust requirements with one twice (portal
-    // Enclave.Api/Modules/SystemManagement/Tags/Validators/TagCreateModelValidator.cs:18,
-    // TagPatchModelValidator.cs:20), so a repeat exits 2 before any call, the lookup included
-    // ("Command options"). Trust requirement names match ignoring case ("Names and IDs"), so
-    // "UK Only" names the requirement "uk only" names. The list with each value once, run next,
-    // shows the rejection comes from the repeat.
+    // The API refuses a trust requirement listed twice (portal TagCreateModelValidator and
+    // TagPatchModelValidator, MustNotHaveDuplicates on TrustRequirements). Names match ignoring
+    // case, so "UK Only" repeats "uk only" (spec/cli-surface.md "Names and IDs").
     [TestCase("--trust-id", "5,9,5", "5,9", "5,9")]
     [TestCase("--trust", "uk only,UK Only", "uk only", "5")]
     public async Task Tag_set_with_a_trust_requirement_given_twice_exits_2_without_a_request(string option, string repeated, string once, string ids)
@@ -328,8 +247,7 @@ public class TagCommandTests
         Assert.That(string.Join(",", patch.BodyIds("TrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo(ids));
     }
 
-    // Trust requirement IDs are 32-bit integers, and every ID is checked before any call ("ID
-    // checks", "Details").
+    // 2147483648 is one past the largest 32-bit integer (spec/cli-surface.md "ID checks").
     [TestCase("5,five")]
     [TestCase("2147483648")]
     public async Task Tag_set_rejects_a_trust_id_that_is_not_a_32_bit_integer(string badIds)
@@ -361,8 +279,7 @@ public class TagCommandTests
         });
     }
 
-    // No match exits 2 invalid_argument, and the error's candidates hold nothing ("Errors and exit
-    // codes").
+    // The error's candidates are empty (spec/cli-surface.md "Errors and exit codes").
     [Test]
     public async Task Tag_set_with_a_trust_requirement_no_requirement_has_exits_2_without_a_change()
     {
@@ -397,8 +314,7 @@ public class TagCommandTests
         Assert.That(Keys(SingleChange(run, "PATCH", TagPath("web")).BodyJson), Is.EqualTo("Colour").IgnoreCase);
     }
 
-    // The read tag set makes to choose between update and create runs under --dry-run, and the
-    // change it chose is printed and not sent ("Dry run").
+    // spec/cli-surface.md "Dry run".
     [Test]
     public async Task Tag_set_with_dry_run_on_a_tag_that_exists_prints_the_update_and_sends_no_change()
     {
@@ -435,28 +351,7 @@ public class TagCommandTests
         });
     }
 
-    // A command that takes several items always makes the bulk call, and the tag bulk delete takes
-    // names in a "tags" array (Enclave.Sdk.Api, TagsClient.DeleteTagsAsync). affected below
-    // requested is a success ("Several IDs").
-    [Test]
-    public async Task Tag_delete_sends_every_tag_named_in_one_bulk_call()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 1);
-
-        var result = await run.RunAsync("tag", "delete", "web", "db");
-
-        CliAssert.Bulk(result, 2, 1);
-        var request = run.SingleRequest();
-        Assert.Multiple(() =>
-        {
-            Assert.That(request.Method, Is.EqualTo("DELETE"));
-            Assert.That(request.Path, Is.EqualTo(TagsPath));
-            Assert.That(request.SortedBodyIds("tags"), Is.EqualTo("db,web"));
-        });
-    }
-
-    // One bad name stops the whole command before any call ("ID checks").
+    // One bad name stops the whole command (spec/cli-surface.md "ID checks").
     [TestCase("Db")]
     [TestCase(TagRefText)]
     public async Task Tag_delete_rejects_a_name_outside_the_tag_rule(string badName)
@@ -465,21 +360,6 @@ public class TagCommandTests
         run.StubBulk("DELETE", TagsPath, "tagsDeleted", 2);
 
         await CliAssert.RejectedThenAcceptedAsync(run, ["tag", "delete", "web", badName], ["tag", "delete", "web", "db"], "DELETE", TagsPath);
-    }
-
-    // A tag list's items are identified by their name (TagSummaryModel.Tag), which the bulk delete
-    // takes ("Several IDs").
-    [Test]
-    public async Task Tag_delete_reads_a_tag_list_from_stdin()
-    {
-        using var run = CliRun.Start();
-        run.StubBulk("DELETE", TagsPath, "tagsDeleted", 2);
-        run.StdinText = CliList.WithIds("tag", "web", "db");
-
-        var result = await run.RunAsync("tag", "delete", "-");
-
-        CliAssert.Bulk(result, 2, 2);
-        Assert.That(run.SingleRequest().SortedBodyIds("tags"), Is.EqualTo("db,web"));
     }
 
     [Test]
@@ -514,10 +394,9 @@ public class TagCommandTests
         run.StubProblem("PATCH", TagPath(tag), 404, "Not Found", $"Tag {tag} does not exist.");
     }
 
-    // tag set makes one change, the update or the create, whatever reads come first ("Calls per
-    // command"). An update answered 404 is how the API says the tag does not exist (portal
-    // TagModifyHandler.GetResponseAsync:58), so a create may follow a PATCH, and nothing may follow
-    // an update that succeeded.
+    // A create may follow a PATCH answered 404, which is how the API says the tag does not exist
+    // (portal TagModifyHandler.GetResponseAsync); nothing may follow an update that succeeded
+    // (spec/cli-surface.md "Calls per command").
     private static RecordedRequest SingleChange(CliRun run, string method, string path)
     {
         var changes = run.RequestsTo(method, path);

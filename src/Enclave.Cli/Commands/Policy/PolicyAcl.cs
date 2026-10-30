@@ -7,8 +7,7 @@ using Enclave.Sdk.Network.NetworkPolicy;
 namespace Enclave.Cli.Commands.Policy;
 
 /// <summary>
-/// One ACL rule: a protocol and, for TCP and UDP, a port or range (spec/cli-surface.md "Command
-/// options", --acl).
+/// One ACL rule: a protocol and, for TCP and UDP, a port or range.
 /// </summary>
 /// <param name="Protocol">The protocol.</param>
 /// <param name="Start">The first port, or null for any and icmp.</param>
@@ -33,15 +32,13 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         : start == End ? start.ToString(CultureInfo.InvariantCulture) : string.Create(CultureInfo.InvariantCulture, $"{start}-{End}");
 
     /// <summary>
-    /// The rule as --acl writes it, lower case: tcp:8000-8100, icmp. Two rules that allow the same
-    /// traffic have the same text.
+    /// The rule as --acl writes it, lower case. Two rules that allow the same traffic have the same
+    /// text.
     /// </summary>
     public string Text => Ports is { } ports ? $"{Name(Protocol)}:{ports}" : Name(Protocol);
 
     /// <summary>
-    /// Reads --acl's value, without its label: any, icmp, or tcp or udp with a port from 1 to 65535
-    /// or a range low-high with low no greater than high ("Details"). The protocol matches ignoring
-    /// case. Null for anything else.
+    /// Reads --acl's value without its label; null when it is not a rule ("Details").
     /// </summary>
     public static PolicyAcl? Parse(string text)
     {
@@ -59,7 +56,7 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         var (_, protocol, takesPorts) = match[0];
 
         // Any and ICMP carry every port, and TCP and UDP need a port or range (portal
-        // PolicyAclModelValidator.cs).
+        // PolicyAclModelValidator).
         if (!takesPorts)
         {
             return split < 0 ? new PolicyAcl(protocol, null, null) : null;
@@ -88,11 +85,10 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
     }
 
     /// <summary>
-    /// The rule an ACL the API returned allows. The API writes a range with spaces, "8000 - 8100"
-    /// (portal PolicyModelExtensions.FormatPorts), and reads it with or without them (portal
-    /// AclConversionExtensions.TryParsePorts), so both forms give the same rule. Null when its ports
-    /// cannot be read.
+    /// Null when the ACL's ports cannot be read.
     /// </summary>
+    // The API writes a range with spaces, "8000 - 8100" (portal PolicyModelExtensions.FormatPorts),
+    // and reads it with or without them (AclConversionExtensions.TryParsePorts).
     public static PolicyAcl? FromModel(PolicyAclModel acl)
     {
         ArgumentNullException.ThrowIfNull(acl);
@@ -119,9 +115,6 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
         return new PolicyAcl(acl.Protocol, start, end);
     }
 
-    /// <summary>
-    /// The ACLs a create sends: each --acl with its label as the description.
-    /// </summary>
     public static PolicyAclModel[] FromGiven(IReadOnlyList<LabelledValue> given)
     {
         ArgumentNullException.ThrowIfNull(given);
@@ -130,8 +123,8 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
     }
 
     /// <summary>
-    /// The ACLs an update sends for --set-acl: each rule given, keeping the label of the rule the
-    /// policy has that allows the same traffic, unless the flag gives one ("Command options").
+    /// Each rule given keeps the label of the policy's rule that allows the same traffic, unless it
+    /// has one of its own.
     /// </summary>
     public static PolicyAclModel[] Keep(IReadOnlyList<LabelledValue> given, IEnumerable<PolicyAclModel> existing)
     {
@@ -147,7 +140,7 @@ internal sealed partial record PolicyAcl(PolicyAclProtocol Protocol, int? Start,
     }
 
     /// <summary>
-    /// Checks each value of an ACL option, exiting 2 for one that is not a rule.
+    /// Exits 2 for a value that is not a rule.
     /// </summary>
     public static void Check(string option, IReadOnlyList<LabelledValue>? values)
     {

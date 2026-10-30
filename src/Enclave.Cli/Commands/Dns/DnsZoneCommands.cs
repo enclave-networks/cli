@@ -4,11 +4,6 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Dns;
 
-/// <summary>
-/// The zone verbs of `dns`: list-zones, show-zone, create-zone, update-zone and delete-zone. A zone
-/// is given by its name, looked up with one list call, or by --id, which makes no lookup
-/// (spec/cli-surface.md "Names and IDs").
-/// </summary>
 internal static class DnsZoneCommands
 {
     public static CliVerb List()
@@ -49,14 +44,13 @@ internal static class DnsZoneCommands
         var autoDnsTags = verb.Add(CliOptions.TagList("--auto-dns-tags", "Give systems with these tags a name in the zone automatically.", needsEntries: true));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
-        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZoneCreateValidator.cs:32).
+        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZoneCreateValidator).
         verb.Check(context => ListValues.CheckNoRepeats(autoDnsTags.Name, context.Get(autoDnsTags), StringComparer.Ordinal));
 
         verb.SetHandler(async context =>
         {
             var org = await context.GetOrganisationAsync();
 
-            // A create sends an empty list for a list flag left out (spec/cli-surface.md "Details").
             var zone = await org.Client.Dns.CreateZoneAsync(new DnsZoneCreateModel
             {
                 Name = context.Get(name)!,
@@ -73,17 +67,15 @@ internal static class DnsZoneCommands
     public static CliVerb Update()
     {
         var (verb, zone, id) = ForZone("update-zone", "Change a zone and print it.", changes: true);
-        // The API refuses a blank zone name (portal
-        // Enclave.Api/Modules/SystemManagement/Dns/Validators/DnsZonePatchValidator.cs:16-22,
-        // NotEmpty when set) and takes empty notes (same file, 24-25, MaximumLength only), which
-        // clear them.
+        // The API refuses a blank zone name and takes empty notes, which clear them (portal
+        // DnsZonePatchValidator).
         var name = verb.Add(CliOptions.NonBlank("--name", "The zone's new name.", "a zone's name", "name"));
         var autoDnsTags = verb.Add(CliOptions.TagList("--set-auto-dns-tags", "Replace the tags whose systems get a name in the zone automatically; \"\" removes them all."));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
 
         verb.AtLeastOne(name, autoDnsTags, notes);
 
-        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZonePatchValidator.cs:28).
+        // The API refuses automatic DNS tags that hold a tag twice (portal DnsZonePatchValidator).
         verb.Check(context => ListValues.CheckNoRepeats(autoDnsTags.Name, context.Get(autoDnsTags), StringComparer.Ordinal));
 
         verb.SetHandler(async context =>
@@ -91,7 +83,6 @@ internal static class DnsZoneCommands
             var org = await context.GetOrganisationAsync();
             var zoneId = await DnsLookup.ZoneIdAsync(context, org, context.Get(zone), context.Get(id), zone.Name);
 
-            // An update sends only the fields given, so the zone keeps the rest ("Create and update").
             var patch = org.Client.Dns.UpdateZone(zoneId);
 
             if (context.Get(name) is { } newName)
@@ -126,8 +117,8 @@ internal static class DnsZoneCommands
             var org = await context.GetOrganisationAsync();
             var zoneId = await DnsLookup.ZoneIdAsync(context, org, context.Get(zone), context.Get(id), zone.Name);
 
-            // The API deletes one zone per call and answers with the zone (portal DnsController.cs:145),
-            // so delete-zone is a single-ID command: a 404 exits 5 ("Several IDs").
+            // The API deletes one zone per call (portal DnsController.DeleteZone), so delete-zone is
+            // a single-ID command ("Several IDs").
             var deleted = await SingleItem.CallAsync(() => org.Client.Dns.DeleteZoneAsync(zoneId));
 
             await context.Output.WriteAsync(deleted, context.CancellationToken);

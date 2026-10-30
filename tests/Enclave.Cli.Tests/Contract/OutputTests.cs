@@ -14,11 +14,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// stdout is JSON using the Enclave.Sdk.Api models unchanged, so field names and values match the
-// API (spec/cli-surface.md "Output"; AGENTS.md "CLI contract"). --help and --version print text
-// for people, and are the only output that is not JSON ("Errors and exit codes"). Lists and their
-// envelope are in ListTests; the output-format options the CLI does not have are in
-// ParseErrorTests.
+// stdout is the Enclave.Sdk.Api models unchanged, so field names and values match the API
+// (spec/cli-surface.md "Output"); --help and --version alone print text. ListTests covers lists.
 public class OutputTests
 {
     private const string KeySecret = "KEY-SECRET-5d1e";
@@ -39,9 +36,7 @@ public class OutputTests
         yield return SingleItem("org show", string.Empty, typeof(OrganisationPropertiesModel), ApiJson.OrgProperties(TestData.OrgName));
     }
 
-    // A command that prints one model prints it as Enclave.Sdk.Api writes it, with no envelope, and
-    // leaves stderr empty on success: a caller treats anything on stderr as an error ("Errors and
-    // exit codes").
+    // A caller treats anything on stderr as an error ("Errors and exit codes").
     [TestCaseSource(nameof(SingleItemCommands))]
     public async Task A_command_that_prints_one_item_prints_the_api_model_unchanged_and_nothing_on_stderr(string command, string path, Type model, string json)
     {
@@ -101,14 +96,10 @@ public class OutputTests
         });
     }
 
-    // Output times are UTC (AGENTS.md "CLI contract"; spec/cli-surface.md "Command options").
-    // System.Text.Json reads a DateTime written with an offset other than Z as local time in the
-    // machine's zone, and one written without a zone as of no kind (dotnet/runtime release/10.0,
-    // src/libraries/System.Text.Json/src/System/Text/Json/JsonHelpers.Date.cs, TryParseAsISO), and
-    // writes each as it holds it: the first with the machine's offset, +00:00 on a machine at UTC,
-    // and the second with no zone. The API's times are UTC, so a time without a zone is UTC too, as
-    // log reads it. EnrolmentKeyModel.Created is a DateTime (Enclave.Sdk.Api.Data). The
-    // expected text is exact, so it differs from what the machine's offset gives on every machine.
+    // System.Text.Json reads a DateTime with an offset as local time and one without a zone as of no
+    // kind, and writes each as it holds it (dotnet/runtime release/10.0, JsonHelpers.Date.cs
+    // TryParseAsISO). The API's times are UTC, so a time without a zone is UTC. An unconverted time
+    // never ends in Z, even at UTC (+00:00), so the test fails on every machine.
     [TestCase("2026-10-08T12:00:00+05:30", "2026-10-08T06:30:00Z")]
     [TestCase("2026-10-08T12:00:00", "2026-10-08T12:00:00Z")]
     public async Task A_time_the_api_writes_prints_as_the_utc_instant_with_z(string written, string printed)
@@ -124,9 +115,8 @@ public class OutputTests
         Assert.That(JsonAssert.Property(result.StdoutJson, "created").GetString(), Is.EqualTo(printed), result.ToString());
     }
 
-    // --verbose adds diagnostics on stderr only, so a caller can turn it on without changing what it
-    // parses from stdout ("Options on every command"). The diagnostics never include the token
-    // ("Login, logout and status").
+    // A caller can turn --verbose on without changing what it parses ("Options on every command").
+    // The token never appears ("Login, logout and status").
     [TestCase("system list", "systems")]
     [TestCase("system show ABCDE", "systems/ABCDE")]
     public async Task Verbose_writes_diagnostics_to_stderr_and_leaves_stdout_and_the_requests_unchanged(string command, string pathSuffix)
@@ -155,11 +145,8 @@ public class OutputTests
         });
     }
 
-    // --verbose writes diagnostics as JSON lines, { "verbose": "…" } ("Details"), and among them the
-    // method and URL of each request, so a caller can see what was sent and where without a proxy.
-    // The list reads two pages, so a CLI that logged one request per command, or none, fails, and
-    // the bulk disable is a change. Each logged request is compared with what the fake API received,
-    // in order, query included. The token is in no line ("Login, logout and status").
+    // A caller sees what was sent and where without a proxy ("Details"). The list reads two pages,
+    // so a CLI that logged one request per command fails; the bulk disable covers a change.
     [TestCase("system list", "GET")]
     [TestCase("system disable ABCDE", "PUT")]
     public async Task Verbose_logs_the_method_and_url_of_each_request_in_the_order_sent(string command, string method)
@@ -181,10 +168,8 @@ public class OutputTests
         });
     }
 
-    // The API names the gateway priority that follows the order of the gateways Ordered, and
-    // Enclave.Sdk.Api.Data names that enum member Prioritised (spec/cli-surface.md
-    // "`Enclave.Sdk.Api` changes", item 9). Output keeps the API's names ("Output"), so a policy the
-    // API sends as Ordered prints as Ordered, in a single item and in a list.
+    // Enclave.Sdk.Api.Data names this member Prioritised, and output keeps the API's name
+    // (spec/cli-surface.md "`Enclave.Sdk.Api` changes", item 9).
     [TestCase("policy show --id 7")]
     [TestCase("policy list")]
     public async Task A_policy_whose_gateway_priority_is_ordered_prints_it_as_Ordered(string command)
@@ -205,9 +190,8 @@ public class OutputTests
         Assert.That(JsonAssert.Property(printed, "gatewayPriority").GetString(), Is.EqualTo("Ordered"), result.ToString());
     }
 
-    // `enclave-cli` with no arguments prints the help and exits 0 ("Errors and exit codes"), the
-    // same text --help prints. Help is for reading before anything is set up, so neither run has a
-    // token or an organisation, and neither calls the API.
+    // Help is for reading before anything is set up, so neither run has a token or an organisation
+    // ("Errors and exit codes").
     [Test]
     public async Task No_arguments_print_the_help_that_help_prints_and_exit_0()
     {
@@ -235,8 +219,6 @@ public class OutputTests
         });
     }
 
-    // A command's help names its options, so a person can read what the command takes, and is text
-    // on stdout with an exit code of 0, needing no token or organisation and making no call.
     [TestCase("system list", "--filter")]
     [TestCase("policy create", "--acl")]
     [TestCase("commands", "--verbose")]

@@ -4,10 +4,6 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Org;
 
-/// <summary>
-/// `org use`: saves the default organisation in ~/.enclave/cli.json (spec/cli-surface.md
-/// "Login, logout and status").
-/// </summary>
 internal static class OrgUseCommand
 {
     public static CliVerb Create()
@@ -19,7 +15,7 @@ internal static class OrgUseCommand
         var name = verb.Add(CliArguments.OptionalText("name", "The organisation's name, matched whole and ignoring case."));
         var id = verb.Add(CliOptions.Id("--id", "The organisation's ID.", IdFormats.Guid, "orgId"));
         verb.ExactlyOne(name, id);
-        OrganisationResolver.RefuseBlankName(verb, name);
+        verb.RefuseBlank(name, context => context.Get(name), "an organisation name");
         EnclaveDirectory.RequireHome(verb);
 
         verb.SetHandler(async context =>

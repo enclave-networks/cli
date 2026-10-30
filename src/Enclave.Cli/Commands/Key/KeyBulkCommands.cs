@@ -5,17 +5,12 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Key;
 
-/// <summary>
-/// `key enable`, `key disable` and `key delete`: keys given by description, by --id, or as a key
-/// list on stdin, sent in bulk calls of 200, printing { requested, affected }
-/// (spec/cli-surface.md "Several IDs").
-/// </summary>
 internal static class KeyBulkCommands
 {
     public static CliVerb Enable()
     {
         var (verb, keys, ids) = Several("enable", "Enable keys; with --for or --until, enable one key until then.");
-        var timing = KeyTiming.AddTo(verb);
+        var timing = Timing.AddTo(verb, "Make the change", "key");
 
         verb.SetHandler(async context =>
         {
@@ -28,13 +23,7 @@ internal static class KeyBulkCommands
                 return;
             }
 
-            // The API's timed enable has no bulk form, so --for and --until take one key and print
-            // the key the API returns ("Several IDs").
-            if (selection.Ids.Count + selection.Names.Count != 1)
-            {
-                var option = context.IsGiven(timing.For) ? (Option)timing.For : timing.Until;
-                throw CliErrors.InvalidArgument(option.Name, $"{option.Name} enables one key, since the API's timed enable has no bulk form. Give one key.");
-            }
+            timing.RequireOne(context, selection, "key");
 
             var org = await context.GetOrganisationAsync();
             var keyId = selection.Ids.Count == 1
@@ -62,8 +51,7 @@ internal static class KeyBulkCommands
     }
 
     // One key makes the bulk call too, so the output is { requested, affected } however many keys
-    // are given ("Several IDs"); Enclave.Sdk.Api IEnrolmentKeysClient.DeleteAsync, the
-    // single delete, is left unused.
+    // are given ("Several IDs"), and the single DeleteAsync goes unused.
     public static CliVerb Delete()
     {
         var (verb, keys, ids) = Several("delete", "Delete keys.");
@@ -88,16 +76,15 @@ internal static class KeyBulkCommands
         return (verb, keys, ids);
     }
 
-    // Descriptions are looked up with one list call; IDs from --id or stdin make none. Two
-    // descriptions can name one key, so the IDs found are deduplicated as given IDs are ("Several
-    // IDs").
+    // Two descriptions can name one key, so the IDs found are deduplicated as given IDs are
+    // ("Several IDs").
     private static async Task RunAsync(
         CliContext context,
         ItemSelection<int> selection,
         Argument<IReadOnlyList<string>> keys,
         Func<OrganisationInUse, IReadOnlyList<EnrolmentKeyId>, Task<int>> call)
     {
-        if (await WroteEmptyAsync(context, selection))
+        if (await Bulk.WroteEmptyAsync(context, selection.Count))
         {
             return;
         }
@@ -109,20 +96,5 @@ internal static class KeyBulkCommands
 
         var result = await Bulk.RunAsync(keyIds, batch => call(org, batch));
         await context.Output.WriteBulkAsync(result, context.CancellationToken);
-    }
-
-    // Items.ReadAsync refuses a command given no keys, so a selection with neither IDs nor names is
-    // an empty list read from stdin. It prints { 0, 0 } and makes no call, the organisation lookup
-    // included, so a pipeline fed by an empty list succeeds ("Several IDs"). A dry run goes on to
-    // report what it would send, which for an empty list is no request ("Dry run").
-    private static async Task<bool> WroteEmptyAsync(CliContext context, ItemSelection<int> selection)
-    {
-        if (selection.Ids.Count > 0 || selection.Names.Count > 0 || context.IsDryRun)
-        {
-            return false;
-        }
-
-        await context.Output.WriteBulkAsync(new BulkResult(0, 0), context.CancellationToken);
-        return true;
     }
 }

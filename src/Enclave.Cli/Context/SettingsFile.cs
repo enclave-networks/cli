@@ -6,21 +6,19 @@ using Enclave.Configuration.Data.Identifiers;
 namespace Enclave.Cli.Context;
 
 /// <summary>
-/// ~/.enclave/cli.json, the CLI's own settings: the default organisation `org use` saves,
-/// { "org": { "id", "name" } }, and the default partner `partner use` saves, { "partner": { "id" } }.
+/// ~/.enclave/cli.json: { "org": { "id", "name" }, "partner": { "id" } }.
 /// </summary>
 internal static class SettingsFile
 {
     /// <summary>
-    /// The file's path, or null when there is no home directory (EnclaveDirectory.HomeFrom).
+    /// Null when there is no home directory.
     /// </summary>
     public static string? PathFor(CliHost host) => EnclaveDirectory.PathOf(host, "cli.json");
 
     /// <summary>
-    /// The settings object, or null when there is no file or no home directory. A file that is not
-    /// a JSON object exits 2; it is read only when no higher source chose the organisation or
-    /// partner (spec/cli-surface.md "Details"), so a malformed file fails only the commands that
-    /// need it.
+    /// Null when there is no file or no home directory. A file that is not a JSON object exits 2;
+    /// callers read it only when no higher source chose (spec/cli-surface.md "Details"), so a
+    /// malformed file fails only the commands that need it.
     /// </summary>
     public static JsonObject? Read(CliHost host)
     {
@@ -41,20 +39,38 @@ internal static class SettingsFile
     }
 
     /// <summary>
-    /// Saves the default organisation as { "org": { "id", "name" } }, keeping the saved partner.
+    /// The default saved under key ("org" or "partner"), or null when none is saved. One without a
+    /// valid ID exits 2 naming the file and saveWith, the command that saves it again.
     /// </summary>
+    // use never saves a default without a valid ID, so only a missing default means none is chosen.
+    public static (Guid Id, string? Name, string Path)? ReadDefault(CliHost host, string key, string noun, string saveWith)
+    {
+        if (PathFor(host) is not { } path || Read(host)?[key] is not { } saved)
+        {
+            return null;
+        }
+
+        if (saved is not JsonObject entry
+            || entry["id"] is not JsonValue value
+            || !value.TryGetValue(out string? text)
+            || !IdFormats.Guid.TryParse(text, out var id))
+        {
+            throw CliErrors.InvalidArgument($"The default {noun} in {path} has no valid ID. Save it again with `{saveWith}`.");
+        }
+
+        var name = entry["name"] is JsonValue savedName && savedName.TryGetValue(out string? nameText) ? nameText : null;
+        return (id, name, path);
+    }
+
     public static void SaveOrganisation(CliHost host, OrganisationGuid id, string name) =>
         Save(host, "org", new JsonObject { ["id"] = id.ToString(), ["name"] = name });
 
-    /// <summary>
-    /// Saves the default partner as { "partner": { "id" } }, keeping the saved organisation.
-    /// </summary>
     public static void SavePartner(CliHost host, Guid id) =>
         Save(host, "partner", new JsonObject { ["id"] = id.ToString("D") });
 
     /// <summary>
-    /// Sets one default and writes the file, keeping the other defaults it holds. A file that is not
-    /// a JSON object is replaced. Exits 2 when there is no home directory.
+    /// Keeps the other defaults the file holds; a file that is not a JSON object is replaced. Exits
+    /// 2 when there is no home directory.
     /// </summary>
     public static void Save(CliHost host, string key, JsonObject value)
     {

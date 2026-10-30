@@ -4,33 +4,22 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Every ID is checked before any call, and one bad ID exits 2 naming it (spec/cli-surface.md
-// "ID checks"). Organisation IDs (a partner's customers included), account IDs and partner IDs are
-// GUIDs. Enclave.Sdk.Api puts customer and account IDs into the partner API's paths as their
-// typed IDs write them (CustomersClient.CustomerRoute), so a value that is not a GUID never reaches
-// a path; "../x" is the value that matters most, since a path holding it unchecked would send the
-// request to another resource. A rejection alone does not show the command exists, so each ID case
-// runs the corrected command in the same sandbox and expects its request at the partner API.
-//
-// --dry-run prints the change a partner customer command would send, with the partner in place of
-// the organisation, and sends none of it ("Dry run"). No command prints the token ("Login, logout
-// and status").
+// spec/cli-surface.md "ID checks", "Dry run", "Login, logout and status". "../x" matters most:
+// unchecked in a path, it sends the request to another resource. Each ID case runs the corrected
+// command after the rejected one, since an unknown command is rejected the same way.
 public class PartnerSafetyTests
 {
-    // None is a GUID: a path that leaves the customer's route, plain text, a number, a customer name
-    // given to the ID option (the option decides how a value is read, and the CLI never guesses its
-    // type, "Commands"), and a GUID with a path after it.
+    // The customer name checks that the option decides how a value is read ("Commands").
     private static readonly string[] OrgIdsThatAreNotGuids = ["../x", "not-a-guid", "42", TestData.CustomerName, TestData.CustomerOrgId + "/../x"];
 
-    // As above, with an admin's email address given to --user-id, which takes only a GUID; the email
-    // address goes to --user ("Commands").
+    // The email address belongs to --user ("Commands").
     private static readonly string[] AccountIdsThatAreNotGuids = ["../x", "not-a-guid", "42", TestData.CustomerAdminEmail, TestData.PartnerStaffAccountId + "/../x"];
 
     private static readonly string[] PartnerIdsThatAreNotGuids = ["../x", "Acme Partners"];
 
     private static readonly string[] AdminVerbs = ["add-admin", "remove-admin"];
 
-    // The dry-run report of a partner command: "partner" takes the place of "org" ("Dry run").
+    // "partner" takes the place of "org" ("Dry run").
     private static readonly string[] DryRunFields = ["dryRun", "partner", "requests"];
 
     [TestCaseSource(nameof(CustomerOrgIdsThatAreNotGuids))]
@@ -51,8 +40,8 @@ public class PartnerSafetyTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync(corrected));
     }
 
-    // No other source chooses a partner here, so the option's value is the partner in use. A CLI
-    // that treated a malformed value as no value would report no_partner.
+    // No other source chooses a partner, so a CLI that treated a malformed value as no value would
+    // report no_partner.
     [TestCaseSource(nameof(PartnerIdOptionsThatAreNotGuids))]
     public async Task A_partner_id_option_that_is_not_a_guid_exits_2_before_the_partner_api(string[] rejected, string[] corrected)
     {
@@ -78,10 +67,8 @@ public class PartnerSafetyTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
-    // A dry run prints the change as Enclave.Sdk.Api builds it, for the partner, and sends none of
-    // it. The reads the change depends on are sent, as without --dry-run: the customer lookup for a
-    // customer given by name, and the admins or invites lookup for an admin or invite given by email
-    // address (spec/cli-surface.md "Dry run"). Each command's change is one call.
+    // The reads are the customer lookup and the admins or invites lookup, which the change depends
+    // on ("Dry run").
     [TestCaseSource(nameof(ChangesWithDryRun))]
     public async Task A_dry_run_of_a_partner_customer_command_prints_its_change_for_the_partner_and_sends_only_the_reads_it_depends_on(string[] args, string[] reads, string change)
     {
@@ -108,9 +95,7 @@ public class PartnerSafetyTests
         });
     }
 
-    // The report shows the body each change would send, every create field among them ("Create and
-    // update": --dry-run shows every value sent), and "body": null for a request with none ("Dry
-    // run").
+    // "body" is null for a request with none ("Dry run").
     [TestCase("create Initech", "initialSystemsCount", "50")]
     [TestCase("create Initech", "initialGatewaysCount", "0")]
     [TestCase("create Initech", "adminAutoSyncIsEnabled", "false")]
@@ -144,15 +129,10 @@ public class PartnerSafetyTests
         }
     }
 
-    // No command prints the token, under --verbose and --dry-run either (spec/cli-surface.md
-    // "Login, logout and status"): a printed token lands in CI logs and agent transcripts, and
-    // personal access tokens do not expire (portal Enclave.Accounts TokensApiController.cs:105).
-    // Each token test also requires the command to succeed, so a command that printed nothing
-    // because it did nothing does not pass, and to send exactly the requests the command table
-    // gives, each carrying the token, which shows the CLI held the token it left out. Under
-    // --dry-run the report must also show the change the command withheld ("Dry run"). create under
-    // --dry-run is the one run that sends no request: it reads nothing first, and its change is
-    // withheld. The report it prints is what shows it ran.
+    // A printed token lands in CI logs and agent transcripts, and does not expire (portal
+    // TokensApiController.Create). Each run must succeed and send its requests with the token, so a
+    // command that printed nothing because it did nothing does not pass. create under --dry-run
+    // sends nothing; its report shows it ran.
     [TestCaseSource(nameof(CustomerCommandRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls, string? withheldChange)
     {
@@ -170,9 +150,7 @@ public class PartnerSafetyTests
         AssertReportedChange(result, withheldChange);
     }
 
-    // --verbose adds diagnostics to stderr as JSON lines, { "verbose": "…" }, each request's method
-    // and URL among them ("Details"), so stderr is not empty, and every line on it is a diagnostic:
-    // none is an error, and none is text a caller reading stderr as JSON cannot parse.
+    // Under --verbose stderr holds only { "verbose" } lines, each request among them ("Details").
     [TestCaseSource(nameof(CustomerCommandRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args, string[] calls, string? withheldChange)
     {
@@ -192,8 +170,7 @@ public class PartnerSafetyTests
         AssertReportedChange(result, withheldChange);
     }
 
-    // partner use changes only cli.json, so it has no dry run. The partner command run afterwards,
-    // with no other partner source, shows the default was saved.
+    // partner use has no dry run. The partner command afterwards shows the default was saved.
     [TestCase(false)]
     [TestCase(true)]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_of_partner_use(bool verbose)
@@ -212,9 +189,7 @@ public class PartnerSafetyTests
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
-    // There is no --token option ("Options on every command"), and an error never repeats the value
-    // given to an unknown option, since that value could be a token passed by mistake ("Errors and
-    // exit codes").
+    // The value of an unknown option could be a token passed by mistake ("Errors and exit codes").
     [Test]
     public async Task A_token_given_to_an_unknown_option_is_not_repeated_in_the_error()
     {
@@ -242,8 +217,8 @@ public class PartnerSafetyTests
         from value in PartnerIdsThatAreNotGuids
         select PartnerCommandTests.Pair([.. command.ByName(), "--partner-id", value], [.. command.ByName(), "--partner-id", TestData.PartnerId.ToString()]);
 
-    // Each change, with the customer given by name and by --org-id: the reads it makes, and the
-    // change it would send as "METHOD path".
+    // Each change with the customer by name and by --org-id: its reads, and its change as "METHOD
+    // path".
     private static IEnumerable<TestCaseData> ChangesWithDryRun()
     {
         foreach (var command in PartnerCommandTests.Commands.Where(command => command.Changes))
@@ -260,9 +235,8 @@ public class PartnerSafetyTests
     private static TestCaseData DryRunCase(string[] args, string[] calls) =>
         new TestCaseData(args, calls[..^1], calls[^1]).SetArgDisplayNames(string.Join(' ', args));
 
-    // Each partner customer command alone and, where it changes something through the API, under
-    // --dry-run, with the calls it sends: all of them alone, and under --dry-run the reads before
-    // its change, with the change it withholds as "METHOD path".
+    // Each command alone, and under --dry-run where it changes something: the calls it sends, and
+    // the change it withholds as "METHOD path".
     private static IEnumerable<TestCaseData> CustomerCommandRuns()
     {
         foreach (var command in PartnerCommandTests.Commands)
@@ -281,8 +255,7 @@ public class PartnerSafetyTests
     private static TestCaseData Run(string[] args, string[] calls, string? withheldChange) =>
         new TestCaseData(args, calls, withheldChange).SetArgDisplayNames(string.Join(' ', args));
 
-    // A dry run's report lists the change it withheld, which the case gives as "METHOD path" ("Dry
-    // run"). A run without --dry-run prints the command's own output, which has no report.
+    // A run without --dry-run prints the command's own output, which has no report.
     private static void AssertReportedChange(CliResult result, string? withheldChange)
     {
         if (withheldChange is null)

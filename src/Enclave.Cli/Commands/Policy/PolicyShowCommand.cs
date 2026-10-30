@@ -3,9 +3,6 @@ using Enclave.Configuration.Data.Identifiers;
 
 namespace Enclave.Cli.Commands.Policy;
 
-/// <summary>
-/// `policy show`: one policy, as the API's GET by ID returns it.
-/// </summary>
 internal static class PolicyShowCommand
 {
     public static CliVerb Create()
@@ -21,7 +18,6 @@ internal static class PolicyShowCommand
             var org = await context.GetOrganisationAsync();
             var policyId = await PolicyLookup.IdAsync(context, org, context.Get(id), context.Get(description), description.Name);
 
-            // One policy named: a 404 means it does not exist, exit 5 ("Several IDs").
             var policy = await SingleItem.CallAsync(() => org.Client.Policies.GetAsync(PolicyId.FromInt(policyId)));
             await context.Output.WriteAsync(policy, context.CancellationToken);
         });

@@ -9,27 +9,25 @@ namespace Enclave.Cli.Tests.Support;
 /// </summary>
 internal static partial class ApiJson
 {
-    // The options Enclave.Sdk.Api reads and writes models with (Constants.JsonSerializerOptions,
-    // internal to the package): camelCase names, the gateway priority Prioritised as the API's
-    // Ordered, and other enums as their member names. The gateway priority converter goes first,
-    // since System.Text.Json uses the first converter that can convert a type.
-    private static readonly JsonSerializerOptions SdkModelJsonOptions = new()
+    // A copy of Enclave.Sdk.Api's Constants.JsonSerializerOptions, which is internal. The gateway
+    // priority converter goes first, since System.Text.Json uses the first converter that can
+    // convert a type.
+    public static JsonSerializerOptions SdkModelJsonOptions { get; } = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter() },
     };
 
     /// <summary>
-    /// The JSON Enclave.Sdk.Api writes after reading <paramref name="json"/> into <paramref name="model"/>: what a
-    /// command that prints that model prints for the body.
+    /// The JSON Enclave.Sdk.Api writes after reading <paramref name="json"/> into
+    /// <paramref name="model"/>: what a command that prints that model prints for the body.
     /// </summary>
-    // Reading through the model drops the body's fields the model lacks, such as the ones a list
-    // item's summary model does not carry. Writing is asynchronous because some models hold
-    // IAsyncEnumerable properties, which only the asynchronous serializer writes.
-    public static async Task<JsonElement> AsSdkModelAsync(string json, Type model)
-    {
-        var value = JsonSerializer.Deserialize(json, model, SdkModelJsonOptions);
+    public static Task<JsonElement> AsSdkModelAsync(string json, Type model) =>
+        WriteSdkModelAsync(JsonSerializer.Deserialize(json, model, SdkModelJsonOptions), model);
 
+    // Some models hold IAsyncEnumerable properties, which only the asynchronous serializer writes.
+    public static async Task<JsonElement> WriteSdkModelAsync(object? value, Type model)
+    {
         using var stream = new MemoryStream();
         await JsonSerializer.SerializeAsync(stream, value, model, SdkModelJsonOptions);
         stream.Position = 0;

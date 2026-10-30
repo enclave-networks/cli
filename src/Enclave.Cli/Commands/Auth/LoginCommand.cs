@@ -3,10 +3,7 @@ using Enclave.Cli.Core;
 
 namespace Enclave.Cli.Commands.Auth;
 
-/// <summary>
-/// `login`: checks a personal access token and saves it (spec/cli-surface.md "Login, logout and
-/// status").
-/// </summary>
+// spec/cli-surface.md "Login, logout and status".
 internal static class LoginCommand
 {
     public static CliVerb Create()
@@ -23,10 +20,9 @@ internal static class LoginCommand
             var host = context.Host;
             var token = await ReadTokenAsync(context, context.Get(tokenStdin));
 
-            // credentials.json's baseUrl is kept, so a file pointing at another API address points
-            // there after login too, and the token is checked at that address. Its partnerApiBaseUrl
-            // is kept as well, since staging means setting both (spec/cli-surface.md "Partner
-            // API"), and is checked as every other command checks it.
+            // The file's baseUrl is kept and the token checked there, so a file pointing at another
+            // API address keeps pointing there; partnerApiBaseUrl is kept too, since staging means
+            // setting both (spec/cli-surface.md "Partner API").
             var stored = CredentialsFile.Read(host);
             var access = new ApiAccess(
                 token,
@@ -35,15 +31,14 @@ internal static class LoginCommand
                 ApiAccess.PartnerApiBaseUrlFrom(host, stored));
             context.Verbose($"Checking the token at {access.BaseUrl}.");
 
-            // GetOrganisationsAsync needs the ReadOrgList scope. A token the API refuses throws here,
-            // before anything is written, so a bad token never replaces a working one.
+            // A token the API refuses throws here, before anything is written, so it never replaces a
+            // working one.
             var organisations = await context.CreateClient(access).GetOrganisationsAsync();
 
             CredentialsFile.Write(host, token, stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri, stored?.PartnerApiBaseUrl);
             context.Verbose($"Saved the token in {CredentialsFile.PathFor(host)}.");
 
-            // With one organisation there is one default to save; with several, the default the
-            // user chose with org use stays as it is.
+            // With several, the default the user chose with org use stays as it is.
             if (organisations.Count == 1)
             {
                 var only = organisations[0];
@@ -57,9 +52,7 @@ internal static class LoginCommand
         return verb;
     }
 
-    // login never prompts: --token-stdin with stdin a terminal exits 2 without reading it, and no
-    // token exits 3. An ENCLAVE_TOKEN that is empty once cleaned counts as unset, and stdin is read
-    // only with --token-stdin.
+    // login never prompts, so stdin that is a terminal is refused without being read.
     private static async Task<string> ReadTokenAsync(CliContext context, bool fromStdin)
     {
         if (fromStdin)
@@ -69,18 +62,6 @@ internal static class LoginCommand
                 throw CliErrors.InvalidArgument("--token-stdin", "--token-stdin reads the token from stdin, and stdin is a terminal. Pipe the token in: enclave-cli login --token-stdin < token-file.");
             }
 
-            // A token file saved with a UTF-8 byte order mark (Windows PowerShell 5.1's Out-File
-            // -Encoding utf8, Microsoft Learn, about_Character_Encoding) starts with U+FEFF when the
-            // reader passes the mark on, as Console.In does on Linux and macOS (dotnet/runtime
-            // release/10.0, src/libraries/System.Console/src/System/ConsolePal.Unix.cs,
-            // GetOrCreateReader, detectEncodingFromByteOrderMarks: false). Trim leaves it, since
-            // U+FEFF is not white space (char.IsWhiteSpace), and in the Authorization header it
-            // fails the request before it is sent: SocketsHttpHandler writes header values as ASCII
-            // and throws HttpRequestException for any other character (dotnet/runtime release/10.0,
-            // src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/HttpConnection.cs,
-            // WriteString). The reader CliHost.FromProcess gives drops the mark itself
-            // (CliHost.StdinReader); ApiAccess.TokenFrom drops it whatever reader the host gives, and
-            // cleans the token from ENCLAVE_TOKEN the same way.
             var text = await context.Host.Stdin.ReadToEndAsync(context.CancellationToken);
 
             return ApiAccess.TokenFrom(text, "stdin") ?? throw CliErrors.TokenMissing("stdin holds no token.");

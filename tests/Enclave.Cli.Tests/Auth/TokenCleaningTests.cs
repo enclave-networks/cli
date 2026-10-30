@@ -4,22 +4,18 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// The token is cleaned the same way from every source, --token-stdin, ENCLAVE_TOKEN and
-// credentials.json: a leading byte order mark is dropped and surrounding white space trimmed
-// (spec/cli-surface.md "Options on every command"). A token file saved with a byte order mark,
-// read into a variable with $(cat file), or a secret pasted with a newline then works. A cleaned
-// token that holds a character outside printable ASCII, or a space, is no personal access token,
-// so the CLI exits 3 token_invalid before any call: retrying cannot help, and an error reported
-// as transient would have an agent retry it.
+// spec/cli-surface.md "Options on every command". Cleaning lets a token file saved with a byte
+// order mark, read with $(cat file), or a secret pasted with a newline work. A bad character is
+// token_invalid: retrying cannot help, and an error reported as transient would have an agent
+// retry it.
 public class TokenCleaningTests
 {
     private const string CleanToken = "clean-token-3e9a41";
 
     private const string FileToken = "file-token-71c4d0";
 
-    // The two halves of a token with a bad character between them. Every four characters of each
-    // hold a letter outside a-f, so no run of them can come from a GUID, a port or an English word
-    // in an error message by chance.
+    // Every four characters hold a letter outside a-f, so no run of them can come from a GUID, a
+    // port or an English word in an error message by chance.
     private const string Head = "Qx7ZkPw4";
 
     private const string Tail = "Vm9RtYh3";
@@ -32,9 +28,7 @@ public class TokenCleaningTests
 
     private static readonly string[] Sources = ["ENCLAVE_TOKEN", "credentials.json", "login with ENCLAVE_TOKEN", "login --token-stdin"];
 
-    // Each source with each decoration a token picks up on its way from a file or a paste: a byte
-    // order mark, a trailing newline from Unix or Windows, and spaces around it. The token the API
-    // receives and login saves is the token without them.
+    // login saves the cleaned token too.
     [TestCaseSource(nameof(DecoratedTokens))]
     public async Task A_token_is_sent_without_a_leading_byte_order_mark_or_surrounding_white_space(string source, string given)
     {
@@ -51,13 +45,9 @@ public class TokenCleaningTests
         }
     }
 
-    // A token is printable ASCII with no space: RFC 6750 section 2.1 gives a bearer token as
-    // letters, digits and -._~+/=, and HTTP header values are visible ASCII (RFC 9110 section 5.5,
-    // with RFC 5234's VCHAR). Each character here is one a copy from a document or a two-line file
-    // can bring in. The CLI exits 3 token_invalid with no request, naming where the token came from,
-    // and prints no part of it: the token does not expire (portal
-    // Enclave.Accounts/Controllers/Api/TokensApiController.cs:105), and output reaches CI logs and
-    // agent transcripts. login saves nothing.
+    // RFC 6750 section 2.1 gives a bearer token as letters, digits and -._~+/=, and header values
+    // are visible ASCII (RFC 9110 section 5.5). The error names the source and prints no part of
+    // the token, which does not expire (portal TokensApiController.Create). login saves nothing.
     [TestCaseSource(nameof(BadTokens))]
     public async Task A_token_holding_a_character_outside_printable_ASCII_exits_3_with_token_invalid_and_sends_nothing(string source, string character)
     {
@@ -80,8 +70,7 @@ public class TokenCleaningTests
         });
     }
 
-    // An ENCLAVE_TOKEN that holds nothing once cleaned holds no token, so it counts as unset, as an
-    // empty one does ("Login, logout and status"), and the file's token is sent.
+    // The file's token is sent, as for an empty ENCLAVE_TOKEN ("Login, logout and status").
     [TestCase(" ")]
     [TestCase("\n")]
     [TestCase("﻿")]
@@ -97,8 +86,7 @@ public class TokenCleaningTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {FileToken}"));
     }
 
-    // login takes its token from stdin or ENCLAVE_TOKEN, so an ENCLAVE_TOKEN that holds nothing once
-    // cleaned leaves it no token: exit 3 token_missing, with no call and nothing saved.
+    // login takes its token from stdin or ENCLAVE_TOKEN only.
     [TestCase(" ")]
     [TestCase("\n")]
     [TestCase("﻿")]
@@ -114,8 +102,6 @@ public class TokenCleaningTests
         Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
     }
 
-    // A saved token that holds nothing once cleaned is no token, as an empty one is, so with no
-    // ENCLAVE_TOKEN the command exits 3 token_missing with no call.
     [TestCase(" ")]
     [TestCase("﻿\n")]
     public async Task A_credentials_json_token_of_only_white_space_or_a_byte_order_mark_is_no_token(string value)
@@ -172,9 +158,7 @@ public class TokenCleaningTests
         }
     }
 
-    // Puts the token in the source and stubs the call the command makes with it: system list for
-    // ENCLAVE_TOKEN and credentials.json, the two sources every command reads, and login for the
-    // two login reads.
+    // system list for the two sources every command reads, and login for the two only it reads.
     private static Command Arrange(CliRun run, string source, string token)
     {
         switch (source)
@@ -209,7 +193,6 @@ public class TokenCleaningTests
         _ => "ENCLAVE_TOKEN",
     };
 
-    // Every run of four characters in the text.
     private static IEnumerable<string> Pieces(string text) =>
         Enumerable.Range(0, text.Length - 3).Select(start => text.Substring(start, 4));
 

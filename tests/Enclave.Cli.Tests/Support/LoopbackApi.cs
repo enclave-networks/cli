@@ -12,8 +12,7 @@ using WireMock.Types;
 namespace Enclave.Cli.Tests.Support;
 
 /// <summary>
-/// Starts fake APIs that listen on 127.0.0.1 only, sets up their answers, and reads the requests
-/// they received. CliRun starts one for the main API and one for the partner API.
+/// Starts fake APIs that listen on 127.0.0.1 only, stubs their answers and reads their requests.
 /// </summary>
 internal static class LoopbackApi
 {
@@ -29,32 +28,29 @@ internal static class LoopbackApi
     internal const string JsonContentType = "application/json";
 
     // Enclave.Sdk.Api throws EnclaveApiException only for this media type
-    // (Handlers/ProblemDetailsHttpMessageHandler.cs:29); any other error body reaches the caller as
+    // (ProblemDetailsHttpMessageHandler.SendAsync); any other error body reaches the caller as
     // HttpRequestException.
     internal const string ProblemContentType = "application/problem+json";
 
-    // 421 Misdirected Request: "the request was directed at a server that is unable or unwilling to
-    // produce an authoritative response for the target URI" (RFC 9110 section 15.5.20).
+    // 421 Misdirected Request: the server cannot answer for the target URI (RFC 9110 section
+    // 15.5.20).
     private const int MisdirectedRequest = 421;
 
     /// <summary>
-    /// Starts a fake API on a loopback port the OS chooses, and returns it with its URL,
-    /// http://127.0.0.1:{port} without a trailing slash.
+    /// Returns the fake API with its URL, http://127.0.0.1:{port} without a trailing slash.
     /// </summary>
     public static (WireMockServer Api, string Url) Start()
     {
         var api = WireMockServer.Start(new WireMockServerSettings
         {
-            // Without Urls, WireMock.Net listens on every interface, which makes Windows Firewall
-            // prompt to allow the test host and accepts connections from other machines. The tests
-            // need loopback only. Port 0 has the OS choose a free port as the listener binds it, so
-            // no other process can take the port between the choice and the bind; WireMock.Net
-            // reports the port it bound in Ports (WireMock.Net 2.18.0, checked below).
+            // Without Urls, WireMock.Net listens on every interface, which raises a Windows
+            // Firewall prompt and accepts connections from other machines. Port 0 has the OS choose
+            // a free port as the listener binds it, so no other process can take it first;
+            // WireMock.Net 2.18.0 reports the bound port in Ports, checked below.
             Urls = ["http://127.0.0.1:0"],
 
-            // Enclave.Sdk.Api sends bulk revoke, decline and delete requests as DELETE with a JSON body
-            // (Enclave.Sdk.Api, SystemsClient.RevokeSystemsAsync), so every method's body
-            // is read and recorded.
+            // Enclave.Sdk.Api sends bulk revoke, decline and delete as DELETE with a JSON body
+            // (SystemsClient.RevokeSystemsAsync).
             AllowBodyForAllHttpMethods = true,
 
             // One request at a time keeps the request log in the order the CLI sent them.
@@ -73,38 +69,30 @@ internal static class LoopbackApi
     }
 
     /// <summary>
-    /// Answers requests with this method and URL path, whatever their query, with the given status
-    /// and JSON body.
+    /// Answers this method and path, whatever the query, with a JSON body.
     /// </summary>
     public static void Stub(WireMockServer api, string method, string path, int status = 200, string? json = null) =>
         api.Given(Matching(method, path)).AtPriority(GeneralPriority)
             .RespondWith(Respond(status, json, JsonContentType));
 
-    /// <summary>
-    /// The requests a fake API received, in the order it received them.
-    /// </summary>
     public static IReadOnlyList<RecordedRequest> Received(WireMockServer api) =>
         Log(api).Select(Record).ToArray();
 
     /// <summary>
     /// Answers every request whose path <paramref name="path"/> accepts, and that no stub answers,
-    /// with 421 Misdirected Request and a problem details body carrying <paramref name="detail"/>.
+    /// with 421 Misdirected Request.
     /// </summary>
     internal static void Misdirect(WireMockServer api, IStringMatcher path, string detail) =>
         api.Given(Request.Create().WithPath(path)).AtPriority(MisdirectedPriority)
             .RespondWith(Respond(MisdirectedRequest, ApiJson.Problem(MisdirectedRequest, "Misdirected Request", detail), ProblemContentType));
 
-    /// <summary>
-    /// The messages a fake API received, in the order it received them.
-    /// </summary>
     internal static IEnumerable<IRequestMessage> Log(WireMockServer api) =>
         api.LogEntries.Select(entry => entry.RequestMessage).OfType<IRequestMessage>();
 
     internal static RecordedRequest Record(IRequestMessage request)
     {
         // WireMock.Net's own query parse can split one value into several
-        // (WireMockServerSettings.QueryParameterMultipleValueSupport, default All, version 2.18.0),
-        // so the raw query is parsed here and each value kept whole.
+        // (WireMockServerSettings.QueryParameterMultipleValueSupport, WireMock.Net 2.18.0).
         var parsed = HttpUtility.ParseQueryString(request.RawQuery ?? string.Empty);
         var query = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -136,13 +124,9 @@ internal static class LoopbackApi
         Request.Create().UsingMethod(method).WithPath(new ExactMatcher(path));
 
     /// <summary>
-    /// Matches a request for this page of a list: page=<paramref name="page"/>, or no page parameter
-    /// for page 0.
+    /// Matches page=<paramref name="page"/>, or no page parameter for page 0, as the API reads it
+    /// (portal PaginatedRequestModel.Page). A page that is not a whole number matches none.
     /// </summary>
-    // The API reads a missing page parameter as page 0 (portal PaginatedRequestModel.Page), and
-    // Enclave.Sdk.Api leaves the parameter out when it is given no page number
-    // (SystemsClient.BuildQueryString and the other list clients). A parameter that is not a whole
-    // number matches no page.
     internal static IRequestBuilder MatchingPage(string path, int page) =>
         Matching("GET", path).WithParam(query => RequestedPage(query) == page);
 

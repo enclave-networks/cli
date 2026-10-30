@@ -4,9 +4,8 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Auth;
 
-// Where the token comes from, when it is checked, and that no command of this area prints it
-// (spec/cli-surface.md "Options on every command", "Errors and exit codes" and "Login, logout
-// and status").
+// spec/cli-surface.md "Options on every command", "Errors and exit codes", "Login, logout and
+// status".
 public class TokenTests
 {
     private const string FileToken = "file-token-2b8e61";
@@ -15,9 +14,8 @@ public class TokenTests
 
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
 
-    // Commands of this area, each run with --verbose to the point where the CLI holds the token:
-    // every request it sends carries the token, and the failures are ones the CLI reports after
-    // the API received it, or after resolving the organisation. Arrange sets each one up.
+    // Each runs to a point where the CLI holds the token: a failure comes after the API received it,
+    // or after resolving the organisation.
     private static readonly string[] VerboseRuns =
     [
         "login",
@@ -35,8 +33,7 @@ public class TokenTests
         "several organisations and none chosen",
     ];
 
-    // The token comes from ENCLAVE_TOKEN, then credentials.json ("Options on every command"), so an
-    // agent session can use its own token without replacing the one saved for the user.
+    // An agent session can use its own token without replacing the one saved for the user.
     [Test]
     public async Task ENCLAVE_TOKEN_takes_precedence_over_credentials_json()
     {
@@ -49,8 +46,8 @@ public class TokenTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
     }
 
-    // An empty ENCLAVE_TOKEN counts as unset ("Login, logout and status"), the value a CI job gets
-    // when its secret is missing, so the saved file supplies the token then too.
+    // An empty ENCLAVE_TOKEN is what a CI job gets when its secret is missing ("Login, logout and
+    // status").
     [TestCase(false)]
     [TestCase(true)]
     public async Task Credentials_json_supplies_the_token_when_ENCLAVE_TOKEN_is_unset_or_empty(bool empty)
@@ -74,8 +71,7 @@ public class TokenTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {FileToken}"));
     }
 
-    // An empty ENCLAVE_TOKEN with no saved file leaves no token, so the CLI reports token_missing
-    // before any call. Sending "Bearer " would turn a missing secret into a 401 and token_invalid.
+    // Sending "Bearer " would turn a missing secret into a 401 and token_invalid.
     [Test]
     public async Task An_empty_ENCLAVE_TOKEN_with_no_credentials_file_exits_3_with_token_missing()
     {
@@ -88,10 +84,8 @@ public class TokenTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // credentials.json's baseUrl is the API address, and ENCLAVE_TOKEN keeps it ("Login, logout and
-    // status": the CLI reads the file itself and passes EnclaveClientOptions to Enclave.Sdk.Api). A
-    // second fake API at another address shows where the request went; the default API receives
-    // nothing.
+    // The CLI reads the file itself and passes EnclaveClientOptions to Enclave.Sdk.Api, so
+    // ENCLAVE_TOKEN keeps the file's baseUrl ("Login, logout and status").
     [TestCase(false)]
     [TestCase(true)]
     public async Task Credentials_json_base_url_is_the_api_address_whichever_source_supplies_the_token(bool tokenFromEnvironment)
@@ -121,10 +115,8 @@ public class TokenTests
         });
     }
 
-    // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made, from
-    // new Uri(PartnerApiBaseUrl) (EnclaveClient.SetupPartnerHttpClient, Enclave.Sdk.Api), so
-    // an address that is not a URL fails every command. The CLI reports it as a bad setting naming
-    // the file, as it does a bad baseUrl, before any call.
+    // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made
+    // (EnclaveClient.SetupPartnerHttpClient), so a bad address fails every command, partner or not.
     [TestCase("not a url")]
     [TestCase("ftp://partner-api.example")]
     public async Task A_partner_api_base_url_that_is_not_an_http_or_https_url_exits_2_naming_the_file(string partnerApiBaseUrl)
@@ -139,10 +131,7 @@ public class TokenTests
         Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain(run.CredentialsPath).And.Contain("partnerApiBaseUrl"));
     }
 
-    // With no token there is nothing to authenticate with, so the CLI reports token_missing (exit 3,
-    // "Errors and exit codes") before any call, including the lookup a name or no choice of
-    // organisation makes. The commands cover the organisation commands and status, and a command
-    // that acts in an organisation given by ID and by name.
+    // Nothing is sent, the lookup a name makes included.
     [TestCase("system", "list")]
     [TestCase("system", "list", "--org", TestData.OrgName)]
     [TestCase("org", "list")]
@@ -160,13 +149,9 @@ public class TokenTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // Checks run in this order: arguments, the token, the organisation or partner, then the call
-    // ("Errors and exit codes"). With no token, the CLI reports token_missing and makes no call
-    // whatever the choice of organisation or partner would give: no_org (none chosen, several
-    // organisations), a lookup (a name in ENCLAVE_ORG), or exit 2 with no call ("Details": ENCLAVE_ORG
-    // with ENCLAVE_ORG_ID, and a malformed source that is read). The choices that exit 2 need no
-    // client, so they are the ones a CLI that chose before reading the token reports. status
-    // chooses the organisation and the partner as any command does ("Login, logout and status").
+    // "Errors and exit codes". Each choice would otherwise give no_org, a lookup, or exit 2 with no
+    // call. The choices that exit 2 need no client, so a CLI that chose before reading the token
+    // reports them.
     [TestCaseSource(nameof(ContextChoices))]
     public async Task The_token_is_checked_before_the_organisation_and_the_partner(string[] args, string choice)
     {
@@ -206,10 +191,8 @@ public class TokenTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // Arguments are checked before the token, so a command with bad arguments fails the same way
-    // with or without a token ("Errors and exit codes"): the caller fixes the command line first,
-    // and the error does not depend on the machine's credentials. Each case is run with the token
-    // and without one, and both runs must give the same error and send nothing.
+    // The caller fixes the command line first, and the error does not depend on the machine's
+    // credentials ("Errors and exit codes").
     [TestCaseSource(nameof(BadArgumentRuns))]
     public async Task A_command_with_bad_arguments_fails_the_same_way_with_or_without_a_token(string[] args)
     {
@@ -232,12 +215,9 @@ public class TokenTests
         Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
     }
 
-    // There is no --token option ("Options on every command"): a token given as an argument ends up
-    // in shell history, process listings, CI logs and agent transcripts, and personal access tokens
-    // do not expire (portal Enclave.Accounts/Controllers/Api/TokensApiController.cs:105). The option
-    // is a parse error, exit 2, and the error never repeats the value given to an unknown option,
-    // since that value can be a token ("Errors and exit codes"). ENCLAVE_TOKEN is unset and no file
-    // is saved, so a CLI that took the option as a token source runs the command.
+    // A token given as an argument ends up in shell history, process listings, CI logs and agent
+    // transcripts, and does not expire (portal TokensApiController.Create). ENCLAVE_TOKEN is unset
+    // and no file is saved, so a CLI that took the option as a token source runs the command.
     [TestCase("login", "--token", TestData.Token)]
     [TestCase("status", "--token", TestData.Token)]
     [TestCase("org", "list", "--token", TestData.Token)]
@@ -259,10 +239,8 @@ public class TokenTests
         });
     }
 
-    // No command prints the token, under --verbose either ("Login, logout and status"); a printed
-    // token lands in CI logs and agent transcripts, and personal access tokens do not expire. The
-    // token is the same in every case, whether it comes from ENCLAVE_TOKEN, stdin or the file, so
-    // one check covers every source.
+    // A printed token lands in CI logs and agent transcripts. The token is the same from every
+    // source, so one check covers them all.
     [TestCaseSource(nameof(VerboseRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_under_verbose(string name)
     {
@@ -291,10 +269,8 @@ public class TokenTests
         });
     }
 
-    // A type's ToString is what string interpolation, an exception message, a debugger or a
-    // diagnostic prints of it, so the saved credentials leave the token out of their text: no
-    // command prints the token ("Login, logout and status"). The base URLs and the token are all
-    // given, so a text that lists every value shows the token.
+    // ToString is what interpolation, an exception message or a diagnostic prints. Every value is
+    // given, so a text that lists them all shows the token.
     [Test]
     public void Saved_credentials_leave_the_token_out_of_their_text()
     {
@@ -303,13 +279,8 @@ public class TokenTests
         Assert.That(credentials.ToString(), Does.Not.Contain(TestData.Token));
     }
 
-    // Bad arguments of each kind this area has: an ID that is not a GUID, a name with its ID option,
-    // an unknown option, a missing argument, an option the command does not take ("Details"), an
-    // empty or blank organisation name, which names no organisation and would otherwise cost the
-    // lookup a name makes ("Calls per command") before matching nothing, and an empty or blank
-    // organisation or partner ID, which is no GUID ("ID checks"). status succeeds with no
-    // organisation or partner chosen ("Login, logout and status"), so a CLI that read such an ID
-    // as not given would print its status.
+    // Bad arguments of each kind in this area. status succeeds with no organisation or partner
+    // chosen, so a CLI that read a blank ID as not given would print its status.
     private static IEnumerable<TestCaseData> BadArgumentRuns()
     {
         yield return BadArguments("system", "list", "--org-id", "12");
@@ -330,8 +301,8 @@ public class TokenTests
         yield return BadArguments("org", "use", " \t ");
     }
 
-    // Each choice for an organisation command, and for status, which also reads the partner; and
-    // the partner choices for a partner command, which reads cli.json for its partner.
+    // status reads both the organisation and the partner; a partner command reads cli.json for its
+    // partner.
     private static IEnumerable<TestCaseData> ContextChoices()
     {
         string[] systemList = ["system", "list"];
@@ -357,7 +328,6 @@ public class TokenTests
     private static TestCaseData BadArguments(params string[] args) =>
         new TestCaseData((object)args).SetArgDisplayNames(string.Join(" ", args.Select(arg => string.IsNullOrWhiteSpace(arg) ? $"'{arg}'" : arg)));
 
-    // Stubs what each command needs to reach its outcome, and returns its arguments and exit code.
     private static CommandRun Arrange(CliRun run, string name)
     {
         var oneOrg = ApiJson.Orgs((TestData.OrgId, TestData.OrgName));
