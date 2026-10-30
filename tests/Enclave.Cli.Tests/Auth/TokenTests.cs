@@ -16,7 +16,7 @@ public class TokenTests
 
     // Each runs to a point where the CLI holds the token: a failure comes after the API received it,
     // or after resolving the organisation.
-    private static readonly string[] VerboseRuns =
+    private static readonly string[] TokenRuns =
     [
         "login",
         "login --token-stdin",
@@ -240,14 +240,15 @@ public class TokenTests
     }
 
     // A printed token lands in CI logs and agent transcripts. The token is the same from every
-    // source, so one check covers them all.
-    [TestCaseSource(nameof(VerboseRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_under_verbose(string name)
+    // source, so one check covers them all. A run that calls the API prints a trace, so the check
+    // covers it.
+    [TestCaseSource(nameof(TokenRuns))]
+    public async Task The_token_appears_in_neither_stdout_nor_stderr(string name)
     {
         using var run = CliRun.Start();
         var command = Arrange(run, name);
 
-        var result = await run.RunAsync([.. command.Args, "--verbose"]);
+        var result = await run.RunAsync(command.Args);
 
         var requests = run.Requests;
 
@@ -261,6 +262,8 @@ public class TokenTests
             {
                 Assert.That(requests, Is.Not.Empty);
                 Assert.That(requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
+                var trace = result.ExitCode == 0 ? result.StdoutTrace : result.StderrTrace;
+                Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.Not.Empty, result.ToString());
             }
             else
             {
@@ -269,8 +272,8 @@ public class TokenTests
         });
     }
 
-    // ToString is what interpolation, an exception message or a diagnostic prints. Every value is
-    // given, so a text that lists them all shows the token.
+    // ToString is what interpolation or an exception message prints. Every value is given, so a
+    // text that lists them all shows the token.
     [Test]
     public void Saved_credentials_leave_the_token_out_of_their_text()
     {

@@ -148,7 +148,7 @@ public class SystemCommandTests
         CliAssert.Rejected(run, result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(result.Error.GetProperty("errors")), Is.EqualTo("--dns-name"));
+            CliAssert.Problems(result.Error, "--dns-name");
             Assert.That(result.Error.GetProperty("detail").GetString(), Does.Contain("--dns-name"));
         });
     }
@@ -319,7 +319,7 @@ public class SystemCommandTests
         var tokenless = await withoutToken.RunAsync(contradicting);
 
         CliAssert.Rejected(withoutToken, tokenless);
-        Assert.That(JsonRead.PropertyNameList(tokenless.Error.GetProperty("errors")), Is.EqualTo("--state"));
+        CliAssert.Problems(tokenless.Error, "--state");
         await CliAssert.RejectedThenAcceptedAsync(run, contradicting, ["system", "list", "--not-seen-for", "1d"], "GET", SystemsPath);
     }
 
@@ -348,7 +348,7 @@ public class SystemCommandTests
         var rejected = await run.RunAsync("system", "list", "--not-seen-for", "1000000d");
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--not-seen-for"));
+        CliAssert.Problems(rejected.Error, "--not-seen-for");
         await CliAssert.AcceptedAsync(run, "GET", SystemsPath, "system", "list", "--not-seen-for", "90d");
     }
 
@@ -665,7 +665,7 @@ public class SystemCommandTests
         CliAssert.Rejected(run, rejected);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--enable-gateway-for"));
+            CliAssert.Problems(rejected.Error, "--enable-gateway-for");
             Assert.That(rejected.Stderr, Does.Not.Contain("10.0.0.0"));
         });
 

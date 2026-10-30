@@ -218,7 +218,7 @@ public class DryRunTests
             run.SaveCredentials(TestData.Token);
         }
 
-        var result = await run.RunAsync("system", "revoke", "ABCDE", "--org", TestData.OrgName, "--dry-run", "--verbose");
+        var result = await run.RunAsync("system", "revoke", "ABCDE", "--org", TestData.OrgName, "--dry-run");
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>

@@ -19,7 +19,7 @@ public class LoginTests
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
     // The format Enclave.Sdk.Api reads (EnclaveClient.ReadCredentialsFile). login keeps a
-    // partnerApiBaseUrl already there and never adds one.
+    // partnerApiBaseUrl already there, and adds one only from ENCLAVE_PARTNER_API_URL.
     private static readonly string[] CredentialsFields = ["personalAccessToken", "baseUrl"];
 
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");

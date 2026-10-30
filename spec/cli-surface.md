@@ -1,12 +1,16 @@
 # CLI surface
 
-`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api`. AI agents are the main users; people use it too. This file lists the commands and the behaviour they share.
+`enclave-cli` drives the Enclave Management API and the Enclave Partner API through `Enclave.Sdk.Api`. This file lists the commands and the behaviour they share.
+
+## Who it is for
+
+`enclave-cli` is for programs that automate Enclave, and for the people who read those programs' calls to it: the command line and what it printed, in a transcript or a log. Every choice of input and output is made for that reader, provided the calling program still gets what it needs: JSON it can parse, exit codes it can branch on, and no prompts. A choice that serves neither the calling program nor the reader is not made.
 
 ## Shape and naming
 
 `enclave-cli <noun> <verb> [arguments] [options]`
 
-- A command is a noun and a verb: `system list`, `policy create`. A noun's own parts take a hyphenated verb in place of another level: `dns create-hostname`, `org remove-user`, `partner customer add-admin`. `partner customer` is the one second-level noun, since customers have a dozen verbs of their own.
+- A command is a noun and a verb: `system list`, `policy create`. A noun's own parts take a hyphenated verb in place of another level: `dns create-hostname`, `org remove-user`, `partner customer add-admin`. `partner customer` is the one second-level noun, since customers have a full set of verbs of their own.
 - Nouns are singular. Most commands act on one item (`policy delete <policy>`), and singular reads correctly there. A plural name is accepted as a hidden alias (`systems list` runs `system list`), so a guess works; help and `commands` show the singular name only.
 - Nouns use the same verbs wherever the API supports them: `list`, `show`, `create`, `update`, `delete`, `enable`, `disable`. Other verbs take the API's name: `revoke`, `approve`, `decline`, `convert`, `invite`.
 - A flag is named for what it does, in plain words: `--auto-approve` sets `ApprovalMode`, `--uses` sets `UsesRemaining`, `--ephemeral` sets `Type`. Where an API field name already reads plainly, the flag keeps it (`--notes` sets `Notes`), shortened where it is long: `--senders` sets `SenderTags`, `--receivers` sets `ReceiverTags`, `--trust` sets `SenderTrustRequirements`.
@@ -19,10 +23,12 @@ Where a command acts:
 
 ## Commands
 
+Each command has a user-facing reference page under `docs/commands/`, named for its command words (for example, `docs/commands/system/approve.md`). The [command index](../docs/commands/README.md) links to every page. The repository README links to the index. These pages explain use, examples and output; this specification remains the source for command behaviour.
+
 ```
 enclave-cli
 ├── login --token-stdin                         check a personal access token and save it
-├── logout                                      delete the saved token file
+├── logout                                      delete the saved credentials file
 ├── status                                      token source, organisation and partner in use, your role
 ├── org
 │   ├── list
@@ -41,7 +47,7 @@ enclave-cli
 │       ├── show <customer>
 │       ├── create <name>
 │       ├── update <customer>
-│       ├── convert <customer>                  converts the customer to paid
+│       ├── convert <customer>                  convert the customer to paid
 │       ├── list-admins <customer>
 │       ├── add-admin <customer> --user-id <accountId>
 │       ├── remove-admin <customer> --user <email> | --user-id <accountId>
@@ -127,8 +133,8 @@ enclave-cli
 | `policy create <description>` | `--senders a,b`, `--receivers a,b`, `--acl <protocol>[:<ports>][=<label>]` (repeatable), `--trust <name>,...`, `--trust-id <id>,...`, `--gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--subnet-filter <range>[=<label>]` (repeatable), `--active-hours <hours>`, `--for <duration>` or `--until <time>`, `--then disable\|delete`, `--notes`, `--disabled` |
 | `policy update` | `--description`, `--notes`, `--set-senders a,b`, `--set-receivers a,b`, `--set-acl <protocol>[:<ports>][=<label>]` (repeatable), `--set-trust <name>,...`, `--set-trust-id <id>,...`, `--set-gateway <systemId>:<route>,...` (repeatable), `--mode balanced\|ordered\|geographic`, `--set-subnet-filter <range>[=<label>]` (repeatable), `--set-active-hours <hours>` |
 | `trust list` | `--filter <text>`, `--type user-auth\|public-ip`, `--sort` |
-| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` and `--client-id <id>` (okta, jumpcloud, duo, oidc; both required), `--audience <value>` (same four), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>[=<label>]`, `--block-ip <range>[=<label>]`, `--allow-country <code>[=<label>]`, `--block-country <code>[=<label>]` (each repeatable) |
-| `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...). Each replaces only the conditions of its own kind: `--set-allow-country` replaces the allowed countries and leaves the IP ranges and blocked countries as they are. It does not change a requirement's authority: to change the authority, create a new requirement and delete the old one |
+| `trust create <description>` | `--notes`; a sign-in requirement: `--authority portal\|azure\|google\|okta\|jumpcloud\|duo\|oidc`, `--tenant <id>` (azure), `--authority-uri <url>` and `--client-id <id>` (okta, jumpcloud, duo, oidc; both required), `--audience <value>` (same 4), `--claim <claim>=<value>` (repeatable); a public IP requirement: `--allow-ip <range>[=<label>]`, `--block-ip <range>[=<label>]`, `--allow-country <code>[=<label>]`, `--block-country <code>[=<label>]` (each repeatable) |
+| `trust update` | `--description`, `--notes`, and the create flags for its type with a `--set-` prefix (`--set-claim`, `--set-allow-ip`, ...). Each replaces only the conditions of its own kind: `--set-allow-country` replaces the allowed countries and leaves the IP ranges and blocked countries as they are. It does not change a requirement's authority: to change the authority, create a new requirement and delete the old one. |
 | `tag list` | `--filter <text>`, `--sort` |
 | `tag set` | `--name <new>`, `--colour`, `--trust <name>,...`, `--trust-id <id>,...`, `--notes` |
 | `dns create-zone` | `--auto-dns-tags a,b`, `--notes` |
@@ -153,13 +159,13 @@ enclave-cli
   | `geographic` | the one closest to the system |
 
   Without the flag the CLI sends `balanced`. `--mode` applies to gateway policies only: on `policy create` without `--gateway` it exits 2.
-- `--enable-gateway-for 10.0.0.0/16 --enable-gateway-for 10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one. As in the portal, it replaces the routes a user entered and keeps the subnets the system found itself (`userEntered: false`). It sends new routes with `userEntered: true` and weight 0, and a route that stays keeps its weight (portal-spa `redux/reducers/app/detailTab/systems.ts`). The two flags together exit 2.
+- `--enable-gateway-for 10.0.0.0/16 --enable-gateway-for 10.1.0.0/16` makes the system a gateway for those subnets, replacing any it had; `--disable-gateway` stops it acting as one. As in the portal, it replaces the routes a user entered and keeps the subnets the system found itself (`userEntered: false`). It sends new routes with `userEntered: true` and weight 0, and a route that stays keeps its weight (portal-spa `redux/reducers/app/detailTab/systems.ts`). Both flags together exit 2.
 - `--subnet-filter`, `--allow-ip`, `--block-ip`, `--allow-country`, `--block-country`, `--acl` and `--enable-gateway-for` take an optional label after `=`, which the API stores with each entry: `--subnet-filter "104.47.0.0/17=Exchange Online"`. The label is sent as the entry's `description` (`gatewayAllowedIpRanges`, `ipConstraints`, `acls`, trust requirement `conditions`) or `name` (`gatewayRoutes`). The CLI splits at the first `=`, which no range, country code, ACL or subnet contains, so a label can itself contain `=`. These flags are repeated, never comma lists, since a label can contain a comma.
 - A flag that replaces a list keeps the label of every entry that stays: `--set-subnet-filter 104.47.0.0/17` on a policy that already has that range labelled "Exchange Online" keeps the label. A label given with the flag replaces it, and an empty one, `104.47.0.0/17=`, removes it. New entries without a label have none. Labels set in the portal survive an update from the CLI.
 - `--active-hours "mon-fri 08:00-18:00 Europe/London"` takes days, a start and end time, and an IANA time zone (UTC when left out). `--set-active-hours ""` removes the restriction. A start equal to the end (`mon 08:00-08:00`, `00:00-00:00` included) exits 2: the agent counts a time as active when it is at or after the start and before the end, so such hours are never active (services `Enclave.Discover/Policy/SystemIsopActiveHoursExtensions.cs`).
 - `--keep-disconnected 30m` keeps systems enrolled with an ephemeral key for that long after they disconnect. Without `--ephemeral` it exits 2; the API accepts it only on ephemeral keys (portal `EnrolmentKeyCreateValidator.cs`).
 - `--for 8h` (a duration: `30m`, `8h`, `14d`) or `--until <time>` makes the change temporary. Afterwards the item is disabled; `--then revoke` (systems) or `--then delete` (keys, policies) removes it instead. `enable` and `create` both take them.
-- `--until` takes an RFC 3339 time with its zone (`2026-10-09T17:30:00Z`, `2026-10-09T17:30:00-04:00`), or a time without a zone, which is read in the machine's time zone: a date and time, `2026-10-09T17:30`, or a clock time, `18:00`, meaning its next occurrence. The CLI takes the time zone from the system, and the user never sets it. Formats do not follow the system locale, so a command means the same on every machine. `--since` and `--until` on `log` read times the same way, except that a clock time means its latest occurrence at or before now, since they name a time in the log's past. In the hour repeated when daylight saving ends, a clock time happens twice, and the CLI takes whichever of the two is next, or latest on `log`: at 01:15 on the night the clocks go back from 02:00, `--until 01:30` is 15 minutes away. Output times are UTC.
+- `--until` takes an RFC 3339 time with its zone (`2026-10-09T17:30:00Z`, `2026-10-09T17:30:00-04:00`), or a time without a zone, which is read in the machine's time zone: a date and time, `2026-10-09T17:30`, or a clock time, `18:00`, meaning its next occurrence. The CLI takes the time zone from the system and has no way to set it. Formats do not follow the system locale, so a command means the same on every machine. `--since` and `--until` on `log` read times the same way, except that a clock time means its latest occurrence at or before now, since they name a time in the log's past. In the hour repeated when daylight saving ends, a clock time happens twice, and the CLI takes whichever occurrence is next, or latest on `log`: at 01:15 on the night the clocks go back from 02:00, `--until 01:30` is 15 minutes away. Output times are UTC.
 - `key create` sends every setting of the key, with the portal's values: the general-purpose defaults from portal-spa `createKeyDetailsSaga.ts`, and for an ephemeral key the automatic approval and unlimited uses the portal sends (`createEnrolmentKeySaga.ts`) and its 30-minute default (`appConstants/enrolmentKeys.ts`):
 
   | Key | Approval | Uses | Keeps disconnected systems |
@@ -169,20 +175,20 @@ enclave-cli
 
   As in the portal, an ephemeral key always approves automatically and has unlimited uses, so `--ephemeral` with `--auto-approve` or `--uses` exits 2.
 - `dns create-hostname` sends the record type `ENCLAVE`, the only type the API has (portal `DnsRecordTypeFormatConverter.cs`).
-- These lists exit 2 before any call when they hold a value twice, since the API refuses them: on `policy create` and `policy update`, `--senders`, `--receivers`, `--trust` and `--trust-id`, and their `--set-` forms (portal `PolicyCreateModelValidator.cs`, `PolicyPatchModelValidator.cs`); `tag set --trust` and `--trust-id` (`TagCreateModelValidator.cs`, `TagPatchModelValidator.cs`); `system update --enable-gateway-for` given one subnet twice, with a label or without (`SystemPatchModelValidator.cs`); `dns create-hostname --tags` (`DnsRecordCreateValidator.cs`); `--auto-dns-tags` and `--set-auto-dns-tags` (`DnsZoneCreateValidator.cs`, `DnsZonePatchValidator.cs`); and `--systems` and `--set-systems`. The API upper-cases system IDs and answers 404 `no-such-system` when it finds fewer systems than it was given (`DnsRecordCreateHandler.cs`, `DnsRecordHandlerBase.cs`), so `ABCDE,abcde` names one system twice. Trust requirement names compare ignoring case, as name lookups do. The API also refuses a system's tags with a tag twice (`SystemPatchModelValidator.cs`, `UnapprovedSystemPatchModelValidator.cs`); `--set-tags`, `--add-tags` and `--remove-tags` send the list with each tag once, so a tag given twice is sent once. The API stores a repeated `--acl`, `--subnet-filter`, IP range or country, and two `--gateway` entries for one system, and the CLI sends them as given.
-- `trust create` takes its type from its flags: `--authority` makes a sign-in requirement, `--allow-*` and `--block-*` a public IP requirement, and mixing the two exits 2.
-- A public IP requirement is a list of conditions, each an IP range or a country, allowed or blocked (`{type, value, isBlocked, description}`, portal `TrustRequirementSettingsPublicIpValidator.cs`). The CLI sends `isBlocked` on every condition; the check skips an IP condition without it (services `Enclave.Discover/TrustValidators/PublicIpValidator.cs`). A system's public address must pass both checks (same file, 31-144):
+- These lists exit 2 before any call when they hold a value twice, since the API refuses them: on `policy create` and `policy update`, `--senders`, `--receivers`, `--trust` and `--trust-id`, and their `--set-` forms (portal `PolicyCreateModelValidator.cs`, `PolicyPatchModelValidator.cs`); `tag set --trust` and `--trust-id` (`TagCreateModelValidator.cs`, `TagPatchModelValidator.cs`); `system update --enable-gateway-for` given one subnet twice, with a label or without (`SystemPatchModelValidator.cs`); `dns create-hostname --tags` (`DnsRecordCreateValidator.cs`); `--auto-dns-tags` and `--set-auto-dns-tags` (`DnsZoneCreateValidator.cs`, `DnsZonePatchValidator.cs`); and `--systems` and `--set-systems`. The API upper-cases system IDs and answers 404 `no-such-system` when it finds fewer systems than it was given (`DnsRecordCreateHandler.cs`, `DnsRecordHandlerBase.cs`), so `ABCDE,abcde` names one system twice. Trust requirement names compare ignoring case, as name lookups do. The API also refuses a system's tags with a tag twice (`SystemPatchModelValidator.cs`, `UnapprovedSystemPatchModelValidator.cs`); `--set-tags`, `--add-tags` and `--remove-tags` send the list with each tag once, so a tag given twice is sent once. The API stores a repeated `--acl`, `--subnet-filter`, IP range or country, and 2 `--gateway` entries for the same system, and the CLI sends them as given.
+- `trust create` takes its type from its flags: `--authority` makes a sign-in requirement, `--allow-*` and `--block-*` a public IP requirement, and flags of both kinds together exit 2.
+- A public IP requirement is a list of conditions, each an IP range or a country, allowed or blocked (`{type, value, isBlocked, description}`, portal `TrustRequirementSettingsPublicIpValidator.cs`). The CLI sends `isBlocked` on every condition; the check skips an IP condition without it (services `Enclave.Discover/TrustValidators/PublicIpValidator.cs`). A system's public address must pass both checks (same file, `IsTrustRequirementMetAsync`, `IsIpValid` and `IsCountryValidAsync`):
 
   | Check | Passes when |
   |---|---|
-  | ranges | no `--allow-ip` is given and no `--block-ip` range contains the address, or an `--allow-ip` range contains it. Where an allowed and a blocked range both contain it, the smaller range wins |
+  | ranges | no `--allow-ip` is given and no `--block-ip` range contains the address, or an `--allow-ip` range contains it. Where an allowed and a blocked range both contain it, the smaller range wins. |
   | countries | the address's country is not blocked, and is allowed when any `--allow-country` is given |
 
   The ranges are checked first, and a failed range check is not overridden by an allowed country.
-- `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 two-letter codes, matched ignoring case.
-- Each authority takes only its own settings: `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2; the API refuses one for `azure` and `portal` only (portal `TrustRequirementSettingsUserAuthValidator.cs`), and stores it for the others. A setting given `""` or only white space exits 2 too: the API refuses an `--authority-uri` that is not https, and a `--client-id` or `--audience` that is empty or white space (same file, 47-49, which test with `string.IsNullOrWhiteSpace`, `DictionaryValidationExtensions.cs`), and stores a blank `--tenant`, since for `azure` it checks only which keys are present (same file, 35-38). On `trust update`, a `--set-` setting given only white space exits 2 the same way, and so do `--set-authority-uri ""` and `--set-client-id ""`, since the authority requires both. `--set-audience ""` and `--set-tenant ""` remove the setting, since both are optional.
-- `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". It sends the update, and on a 404 sends the create. Under `--dry-run` it reads the tag instead, to show which of the two it would send. `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
-- A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs, 432-437`).
+- `--claim groups=<object id>` requires that claim in the user's sign-in token. Countries are ISO 3166 2-letter codes, matched ignoring case.
+- Each authority takes only its own settings: `azure` takes `--tenant`; `portal` and `google` take none; `okta`, `jumpcloud`, `duo` and `oidc` require `--authority-uri` (https) and `--client-id`, and take `--audience`. A setting the authority does not take exits 2; the API refuses one for `azure` and `portal` only (portal `TrustRequirementSettingsUserAuthValidator.cs`), and stores it for the others. A setting given `""` or only white space exits 2 too: the API refuses an `--authority-uri` that is not https, and a `--client-id` or `--audience` that is empty or white space (same file, the generic authorities' rules, whose `MustHaveKeyWithValue` and `KeyNotEmptyIfSet` test with `string.IsNullOrWhiteSpace`, `DictionaryValidationExtensions.cs`), and stores a blank `--tenant`, since for `azure` it checks only which keys are present (same file, the `AzureAuthority` rule, `AllowedKeys`). On `trust update`, a `--set-` setting given only white space exits 2 the same way, and so do `--set-authority-uri ""` and `--set-client-id ""`, since the authority requires both. `--set-audience ""` and `--set-tenant ""` remove the setting, since both are optional.
+- `tag set <tag>` updates the tag, and creates it when it does not exist: the API has separate create and update calls, and to a user both mean "make tag `web` look like this". It sends the update, and on a 404 sends the create. Under `--dry-run` it reads the tag instead, to show which call it would send. `--trust` replaces the tag's trust requirements. `--name` renames, so the tag must exist.
+- A tag named on a system, key or policy appears in `tag list` without being created, and the API deletes it again when nothing uses it. `tag set` makes a tag permanent: it stays when nothing uses it (portal `TagsRepository.cs`: `CreateAsync` and `UpdateAsync` set `Persistent`, and `DecrementTagCounterAsync` deletes only a tag without it).
 - `partner customer create` sends every field of the API's `CustomerCreateModel`, with the partner portal's values when a flag is left out (portal `Enclave.Partner.Portal.Client/Pages/AddNewCustomer.razor`, `Shared/AdminTable.razor`):
 
   | Flag | API field | Without the flag |
@@ -208,12 +214,13 @@ enclave-cli
 |---|---|---|
 | `--org <name>`, `--org-id <orgId>` | commands that act within an organisation, and `commands --search-keys` | the organisation to use (see "Context") |
 | `--partner-id <partnerId>` | `partner` commands | the partner to use (see "Context") |
-| `--verbose` | every command | diagnostics on stderr |
 | `--dry-run` | commands that change something through the API | prints the request and sends nothing |
 
 Option values that name an API enum (`--sort`, `--type`, `--approval`, `--then`, `--state`, `--os`, `--level`, `--mode`) take lower-case, hyphenated names (`recently-connected`, `general`, `automatic`, `revoke`), matched ignoring case. A value is renamed where the API's name does not say what it does: `--then revoke` for `Delete` on a system. JSON output keeps the API's own names. `commands` lists the allowed values.
 
 The token comes from `ENCLAVE_TOKEN`, then `~/.enclave/credentials.json`. From either, and from `login --token-stdin`, the CLI drops a byte order mark at the start and white space around the token; an `ENCLAVE_TOKEN` left empty counts as unset. A token that then holds a space, a control character or a character outside ASCII exits 3 `token_invalid` before any call, with an error that names where the token came from and holds no part of it. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs` issues them with `TimeSpan.MaxValue`).
+
+The API address comes from `ENCLAVE_API_URL`, then `baseUrl` in `credentials.json`, then `https://api.enclave.io`. The partner API address comes from `ENCLAVE_PARTNER_API_URL`, then `partnerApiBaseUrl` in `credentials.json`, then `https://partner-api.enclave.io`. With these variables, a CI job reaches staging without writing a file, and its definition shows which API it calls. An address that isn't an absolute `http` or `https` URL exits 2 before any call, with an error that names where the address came from. An empty variable counts as unset.
 
 ## Context
 
@@ -236,16 +243,14 @@ Partner:
 
 ## Several IDs
 
-- A command that takes several items takes any number of them: system IDs or names as arguments, or IDs as `--id 42,43,57`. `-` in place of the arguments reads a list printed by an `enclave-cli` list command from stdin and acts on its items by ID; duplicates are removed.
+- A command that takes several items takes any number of them: system IDs or names as arguments, or IDs as `--id 42,43,57`. `-` in place of the arguments reads a list printed by an `enclave-cli` list command from stdin and acts on its items by ID. Duplicate IDs are removed, whether given as arguments, with `--id` or through `-`.
 - The list's `kind` must match the command: `system approve` and `decline` take the output of `system list --pending`, the other `system` verbs take `system list`, `key` verbs take `key list`, and so on. Any other kind, or input that is not a list, exits 2. Keys, policies, zones, hostnames and trust requirements all have integer IDs, so the kind is what stops `key list | enclave-cli policy delete -` deleting the policies that share those numbers.
 - A command that accepts several IDs always makes the bulk call, also for one ID, so its output is always `{ "requested": n, "affected": m }`. The bulk calls return a count only, and bulk approve succeeds when some IDs were not approved (portal `UnapprovedSystemsController.cs`). `affected` lower than `requested` means some IDs were unknown or already in that state; the exit code is 0, so a re-run after a timeout is safe.
-- The API takes at most 200 IDs per bulk call (portal `Enclave.Utilities/HardLimits.cs`, `MaxBulkIds`), so the CLI sends more than 200 in calls of 200 and adds up `requested` and `affected`. If a call fails, the CLI stops, and the error carries `requested` and `affected` for the calls that succeeded. Running the command again is safe for the reason above.
+- The API takes at most 200 IDs per bulk call (portal `Enclave.Utilities/HardLimits.cs`, `MaxBulkIds`), so the CLI sends the IDs in the order given, in calls of 200, and adds up `requested` and `affected`. If a call fails, the CLI stops, and the error object carries `requested` and `affected` for the calls that succeeded, beside `code`. Running the command again is safe for the reason above.
 - `-` given an empty list prints `{ "requested": 0, "affected": 0 }`, makes no call and exits 0, so a pipeline fed by an empty list succeeds. `--id` with no ID in it (`--id ""`, `--id ,`) names nothing and exits 2, as a command given no items does.
 - `-` when stdin is a terminal exits 2. The CLI never waits for input.
 - `--for` and `--until` take one item and print the updated model; the API's timed enable has no bulk form. A name given twice, in either case, is one item, since names match ignoring case. `dns delete-zone` takes one zone; the API has no bulk zone delete (portal `DnsController.cs`).
 - Single-ID commands (`show`, `update`, `--for` and `--until`, `dns delete-zone`, `org remove-user`, `org cancel-invite`, and the partner customer commands) print the model and exit 5 for an unknown ID. `org invite` prints the invite the API returns.
-- IDs are sent in the order given, and each bulk call takes the next 200. Duplicate IDs are removed, whether given as arguments, with `--id` or through `-`.
-- When a bulk call fails after earlier calls succeeded, the error object carries `requested` and `affected` for the calls that succeeded, beside `code`.
 
 Example, approving every system enrolled with key 12:
 
@@ -282,14 +287,14 @@ Keys, policies, DNS zones, hostnames and trust requirements are given as argumen
 
 ## ID checks
 
-Every ID is checked before any call, and one bad ID exits 2. `Enclave.Sdk.Api` escapes IDs in URL paths, so `system decline ../systems/ABCDE` cannot reach another route. The CLI also checks every ID itself, so a malformed one exits 2 with an error that names it, and no request is sent.
+The CLI checks every ID before any call: one malformed ID exits 2 with an error that names it, and no request is sent. `Enclave.Sdk.Api` also escapes IDs in URL paths, so `system decline ../systems/ABCDE` cannot reach another route.
 
 | ID | Format |
 |---|---|
 | system | letters and digits, read in upper case (see "Names and IDs") |
 | tag | `^([a-z0-9]+[-.])*[a-z0-9]+$`, the API's tag rule (portal `TagValidationExtensions.cs`); tags are given by name only |
 | organisation (a partner's customers included), account, partner | GUID other than all zeros (`00000000-0000-0000-0000-000000000000`), which names nothing; also in `ENCLAVE_ORG_ID`, `ENCLAVE_PARTNER_ID` and a saved default |
-| key, policy, zone, hostname, trust requirement | integer, after `--id` or an option naming the item (portal `Enclave.Configuration.Data/Identifiers`, `IdBackingType.Int`). A name goes to the lookup and never into a URL path |
+| key, policy, zone, hostname, trust requirement | integer, after `--id` or an option naming the item (portal `Enclave.Configuration.Data/Identifiers`, `IdBackingType.Int`). A name goes to the lookup and never into a URL path. |
 | partner API invite | found by email in the customer's invites, so the CLI never takes an invite ID from the user |
 
 ## Changes run when given
@@ -317,7 +322,7 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 - Every field is set with a flag. An update sends only the fields given; the rest are left as they are.
 - A create sends a value for every setting that changes behaviour. When a flag is left out, it sends the value this document gives, for example enabled unless `--disabled`, so a change to the API's own defaults does not change what a command does. `--dry-run` shows every value sent.
 - `--set-tags` and `--set-systems` replace the whole list, and `--set-tags ""` clears it. Tags decide policy membership, so the flag's name says it replaces.
-- `--add-tags` and `--remove-tags` change the list in place: the CLI reads the item, then patches the whole list. A change someone else makes between the two calls is overwritten; `--set-tags` gives an exact list.
+- `--add-tags` and `--remove-tags` change the list in place: the CLI reads the item, then patches the whole list. A change someone else makes between the read and the patch is overwritten; `--set-tags` gives an exact list.
 
 ## Details
 
@@ -328,13 +333,13 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
   - `--enable-gateway-for` with `--disable-gateway`;
   - a name with its ID option: `--org` with `--org-id`, `--user` with `--user-id`, a name argument with `--id`, or `ENCLAVE_ORG` with `ENCLAVE_ORG_ID`.
 - An option a command does not take, such as `--dry-run` on a read or `--partner-id` on an organisation command, is unknown to it and exits 2.
-- `--pending` with options only enrolled systems have (`--state`, `--os`, `--type`, `--gateway`, `--include-disabled`, `--not-seen-for`, the gateway flags) exits 2, and so does `--waiting-for` without `--pending`. With `--pending`, `--sort` takes the waiting-systems sort values. The waiting-systems search also takes `os:` and `type:` terms, but `--os` and `--type` stay on enrolled systems by decision; `--filter "os:Windows"` reaches those terms with `--pending`.
+- `--pending` with options only enrolled systems have (`--state`, `--os`, `--type`, `--gateway`, `--include-disabled`, `--not-seen-for`, the gateway flags) exits 2, and so does `--waiting-for` without `--pending`. With `--pending`, `--sort` takes the waiting-systems sort values. The waiting-systems search also takes `os:` and `type:` terms, but `--os` and `--type` stay on enrolled systems by design; `--filter "os:Windows"` reaches those terms with `--pending`.
 - An update with no change flag exits 2, `tag set` included.
 - A flag or argument given `""` or only white space sets the empty value only where an empty value means something: it clears an optional field, setting or list (`--set-active-hours ""`, `--set-tags ""`, `trust update --set-audience ""`). Where an empty value means nothing (a name, an email address, an ID, a filter, a required setting), the command exits 2 `invalid_argument` with the other argument checks, before the token is read and before any call. The CLI never treats such a value as a flag left out: an empty value usually comes from an unset shell variable, and leaving the flag out would widen the command, so `system list --tag "$RETIRED" | system revoke -` would revoke every system.
-- An empty or blank name, email address, domain or contact name names nothing, so it exits 2 with the other argument checks, before the token is read and before any call: `--org`, `org use <name>`, the email address of `org invite`, `org cancel-invite` and `org remove-user`, a partner customer's name and `partner customer update --name`, `--user` and `--email` on the partner customer commands, and `--owner`, `--domain` and `--contact` on `partner customer create`, which sends null for a flag left out. So does the description or name a `key`, `policy`, `trust` or `dns` command takes, whether it names the item to create or one to look up, a blank one among several included (`key delete "build agents" ""`), and `dns update-hostname --name`: the API refuses a blank description or name for each of these items (portal `EnrolmentKeyCreateValidator.cs`, `PolicyCreateModelValidator.cs`, `TrustRequirementCreateModelValidator.cs`, `DnsZoneCreateValidator.cs`, `DnsRecordCreateValidator.cs`, and the patch validators), so none has one. An update option given a blank value the API refuses exits 2 the same way: `--description` on `key update`, `policy update` and `trust update` (`EnrolmentKeyPatchModelValidator.cs`, `PolicyPatchModelValidator.cs`, `TrustRequirementPatchBasicValidator.cs`), `dns update-zone --name` (`DnsZonePatchValidator.cs`), `tag set --colour`, a hex code or none (`TagPatchModelValidator.cs`), and `tag set --name`, a tag name. So does `org update --name`: the API refuses an empty name and stores one of white space (`OrganisationPatchModelValidator.cs` checks only its length), which names nothing. Optional text the API takes empty is cleared by `""`: `--notes` on every command that takes it, `system update --description` (with `--pending` too), `org update --website` and `--phone`, and `partner customer update --contact`.
+- An empty or blank name, email address, domain or contact name names nothing, so it exits 2 the same way: `--org`, `org use <name>`, the email address of `org invite`, `org cancel-invite` and `org remove-user`, a partner customer's name and `partner customer update --name`, `--user` and `--email` on the partner customer commands, and `--owner`, `--domain` and `--contact` on `partner customer create`, which sends null for a flag left out. So does the description or name a `key`, `policy`, `trust` or `dns` command takes, whether it names the item to create or one to look up, a blank one among several included (`key delete "build agents" ""`), and `dns update-hostname --name`: the API refuses a blank description or name for each of these items (portal `EnrolmentKeyCreateValidator.cs`, `PolicyCreateModelValidator.cs`, `TrustRequirementCreateModelValidator.cs`, `DnsZoneCreateValidator.cs`, `DnsRecordCreateValidator.cs`, and the patch validators), so none has one. An update option given a blank value the API refuses exits 2 the same way: `--description` on `key update`, `policy update` and `trust update` (`EnrolmentKeyPatchModelValidator.cs`, `PolicyPatchModelValidator.cs`, `TrustRequirementPatchBasicValidator.cs`), `dns update-zone --name` (`DnsZonePatchValidator.cs`), `tag set --colour`, a hex code or none (`TagPatchModelValidator.cs`), and `tag set --name`, a tag name. So does `org update --name`: the API refuses an empty name and stores one of white space (`OrganisationPatchModelValidator.cs` checks only its length), which names nothing. Optional text the API takes empty is cleared by `""`: `--notes` on every command that takes it, `system update --description` (with `--pending` too), `org update --website` and `--phone`, and `partner customer update --contact`.
 - A list filter given `""`, only white space, or a list with no entries (`--tag ,`) filters by nothing, so it exits 2 the same way, keyed by the option: `--filter` on `system list`, `key list`, `policy list`, `tag list`, `trust list`, `dns list-hostnames` and `log`; `--tag` on `system list`, `key list` and `policy list`; `--key` on `system list`; `--zone` on `dns list-hostnames`; and `--user` and `--level` on `log`. The other filter flags take a value from a fixed set, a number, an ID, a duration or a time, and `""` is not one of those.
 - `--add-tags` and `--remove-tags` given `""`, only white space or a list with no entries add or remove nothing, so they exit 2 the same way, keyed by the option, on `system update` (with `--pending` too), `key update` and `dns update-hostname`. On a create, a list flag given no entries exits 2 the same way, since the create sends an empty list for a flag left out, so the value sets nothing: `key create --tags`, `policy create --senders`, `--receivers`, `--trust` and `--trust-id`, `dns create-zone --auto-dns-tags`, and `dns create-hostname --tags` and `--systems`. So does a value that is blank before its label, which names no range, country or subnet, on `key create --allow-ip`, `policy create --subnet-filter`, the `--allow-` and `--block-` flags of `trust create`, and `system update --enable-gateway-for`. On a create, `--acl ""`, `--gateway ""` and `--claim ""` exit 2 as values not in their form. `tag set --trust ""` and `--trust-id ""` replace the tag's trust requirements with none, as a `--set-` flag clears its list. A comma list with an empty entry (`--tag "web,"`, `--set-tags "web,,db"`, `--trust "uk only,"`, `--id "1,,2"`, `,`, or `--id 5 --id ""`) exits 2 the same way, on every comma-list option and `--id`, and so does a `--gateway` or `--set-gateway` value with an empty route: dropped, the entry would shorten the list, and an empty entry usually comes from an unset shell variable. `""` or only white space alone keeps its own meaning. A repeated `--set-` flag (`--set-allow-ip`, `--set-acl`, `--set-subnet-filter`, the `--set-allow-` and `--set-block-` flags of `trust update`, `--set-gateway`, `--set-claim`) given `""` or only white space alone clears its list, sending an empty list with no read where the read would only keep labels (`key update --set-allow-ip ""` sends `[]`), and a blank value among others, or a label with nothing before it (`--set-allow-ip 10.0.0.0/8 --set-allow-ip ""`, `--set-allow-ip =office`), exits 2 the same way, on `key update`, `policy update` and `trust update`.
-- Any `--set-` list flag given `""` clears the list (`--set-tags ""`, `--set-trust ""`, `--set-systems ""`, `--set-auto-dns-tags ""`). A create sends an empty list for a list flag left out.
+- Any `--set-` list flag given `""` clears the list (`--set-tags ""`, `--set-trust ""`, `--set-systems ""`, `--set-auto-dns-tags ""`).
 - An empty label (`range=`) is sent as a null `description` or `name`.
 - A context source lower in the precedence is not read when a higher one is given, so a malformed lower source does not fail the command. A saved default that is read and is not in the form `org use` or `partner use` saves exits 2, naming the file.
 - `--until` in the past exits 2. The CLI sends the expiry as a UTC instant.
@@ -343,20 +348,30 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 - ACL ports are a port from 1 to 65535 or a range `low-high` with low no greater than high; anything else exits 2.
 - `--active-hours` takes `<days> <start>-<end> [<zone>]`. Days are `mon` to `sun`, a range (`mon-fri`, `sat-sun`) or a comma list (`mon,wed,fri`); times are 24-hour `HH:MM`. Anything else exits 2.
 - A hostname's zone is the longest zone name it ends in, at a label boundary: with zones `internal` and `eu.internal`, `db.eu.internal` is in `eu.internal`. The record name is the rest and may contain dots. A hostname with no zone, or equal to a zone's name, exits 2. `dns update-hostname --name` takes a full hostname in the same zone; another zone exits 2, since the API cannot move a record between zones.
-- `log` asks for pages of 200, or of `--limit` when that is smaller and none of `--user`, `--level`, `--filter` or `--until` is given; with neither `--limit` nor `--since` the limit is 100, which without those four is one page of 100. Those four leave entries out, so nothing bounds how many entries the CLI reads before `--limit` of them match, and pages of a small limit would take a call per entry read. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case. `--since` and `--until` given a duration count back from now. The API pages by skipping entries, so an entry written while the CLI reads moves older entries onto later pages, and a page can begin with entries already read. The API also stores entries in batches every 2 seconds, each with the time of its own event (portal `Enclave.ActivityLog/ActivityLogSink.cs`), so an entry stored late can land among entries already read. The CLI prints each entry once: it drops an entry on a later page that it has read already, and prints every other entry, newest first, so an entry stored late takes its place by time. Entries have no ID (portal `LogEntryModel.cs`), so two distinct entries alike in every field and in time that fall on different pages print once.
-- `--verbose` writes diagnostics to stderr as JSON lines, `{ "verbose": "…" }`, so stderr stays machine-readable. They include the method and URL of each request, in the order sent, and never the token or the Authorization header.
+- `log` asks for pages of 200, or of `--limit` when that is smaller and none of `--user`, `--level`, `--filter` or `--until` is given; with neither `--limit` nor `--since` the limit is 100, which without those 4 is one page of 100. Those 4 leave entries out, so nothing bounds how many entries the CLI reads before `--limit` of them match, and pages of a small limit would take a call per entry read. `--until` leaves out newer entries before `--limit` counts. With `--since` and `--limit`, reading stops at whichever comes first. `--user` matches the whole `userName`, ignoring case; `--filter` matches part of the message, ignoring case. `--since` and `--until` given a duration count back from now. The API pages by skipping entries, so an entry written while the CLI reads moves older entries onto later pages, and a page can begin with entries already read. The API also stores entries in batches every 2 seconds, each with the time of its own event (portal `Enclave.ActivityLog/ActivityLogSink.cs`), so an entry stored late can land among entries already read. The CLI prints each entry once: it drops an entry on a later page that it has read already, and prints every other entry, newest first, so an entry stored late takes its place by time. Entries have no ID (portal `LogEntryModel.cs`), so 2 distinct entries alike in every field and in time that fall on different pages print once.
 - `key update --keep-disconnected` on a general-purpose key is passed to the API, which refuses it (portal `EnrolmentKeyModifyHandler.cs`).
 - `commands` takes a command's words, `commands partner customer create` included, and prints `{ "commands": [ { "command", "description", "arguments": [ { "name" } ], "options": [ { "name", "values" } ] } ], "errors": [ { "code", "exitCode" } ] }`.
 - `commands <list command> --search-keys`, for `system list` (with or without `--pending`), `key list`, `policy list` and `tag list`, adds the search keys that list's `--filter` accepts, as the API gives them (`GetSearchKeysAsync`, `GET /org/{orgId}/<list>/meta/search-keys`). It makes that one call, so it needs a token and an organisation. Without `--search-keys`, `commands` needs neither and makes no call.
   - The keys go on that command's entry as `searchKeys`, a list of `Enclave.Sdk.Api`'s `SearchKey` models unchanged: `{ "command": "key list", "description", "arguments", "options", "searchKeys": [ { "name", "modifiers", "dataType", "description", "hintText", "hintValues", "canHaveMultiple", "isDefault", "useExactMatch" } ] }`. `errors` is printed as without `--search-keys`.
   - `commands system list --pending --search-keys` gives the keys of the systems waiting for approval (`GET /org/{orgId}/unapproved-systems/meta/search-keys`); the entry is `system list`'s.
   - `--search-keys` takes `--org` and `--org-id`, and the organisation is chosen as for any other command (see "Context").
-  - `--search-keys` with no command words, with a noun, or with any command but those four lists exits 2 `invalid_argument`. So do `--pending` without `--search-keys` or with a list other than `system list`, and `--org` or `--org-id` without `--search-keys`. These are argument errors, so they exit 2 with or without a token or organisation, and make no call.
+  - `--search-keys` with no command words, with a noun, or with any command but those 4 lists exits 2 `invalid_argument`. So do `--pending` without `--search-keys` or with a list other than `system list`, and `--org` or `--org-id` without `--search-keys`. These are argument errors, so they exit 2 with or without a token or organisation, and make no call.
 
 ## Output
 
-- JSON, using the `Enclave.Sdk.Api` models unchanged. There is one output format. Agents read JSON, and a format for people alone is not worth a flag on every command.
-- Lists: `{ "kind": "system", "items": [...], "total": <n> }`. `total` is the number of items printed, `log` included. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, `org` for `org list` and `login`, `user` for `org list-users`, `invite` for `org list-invites` and `partner customer list-invites`, `customer`, `admin`), so a command reading the list from stdin can check it.
+- JSON, using the `Enclave.Sdk.Api` models unchanged, with `trace` added at the end. There's one output format, which serves both the calling program and the person reading the call.
+- JSON on stdout and stderr is indented, so the person reading the call can follow it.
+- `trace` shows how the command ran: which API and organisation it used, and what it sent. It comes last in every document a command prints, on success and on failure:
+  - `token`: `{ "source" }`, where the token came from: `ENCLAVE_TOKEN`, the path of `credentials.json`, or stdin for `login --token-stdin`.
+  - `api`, and `partnerApi` for `partner` commands: the addresses the command called.
+  - `org`: `{ "id", "name", "source" }`, with the sources `status` uses. `name` is null when the organisation was given by ID, since no lookup ran.
+  - `partner`: `{ "id", "source" }`, for `partner` commands.
+  - `requests`: each request sent, in order, as `"<METHOD> <URL>"`. Under `--dry-run` the changes aren't sent, so only the dry run's `requests` lists them.
+  - `saved`: the files `login`, `org use` and `partner use` wrote.
+  - `cause`: on failure, the .NET exception behind an error the API sent no problem details for, such as a network failure or a timeout.
+
+  A part is left out when its step didn't happen, and `trace` is left out when nothing happened, as for a parse error or `commands`. `trace` never holds the token or the Authorization header. A command reading a list from `-` reads only `kind` and `items`, so `trace` doesn't affect it.
+- Lists: `{ "kind": "system", "items": [...], "total": <n>, "trace": { … } }`. `total` is the number of items printed, `log` included. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, `org` for `org list` and `login`, `user` for `org list-users`, `invite` for `org list-invites` and `partner customer list-invites`, `customer`, `admin`), so a command reading the list from stdin can check it.
 - A list is printed once every page has been read. If a page read fails, the command exits with that error and prints nothing, so stdout never holds part of a list.
 - Redirected stdout and stderr are UTF-8 without a byte order mark (RFC 8259 section 8.1), on every OS. stdin is read as UTF-8, or in the encoding a byte order mark at its start names, so a list one run prints reads back in the next, and a token file saved with a byte order mark works. Windows PowerShell 5.1 shows non-ASCII characters in captured output correctly only after `[Console]::OutputEncoding = [Text.Encoding]::UTF8`.
 - Enrolment key output includes the key's secret, `key` (`EnrolmentKeyModel.Key`).
@@ -365,7 +380,7 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 
 ## Errors and exit codes
 
-stderr carries one JSON object per error: `{ "error": { "code", "status", "title", "detail", "errors" } }`. `code` comes from a fixed set the CLI owns, listed by `commands`. `status`, `title`, `detail` and `errors` carry the API's problem details when the API sent them.
+stderr carries only the error, one JSON object: `{ "error": { "code", "status", "title", "detail", "errors" }, "trace": { … } }`, with `trace` as "Output" describes it. A command that succeeds writes nothing to stderr. `code` comes from a fixed set the CLI owns, listed by `commands`. `status`, `title`, `detail` and `errors` carry the API's problem details when the API sent them.
 
 | Exit | `code` | Meaning |
 |---|---|---|
@@ -377,12 +392,12 @@ stderr carries one JSON object per error: `{ "error": { "code", "status", "title
 | 5 | `not_found` | HTTP 404 on a single-ID command |
 | 6 | `transient` | network failure, timeout, HTTP 429 or 5xx: retrying can succeed |
 
-Parse errors (unknown option, missing argument) follow the same rules: JSON on stderr, nothing on stdout, exit 2, with any suggestion in `detail`. System.CommandLine's default writes plain text and help and exits 1, so the CLI replaces its parse-error action. A command line with several problems gives one error object: `detail` names the first, and `errors` lists them all in the API's shape, an object keyed by the option or argument name with a list of messages each (`{ "--bogus": [ "…" ] }`), so `errors` has one shape whether it came from the API or the CLI. An error never repeats any part of the value given to an unknown option, however it is joined to the option, or anything glued to the option's name, since that value could be a token passed by mistake. An unknown option is named only in the form the CLI's options take: `--` and lower-case words joined by hyphens, up to a `=`, `:` or space (`--token=…`, `--token:…` and `"--token …"` are named `--token`), or `-` and one letter or digit (`-t…` is named `-t`). An option written any other way, such as one with a capital in its name or a token glued to it, is reported without its name, under the key `options`. A word after an unknown option that carries no value of its own is taken as its value and left out; after one that carries a value, the word is reported as an argument the command does not take.
+Parse errors (unknown option, missing argument) follow the same rules: JSON on stderr, nothing on stdout, exit 2, with any suggestion in `detail`. System.CommandLine's default writes plain text and help and exits 1, so the CLI replaces its parse-error action. A command line with several problems gives one error object: `detail` names the first, and `errors` lists them all in the API's shape, an object keyed by the option or argument name with a list of messages each (`{ "--bogus": [ "…" ] }`), so `errors` has one shape whether it came from the API or the CLI. `errors` is empty when its only message is the one in `detail`. An unknown command is the only problem reported for its command line, since the options after it belong to a command the CLI can't identify. An error never repeats any part of the value given to an unknown option, however it is joined to the option, or anything glued to the option's name, since that value could be a token passed by mistake. An unknown option is named only in the form the CLI's options take: `--` and lower-case words joined by hyphens, up to a `=`, `:` or space (`--token=…`, `--token:…` and `"--token …"` are named `--token`), or `-` and one letter or digit (`-t…` is named `-t`). An option written any other way, such as one with a capital in its name or a token glued to it, is reported without its name, under the key `options`. A word after an unknown option that carries no value of its own is taken as its value and left out; after one that carries a value, the word is reported as an argument the command does not take.
 
 - A name that matches nothing, or several items, exits 2 `invalid_argument`. The error carries `candidates`: the items that matched, or an empty list for no match. `no_org` is for an organisation that was not chosen at all, and also carries `candidates`, the token's organisations as `{ id, name }`.
 - Exit 5 `not_found` means the item the command names was not found. A 404 about another item exits 1 `api_error` and carries the API's detail. `dns update-hostname --set-systems` with a system the organisation does not have gets a 404 with the problem type `no-such-system` (portal `DnsRecordHandlerBase.cs`), so `dns update-hostname` exits 5 only for the problem type `dns-record-not-found` (portal `DnsController.cs`).
 - Checks run in this order: arguments (exit 2), the token (3), the organisation or partner (2), then the call. A command with bad arguments fails the same way with or without a token.
-- `--help` and `--version` print text for people, and are the only output that is not JSON. `enclave-cli` with no arguments prints the help and exits 0.
+- `--help` and `--version` are the only output that isn't JSON. `enclave-cli` with no arguments prints the help and exits 0.
 
 `Enclave.Sdk.Api` throws `EnclaveApiException` only for `application/problem+json` responses (`Handlers/ProblemDetailsHttpMessageHandler.cs`), and throws `HttpRequestException` with the status for any other failure. The CLI maps those status codes to the same exit codes, so a plain 401 or a proxy's 502 gets 3 or 6 as well.
 
@@ -390,13 +405,13 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 
 - `login --token-stdin` reads the token from stdin, without a trailing newline; with `ENCLAVE_TOKEN` set, `login` saves that token. `--token-stdin` wins over `ENCLAVE_TOKEN`. It never prompts: `--token-stdin` with stdin a terminal exits 2, and no token, or empty stdin, exits 3 `token_missing`. An empty `ENCLAVE_TOKEN` counts as unset, as does any empty environment variable the CLI reads.
 - `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
-- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`). `login` keeps an existing `baseUrl` and `partnerApiBaseUrl`. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
-- The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and `ENCLAVE_TOKEN` keeps the file's `baseUrl`.
-- When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables work against the default API address, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
+- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`). `login` checks the token at the API address in use and saves that address as `baseUrl`: `ENCLAVE_API_URL` when it's set, otherwise the file's own `baseUrl`, or the default. It saves `ENCLAVE_PARTNER_API_URL` as `partnerApiBaseUrl` when it's set, and otherwise keeps the file's. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
+- The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory. A token from `ENCLAVE_TOKEN` uses the same API addresses as one from the file.
+- When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables still work, against `ENCLAVE_API_URL` or the default API address, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
 - `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
 - `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
 - `org use` saves `{ "org": { "id", "name" } }` in `~/.enclave/cli.json` and prints the organisation's model; `org use --id` makes one lookup call for the name, and an ID the token does not see exits 2. `partner use --id` saves `{ "partner": { "id" } }` beside it, makes no call, and prints `{ "id" }`. Each leaves the other's default as it is. On Linux and macOS, either one run before `login` creates `~/.enclave` as 0700, since `login` later writes the token into it; `cli.json` holds no secret and is written with the default file mode.
-- No command prints the token, including under `--verbose` and `--dry-run`. A test runs every command that changes something with a known token and checks the token appears on neither stdout nor stderr.
+- No command prints the token, including under `--dry-run`. A test runs every command that changes something with a known token and checks the token appears on neither stdout nor stderr.
 
 ## Calls per command
 
@@ -414,7 +429,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 
 The partner API is a separate service (portal `src/Enclave.Partner.Api`) with every route under `/partner/{partnerId}/`. It covers the partner (properties, users, invites) and its customers (properties, admins, invites, auto-sync). The CLI uses the customer routes only, the ones a personal access token can reach.
 
-- It runs on its own host: `https://partner-api.enclave.io` in production and `https://staging-partner-api.enclave.io` in staging, beside `https://api.enclave.io` and `https://staging-api.enclave.io`. `Enclave.Sdk.Api`'s `EnclaveClientOptions.PartnerApiBaseUrl` defaults to production, as `BaseUrl` does. The CLI reads `partnerApiBaseUrl` from `credentials.json` beside `baseUrl`, so staging means setting both there.
+- It runs on its own host: `https://partner-api.enclave.io` in production and `https://staging-partner-api.enclave.io` in staging, beside `https://api.enclave.io` and `https://staging-api.enclave.io`. `Enclave.Sdk.Api`'s `EnclaveClientOptions.PartnerApiBaseUrl` defaults to production, as `BaseUrl` does. To reach staging, set `ENCLAVE_API_URL` and `ENCLAVE_PARTNER_API_URL`, or `baseUrl` and `partnerApiBaseUrl` in `credentials.json` (see "Options on every command").
 - Personal access tokens can carry the partner scopes `ReadCustomers` and `WriteCustomers`, and no other partner scope (portal `Enclave.Accounts/Config/EnclaveIdentityClientConfig.cs`). The partner API requires the scope claim on the token (portal `Enclave.Api.Scaffolding/Authorisation/AuthorizationExtensions.cs`). With a personal access token:
   - The customer routes work: reading needs `ReadCustomers`, and changes and the invite list need `WriteCustomers` (portal `CustomersController.cs`).
   - The partner's own properties, users and invites need `ReadPartnerList`, `ReadPartnerInfo` or `WritePartnerSettings` (portal `Enclave.Partner.Api/WebStartup.cs`), which a personal access token cannot carry, so the CLI has no commands for them.
@@ -437,7 +452,7 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 - The partner's own properties, users and invites, and listing partners: personal access tokens cannot carry the scopes they need (see "Partner API").
 - Listing systems by DNS name. The API binds a `dns` parameter on the systems list (portal `Enclave.Api/Modules/SystemManagement/Systems/Models/SystemsRequestModel.cs`), and its handler never reads it (`Systems/Handlers/PaginatedSystemsHandler.cs`), so the list it returns holds every system. `dns show-hostname <name>` shows what a hostname answers to: the systems it names (`systems`) and the tags whose systems it answers for (`tags`) (portal `Dns/Handlers/SingleDnsRecordQueryHandler.cs`).
 
-## Accepted for now
+## Known limitations
 
 Known, and left as they are. The CLI passes the API's answers on as they come.
 
@@ -459,7 +474,7 @@ Known, and left as they are. The CLI passes the API's answers on as they come.
 These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API itself did not change for numbers 1 to 10. `Enclave.Sdk.Api.Data` is built from the portal repository, so a model it lacks or has wrong is defined or corrected in `Enclave.Sdk.Api`.
 
 1. IDs are escaped in URL paths, and an empty ID, `.` or `..` throws.
-2. `EnclaveClientOptions.HttpMessageHandler` sends every request through a caller's handler, which `--dry-run` uses to capture the requests and `--verbose` to log them.
+2. `EnclaveClientOptions.HttpMessageHandler` sends every request through a caller's handler, which `--dry-run` uses to capture the requests.
 3. `PatchClient.Set` takes `null`, so an update flag given an empty value (`--set-active-hours ""`) clears the field.
 4. Enrolment key delete, single and bulk, for `key delete`.
 5. `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, with `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
@@ -468,7 +483,7 @@ These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API it
 8. `CreatePartnerClient(PartnerId)`, whose `Customers` client covers the customer routes. `EnclaveClientOptions.PartnerApiBaseUrl` defaults to `https://partner-api.enclave.io`.
 9. `GatewayPriorityType.Prioritised` is sent and read as `Ordered`, the API's name for it. `Enclave.Sdk.Api.Data` names it `Prioritised` (portal `Enclave.Sdk.Api.Data/Duplicated/GatewayPriorityType.cs`), and the API uses the sdk repository's enum (`Enclave.Sdk.Network/NetworkPolicy/GatewayPriorityType.cs`). `GatewayPriorityTypeJsonConverter` does the mapping, and the CLI adds it to the options it prints models with.
 10. `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync` return the model the API answers with (portal `OrganisationController.cs`), so `org remove-user`, `org invite` and `org cancel-invite` print it. A successful response with no model throws `InvalidOperationException`.
-11. The sort modes the API added in portal PR #648: `LastConnected`, `State` and `Version` for the systems list, and `DescriptionOrHostname` for the waiting systems list.
+11. The sort modes the API added in portal PR #648: `LastConnected`, `State` and `Version` for the systems list, and `DescriptionOrHostname` for the waiting-systems list.
 
 ## Examples
 
@@ -522,7 +537,7 @@ enclave-cli key list --state disabled | enclave-cli key delete -
 # 14. Revoke systems that have not connected for 90 days
 enclave-cli system list --not-seen-for 90d | enclave-cli system revoke -
 
-# 15. Point db.internal at the two database systems
+# 15. Point db.internal at the 2 database systems
 enclave-cli dns create-hostname db.internal --systems ABCDE,FGHIJ --notes "primary database pair"
 
 # 16. Remove every hostname for old-api, after checking which ones match
@@ -619,7 +634,7 @@ enclave-cli system update ABCDE --remove-tags legacy
 # 43. Stop GW001 acting as a gateway
 enclave-cli system update GW001 --disable-gateway
 
-# 44. Disable three systems at once
+# 44. Disable 3 systems at once
 enclave-cli system disable ABCDE FGHIJ KLMNO
 
 # 45. Disable every system listed in a file, one ID per line
@@ -632,11 +647,11 @@ enclave-cli key show --id 12
 # 47. List the keys that approve automatically and are tagged ci
 enclave-cli key list --approval automatic --tag ci
 
-# 48. Let a key enrol five more systems, from the office network only
+# 48. Let a key enrol 5 more systems, from the office network only
 enclave-cli key update "build agents" --uses 5 --set-allow-ip 203.0.113.0/24
 enclave-cli key update --id 12 --uses 5 --set-allow-ip 203.0.113.0/24
 
-# 49. Let a key enrol for two weeks, then delete it
+# 49. Let a key enrol for 2 weeks, then delete it
 enclave-cli key enable "contractor laptops" --for 14d --then delete
 enclave-cli key enable --id 31 --for 14d --then delete
 
@@ -650,7 +665,7 @@ enclave-cli policy update --id 61 --set-active-hours ""
 # 52. Allow ping and a UDP port range between the monitoring and app servers
 enclave-cli policy create "monitoring" --senders monitoring --receivers app --acl icmp --acl udp:8125-8126
 
-# 53. Route the office LAN through two gateways: shared between them, through GW001 with GW002 as standby, or through whichever is closest
+# 53. Route the office LAN through 2 gateways: shared between them, through GW001 with GW002 as standby, or through whichever is closest
 enclave-cli policy create "office LAN" --senders staff --gateway GW001:10.0.0.0/16 --gateway GW002:10.0.0.0/16 --mode balanced --acl any
 enclave-cli policy create "office LAN" --senders staff --gateway GW001:10.0.0.0/16 --gateway GW002:10.0.0.0/16 --mode ordered --acl any
 enclave-cli policy create "office LAN" --senders staff --gateway GW001:10.0.0.0/16 --gateway GW002:10.0.0.0/16 --mode geographic --acl any
@@ -702,7 +717,7 @@ enclave-cli partner customer add-admin --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f
 # 66. Invite someone at the customer to be its admin
 enclave-cli partner customer invite "Globex Ltd" --email sam@globex.example
 
-# 67. Sign out on a shared machine
+# 67. Log out on a shared machine
 enclave-cli logout
 
 # 68. Show the latest activity
@@ -726,10 +741,10 @@ enclave-cli log --since 2026-10-05T09:00 --until 2026-10-05T12:00
 # 74. Label each rule so the portal shows what it is for; a label can contain spaces and commas
 enclave-cli policy create "reports to db" --senders reports --receivers db --acl "tcp:5432=PostgreSQL" --acl "icmp=Ping, for monitoring"
 
-# 75. Make GW001 a gateway for two subnets, each with a name
+# 75. Make GW001 a gateway for 2 subnets, each with a name
 enclave-cli system update GW001 --enable-gateway-for "10.0.0.0/16=Office LAN" --enable-gateway-for "10.1.0.0/16=Warehouse, ground floor"
 
-# 76. Restrict a key to two labelled networks
+# 76. Restrict a key to 2 labelled networks
 enclave-cli key update "build agents" --set-allow-ip "203.0.113.0/24=London office" --set-allow-ip "198.51.100.0/24=CI runners"
 enclave-cli key update --id 12 --set-allow-ip "203.0.113.0/24=London office" --set-allow-ip "198.51.100.0/24=CI runners"
 

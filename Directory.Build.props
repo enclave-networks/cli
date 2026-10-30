@@ -22,9 +22,8 @@
   </PropertyGroup>
 
   <!--
-    CI sets the version with -p:Version: YEAR.MONTH.DAY.RUN, the scheme other Enclave products use
-    (pull request builds add -pr.N). These defaults label local builds 0.0.0-dev, so a binary
-    built on a developer machine identifies itself as one.
+    CI sets the version with -p:Version, from GitVersion (GitVersion.yml). These defaults label
+    local builds 0.0.0-dev, so a binary built on a developer machine identifies itself as one.
   -->
   <PropertyGroup>
     <VersionPrefix>0.0.0</VersionPrefix>

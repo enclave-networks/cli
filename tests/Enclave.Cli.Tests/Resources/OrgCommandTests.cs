@@ -256,7 +256,7 @@ public class OrgCommandTests
         CliAssert.Rejected(withoutToken, second);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(first.Error.GetProperty("errors")), Is.EqualTo("email"), first.ToString());
+            CliAssert.Problems(first.Error, "email");
             Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
         });
     }

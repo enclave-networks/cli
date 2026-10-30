@@ -53,7 +53,7 @@ public class StatusTests
         var org = JsonAssert.Property(output, "org");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(StatusFields));
+            Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(StatusFields));
             Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "token")), Is.EquivalentTo(TokenFields));
             Assert.That(JsonRead.PropertyNames(org), Is.EquivalentTo(OrgFields));
             Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "partner")), Is.EquivalentTo(PartnerFields));
@@ -312,20 +312,11 @@ public class StatusTests
     private static string? TokenSource(CliResult result) =>
         JsonAssert.Property(JsonAssert.Property(result.StdoutJson, "token"), "source").GetString();
 
-    // ApiJson.Orgs with a different role per organisation, which it does not offer. The roles are
-    // portal UserOrganisationRole names.
     private static string OrgsWithRoles() =>
-        $$"""
-        {"orgs":[
-          {"orgId":"{{TestData.OrgId:N}}","orgName":"{{TestData.OrgName}}","role":"Owner","partnerAccess":false},
-          {"orgId":"{{TestData.OtherOrgId:N}}","orgName":"{{TestData.OtherOrgName}}","role":"Admin","partnerAccess":true}
-        ]}
-        """;
+        ApiJson.OrgsOf(ApiJson.Org(TestData.OrgId, TestData.OrgName), GlobexAsAdmin());
 
-    private static string OnlyGlobexAsAdmin() =>
-        $$"""
-        {"orgs":[
-          {"orgId":"{{TestData.OtherOrgId:N}}","orgName":"{{TestData.OtherOrgName}}","role":"Admin","partnerAccess":true}
-        ]}
-        """;
+    private static string OnlyGlobexAsAdmin() => ApiJson.OrgsOf(GlobexAsAdmin());
+
+    private static string GlobexAsAdmin() =>
+        ApiJson.Org(TestData.OtherOrgId, TestData.OtherOrgName, "Admin", partnerAccess: true);
 }

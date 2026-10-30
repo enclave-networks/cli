@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
@@ -7,8 +8,6 @@ namespace Enclave.Cli.Tests.Safety;
 // spec/cli-surface.md "Several IDs".
 public class StdinListTests
 {
-    private static readonly string[] StdinKeyOnly = ["-"];
-
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_acts_on_the_items_of_a_list_of_the_commands_kind_on_stdin(BulkCommand command)
     {
@@ -27,6 +26,23 @@ public class StdinListTests
             Assert.That(request.Path, Is.EqualTo(command.Path));
             Assert.That(string.Join(",", request.BodyIds(command.BodyField)), Is.EqualTo(string.Join(",", ids)));
         });
+    }
+
+    [Test]
+    public async Task Dash_reads_the_list_a_list_command_printed_with_its_trace()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("systems/disable");
+        run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"), ApiJson.System("FGHIJ"));
+        run.StubBulk("PUT", path, "systemsUpdated", 2);
+        var listed = await run.RunAsync("system", "list");
+        Assert.That(listed.StdoutTrace.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        run.StdinText = listed.Stdout;
+
+        var result = await run.RunAsync("system", "disable", "-");
+
+        CliAssert.Bulk(result, requested: 2, affected: 2);
+        Assert.That(string.Join(",", run.RequestsTo("PUT", path).Single().BodyIds("systemIds")), Is.EqualTo("ABCDE,FGHIJ"));
     }
 
     // Several kinds share an ID format, so a list of the wrong kind would act on whatever items share
@@ -106,7 +122,7 @@ public class StdinListTests
         var rejected = await run.RunAsync(command.StdinArgs());
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(StdinKeyOnly));
+        CliAssert.Problems(rejected.Error, "-");
 
         run.StdinText = command.List(ids);
         var accepted = await run.RunAsync(command.StdinArgs());
@@ -221,17 +237,21 @@ public class StdinListTests
     private static IEnumerable<TestCaseData> NotAListCases()
     {
         yield return NotAList("ids one per line", "ABCDE\nFGHIJ\n");
-        yield return NotAList("a JSON array of ids", """["ABCDE","FGHIJ"]""");
-        yield return NotAList("a list without a kind", """{"items":[{"systemId":"ABCDE"}],"total":1}""");
-        yield return NotAList("a list without items", """{"kind":"system","total":0}""");
-        yield return NotAList("items that are not an array", """{"kind":"system","items":{},"total":0}""");
+        yield return NotAList("a JSON array of ids", new JsonArray("ABCDE", "FGHIJ"));
+        yield return NotAList("a list without a kind", new JsonObject { ["items"] = new JsonArray(new JsonObject { ["systemId"] = "ABCDE" }), ["total"] = 1 });
+        yield return NotAList("a list without items", new JsonObject { ["kind"] = "system", ["total"] = 0 });
+        yield return NotAList("items that are not an array", new JsonObject { ["kind"] = "system", ["items"] = new JsonObject(), ["total"] = 0 });
         yield return NotAList("one system", ApiJson.System("ABCDE"));
-        yield return NotAList("bulk output", """{"requested":2,"affected":2}""");
-        yield return NotAList("JSON cut short", """{"kind":"system","items":[""");
+        yield return NotAList("bulk output", new JsonObject { ["requested"] = 2, ["affected"] = 2 });
+
+        // A list cut short before its closing "]}".
+        yield return NotAList("JSON cut short", new JsonObject { ["kind"] = "system", ["items"] = new JsonArray() }.ToJsonString()[..^2]);
         yield return NotAList("nothing", string.Empty);
     }
 
     private static TestCaseData NotAList(string name, string stdin) => new TestCaseData(stdin).SetArgDisplayNames(name);
+
+    private static TestCaseData NotAList(string name, JsonNode stdin) => NotAList(name, stdin.ToJsonString());
 
     private static IEnumerable<TestCaseData> PipelineExamples()
     {

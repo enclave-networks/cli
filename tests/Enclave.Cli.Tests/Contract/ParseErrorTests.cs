@@ -69,8 +69,8 @@ public class ParseErrorTests
         yield return CommandCases.RejectedThenCorrected("policy update --id 42 --template", "policy update --id 42 --notes Reviewed", "PATCH", TestData.OrgPath("policies/42"), ApiJson.Policy(42));
     }
 
-    // A value given to an unknown option could be a token passed by mistake, so no error or
-    // --verbose diagnostic repeats any part of it ("Errors and exit codes"). A token glued to a name,
+    // A value given to an unknown option could be a token passed by mistake, so no error
+    // repeats any part of it ("Errors and exit codes"). A token glued to a name,
     // or a name with a capital, leaves the option unnamed. Each case gives the value, the names
     // errors is keyed by in order (null for an unnamed option), and the suggestion detail carries.
     public static IEnumerable<TestCaseData> UnknownOptionsWithValues()
@@ -84,7 +84,7 @@ public class ParseErrorTests
         yield return Unknown("--filtr:value", Secret, ["--filtr"], "--filter", $"--filtr:{Secret}");
         yield return Unknown("a token glued to --token", GluedToken, [null], null, $"--token{GluedToken}");
         yield return Unknown("--Token=value", Secret, [null], null, $"--Token={Secret}");
-        yield return Unknown("--token value --verbose", Secret, ["--token"], null, "--token", Secret, "--verbose");
+        yield return Unknown("--token value --include-disabled", Secret, ["--token"], null, "--token", Secret, "--include-disabled");
         yield return Unknown("--api-key value", Secret, ["--api-key"], null, "--api-key", Secret);
         yield return Unknown("--password value --bogus", Secret, ["--password", "--bogus"], null, "--password", Secret, "--bogus");
     }
@@ -111,6 +111,49 @@ public class ParseErrorTests
 
         CliAssert.Rejected(run, result);
         Assert.That(result.Error.GetProperty("detail").GetString(), Is.Not.Null.And.Not.Empty, result.ToString());
+    }
+
+    // With one problem, errors would only repeat detail, so it's empty ("Errors and exit codes").
+    [TestCase("system list --bogus", "--bogus")]
+    [TestCase("system list --sort nope", "--sort")]
+    [TestCase("system show", "<systemId>")]
+    public async Task A_command_line_with_one_problem_gives_an_error_whose_errors_is_empty(string command, string named)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        using var run = CliRun.Start();
+
+        var result = await run.RunAsync(command.Split(' '));
+
+        CliAssert.Rejected(run, result);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Error.GetProperty("detail").GetString(), Does.Contain(named), result.ToString());
+            Assert.That(JsonRead.PropertyNames(result.Error.GetProperty("errors")), Is.Empty, result.ToString());
+        });
+    }
+
+    // The options after an unknown command belong to a command the CLI can't identify, so the
+    // unknown command is the only problem reported ("Errors and exit codes").
+    [TestCase("og --dry-run")]
+    [TestCase("og --bogus")]
+    [TestCase("system lst --dry-run")]
+    public async Task An_unknown_command_is_the_only_problem_reported(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        using var run = CliRun.Start();
+
+        var result = await run.RunAsync(command.Split(' '));
+
+        CliAssert.Rejected(run, result);
+        var detail = result.Error.GetProperty("detail").GetString();
+        var messages = result.Error.GetProperty("errors").EnumerateObject().SelectMany(key => JsonAssert.Strings(key.Value));
+        Assert.Multiple(() =>
+        {
+            Assert.That(detail, Does.Contain("has no command by the name given"), result.ToString());
+            Assert.That(messages, Is.All.EqualTo(detail), result.ToString());
+        });
     }
 
     // errors has the API's shape, so an agent reads it the same way whether the API or the CLI wrote
@@ -154,15 +197,13 @@ public class ParseErrorTests
 
         CliAssert.Rejected(run, result);
         var error = result.Error;
-        var errors = error.GetProperty("errors");
         var keys = names.Select(name => name ?? UnnamedKey).ToArray();
         var first = names[0] is { } name ? NoOptionOnSystemList(name, suggestion) : UnnamedOnSystemList;
         Assert.Multiple(() =>
         {
             Assert.That(result.Stderr, Does.Not.Contain(value));
             Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo(first));
-            Assert.That(JsonRead.PropertyNames(errors), Is.EquivalentTo(keys), errors.ToString());
-            Assert.That(JsonAssert.Strings(errors.GetProperty(keys[0])), Is.EqualTo(new[] { first }), errors.ToString());
+            CliAssert.Problems(error, keys);
         });
     }
 
@@ -174,8 +215,7 @@ public class ParseErrorTests
         var result = await run.RunAsync(["system", "list", .. args]);
 
         CliAssert.Rejected(run, result);
-        var errors = result.Error.GetProperty("errors");
-        Assert.That(JsonRead.PropertyNames(errors), Is.EquivalentTo(keys), errors.ToString());
+        CliAssert.Problems(result.Error, keys);
     }
 
     // An unknown option is named only when written in this form ("Errors and exit codes"), so a

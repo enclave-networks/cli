@@ -125,7 +125,7 @@ public class DnsCommandTests
             Assert.That(request.Path, Is.EqualTo(Zones));
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(ZoneCreateFields));
             Assert.That(body.GetProperty("name").GetString(), Is.EqualTo("lab"));
-            Assert.That(body.GetProperty("autoDnsTags").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("autoDnsTags").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
             Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
         });
     }
@@ -353,7 +353,7 @@ public class DnsCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(RecordCreateFields));
-            Assert.That(body.GetProperty("tags").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("tags").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
             Assert.That(JsonAssert.Property(body, "name").GetString(), Is.EqualTo("db"));
             Assert.That(JsonAssert.Property(body, "zoneId").GetInt32(), Is.EqualTo(4));
             Assert.That(JsonAssert.Property(body, "type").GetString(), Is.EqualTo("ENCLAVE"));
@@ -513,7 +513,7 @@ public class DnsCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Is.Empty);
-            Assert.That(JsonRead.PropertyNameList(error.GetProperty("errors")), Is.EqualTo("--name"));
+            CliAssert.Problems(error, "--name");
             Assert.That(result.Stderr, Does.Not.Contain(partOfValue));
         });
     }

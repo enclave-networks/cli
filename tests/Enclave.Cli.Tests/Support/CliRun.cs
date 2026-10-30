@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Enclave.Cli.Core;
 using NUnit.Framework;
 using WireMock.Matchers;
 using WireMock.Server;
@@ -254,6 +255,18 @@ internal sealed class CliRun : IDisposable
     public void StubBulk(string method, string path, string resultField, params int[] affected) =>
         StubSequence(method, path, affected.Select(count => (200, ApiJson.Bulk(resultField, count))).ToArray());
 
+    // The trace names each run's own API addresses and home directory, so output from two runs
+    // compares equal once they are placeholders; the home directory is matched as JSON escapes it.
+    public string Comparable(string output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+
+        return output
+            .Replace(JsonSerializer.Serialize(Home, CliJson.Output)[1..^1], "<home>", StringComparison.Ordinal)
+            .Replace(PartnerApiBaseUrl, "<partner-api>", StringComparison.Ordinal)
+            .Replace(ApiBaseUrl, "<api>", StringComparison.Ordinal);
+    }
+
     // The requests after the first skip, each as "METHOD path".
     public string[] Calls(int skip = 0) =>
         Requests.Skip(skip).Select(request => request.Call).ToArray();
@@ -307,6 +320,26 @@ internal sealed class CliRun : IDisposable
         }
 
         Files.WriteText(CredentialsPath, credentials.ToJsonString(IndentedJson), privateToUser: true);
+    }
+
+    // Puts ~/.enclave/cli.json in Files with the defaults given, in the form org use and partner use
+    // save them (spec/cli-surface.md "Login, logout and status"). The IDs are text, so a test can
+    // save one that is malformed, as only a hand edit could.
+    public void SaveDefaults(string? orgId = null, string? orgName = null, string? partnerId = null)
+    {
+        var settings = new JsonObject();
+
+        if (orgId is not null)
+        {
+            settings["org"] = new JsonObject { ["id"] = orgId, ["name"] = orgName };
+        }
+
+        if (partnerId is not null)
+        {
+            settings["partner"] = new JsonObject { ["id"] = partnerId };
+        }
+
+        Files.WriteText(CliConfigPath, settings.ToJsonString(IndentedJson), privateToUser: false);
     }
 
     public void Dispose()

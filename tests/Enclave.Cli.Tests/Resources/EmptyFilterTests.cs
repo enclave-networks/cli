@@ -60,7 +60,7 @@ public class EmptyFilterTests
         CliAssert.Rejected(withoutToken, second);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(first.Error.GetProperty("errors")), Is.EqualTo(option), first.ToString());
+            CliAssert.Problems(first.Error, option);
             Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
         });
     }

@@ -78,7 +78,7 @@ internal sealed class CliRootCommand : RootCommand
         public override int Invoke(ParseResult parseResult)
         {
             var error = CliErrors.InvalidArgument("command", $"{ProgramName} takes no directives such as [suggest].");
-            parseResult.InvocationConfiguration.Error.WriteLine(CliOutput.Describe(error).ToJsonString(CliJson.Compact));
+            parseResult.InvocationConfiguration.Error.WriteLine(CliOutput.Format(error));
             return error.Code.ExitCode;
         }
     }
@@ -89,7 +89,7 @@ internal sealed class CliRootCommand : RootCommand
         {
             if (ParseProblems.Find(parseResult) is { } error)
             {
-                parseResult.InvocationConfiguration.Error.WriteLine(CliOutput.Describe(error).ToJsonString(CliJson.Compact));
+                parseResult.InvocationConfiguration.Error.WriteLine(CliOutput.Format(error));
                 return error.Code.ExitCode;
             }
 

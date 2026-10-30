@@ -55,7 +55,7 @@ internal static class ApiErrors
 
             // No status means no response, which a retry can fix. A TLS failure also has no status
             // (HttpRequestError.SecureConnectionError) and gets the same code, though a retry does
-            // not fix it (spec/cli-surface.md "Accepted for now").
+            // not fix it (spec/cli-surface.md "Known limitations").
             case HttpRequestException http:
                 return new CliException(ErrorCode.Transient, $"The Enclave API could not be reached: {http.Message}", innerException: http);
 

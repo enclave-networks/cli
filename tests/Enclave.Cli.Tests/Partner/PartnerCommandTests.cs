@@ -245,30 +245,30 @@ public class PartnerCommandTests
             Assert.That(request.Method, Is.EqualTo("POST"));
             Assert.That(request.Path, Is.EqualTo(TestData.PartnerPath("customers")));
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(CreateFields), request.ToString());
-            Assert.That(Raw(body, "name"), Is.EqualTo("\"Initech\""));
-            Assert.That(Raw(body, "initialSystemsCount"), Is.EqualTo("50"));
-            Assert.That(Raw(body, "initialGatewaysCount"), Is.EqualTo("0"));
-            Assert.That(Raw(body, "industryDiscount"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "hardLimit"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "ownerEmail"), Is.EqualTo("null"));
-            Assert.That(Raw(body, "domain"), Is.EqualTo("null"));
-            Assert.That(Raw(body, "contactName"), Is.EqualTo("null"));
+            Assert.That(Raw(body, "name"), Is.EqualTo(Json("Initech")));
+            Assert.That(Raw(body, "initialSystemsCount"), Is.EqualTo(Json(50)));
+            Assert.That(Raw(body, "initialGatewaysCount"), Is.EqualTo(Json(0)));
+            Assert.That(Raw(body, "industryDiscount"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "hardLimit"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "ownerEmail"), Is.EqualTo(Json<string?>(null)));
+            Assert.That(Raw(body, "domain"), Is.EqualTo(Json<string?>(null)));
+            Assert.That(Raw(body, "contactName"), Is.EqualTo(Json<string?>(null)));
             Assert.That(Unchanged(result.StdoutJson, ApiJson.Customer(TestData.NewCustomerOrgId, TestData.NewCustomerName)), Is.True, result.ToString());
         });
     }
 
     // 2 systems and 0 gateways are the smallest counts the API accepts (portal
     // CustomerCreateModelValidator).
-    [TestCase("--owner", "it@initech.example", "ownerEmail", "\"it@initech.example\"")]
-    [TestCase("--domain", "initech.example", "domain", "\"initech.example\"")]
-    [TestCase("--contact", "Peter Gibbons", "contactName", "\"Peter Gibbons\"")]
-    [TestCase("--systems", "2", "initialSystemsCount", "2")]
-    [TestCase("--gateways", "3", "initialGatewaysCount", "3")]
-    [TestCase("--industry-discount", null, "industryDiscount", "true")]
-    [TestCase("--hard-limit", null, "hardLimit", "true")]
-    [TestCase("--auto-sync", null, "adminAutoSyncIsEnabled", "true")]
-    public async Task Partner_customer_create_sends_each_flag_as_its_field(string option, string? value, string field, string json)
+    [TestCase("--owner", "it@initech.example", "ownerEmail", "it@initech.example")]
+    [TestCase("--domain", "initech.example", "domain", "initech.example")]
+    [TestCase("--contact", "Peter Gibbons", "contactName", "Peter Gibbons")]
+    [TestCase("--systems", "2", "initialSystemsCount", 2)]
+    [TestCase("--gateways", "3", "initialGatewaysCount", 3)]
+    [TestCase("--industry-discount", null, "industryDiscount", true)]
+    [TestCase("--hard-limit", null, "hardLimit", true)]
+    [TestCase("--auto-sync", null, "adminAutoSyncIsEnabled", true)]
+    public async Task Partner_customer_create_sends_each_flag_as_its_field(string option, string? value, string field, object expected)
     {
         using var run = PartnerApiFake.StartWithPartner();
         string[] flag = value is null ? [option] : [option, value];
@@ -279,8 +279,8 @@ public class PartnerCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(CreateFields), request.ToString());
-            Assert.That(Raw(body, field), Is.EqualTo(json));
-            Assert.That(Raw(body, "name"), Is.EqualTo("\"Initech\""));
+            Assert.That(Raw(body, field), Is.EqualTo(Json(expected)));
+            Assert.That(Raw(body, "name"), Is.EqualTo(Json("Initech")));
         });
     }
 
@@ -296,29 +296,29 @@ public class PartnerCommandTests
         var body = request.BodyJson;
         Assert.Multiple(() =>
         {
-            Assert.That(Raw(body, "name"), Is.EqualTo("\"Initech\""));
-            Assert.That(Raw(body, "ownerEmail"), Is.EqualTo("\"it@initech.example\""));
-            Assert.That(Raw(body, "domain"), Is.EqualTo("\"initech.example\""));
-            Assert.That(Raw(body, "initialSystemsCount"), Is.EqualTo("20"));
-            Assert.That(Raw(body, "initialGatewaysCount"), Is.EqualTo("1"));
-            Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo("true"));
-            Assert.That(Raw(body, "industryDiscount"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "hardLimit"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "contactName"), Is.EqualTo("null"));
+            Assert.That(Raw(body, "name"), Is.EqualTo(Json("Initech")));
+            Assert.That(Raw(body, "ownerEmail"), Is.EqualTo(Json("it@initech.example")));
+            Assert.That(Raw(body, "domain"), Is.EqualTo(Json("initech.example")));
+            Assert.That(Raw(body, "initialSystemsCount"), Is.EqualTo(Json(20)));
+            Assert.That(Raw(body, "initialGatewaysCount"), Is.EqualTo(Json(1)));
+            Assert.That(Raw(body, "adminAutoSyncIsEnabled"), Is.EqualTo(Json(true)));
+            Assert.That(Raw(body, "industryDiscount"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "hardLimit"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "contactName"), Is.EqualTo(Json<string?>(null)));
         });
     }
 
     // Enclave.Sdk.Api keys a PATCH body by the model's property names (PatchClient.Set) and the API
     // reads them ignoring case, so names are compared ignoring case.
-    [TestCase("--name", "Globex Limited", "Name", "\"Globex Limited\"")]
-    [TestCase("--contact", "Jo Bloggs", "ContactName", "\"Jo Bloggs\"")]
-    [TestCase("--systems", "2", "LicensedAgentsCount", "2")]
-    [TestCase("--gateways", "0", "LicensedGatewaysCount", "0")]
-    [TestCase("--industry-discount", null, "IndustryDiscount", "true")]
-    [TestCase("--no-industry-discount", null, "IndustryDiscount", "false")]
-    [TestCase("--hard-limit", null, "EnableHardLimit", "true")]
-    [TestCase("--no-hard-limit", null, "EnableHardLimit", "false")]
-    public async Task Partner_customer_update_patches_only_the_field_each_flag_sets(string option, string? value, string field, string json)
+    [TestCase("--name", "Globex Limited", "Name", "Globex Limited")]
+    [TestCase("--contact", "Jo Bloggs", "ContactName", "Jo Bloggs")]
+    [TestCase("--systems", "2", "LicensedAgentsCount", 2)]
+    [TestCase("--gateways", "0", "LicensedGatewaysCount", 0)]
+    [TestCase("--industry-discount", null, "IndustryDiscount", true)]
+    [TestCase("--no-industry-discount", null, "IndustryDiscount", false)]
+    [TestCase("--hard-limit", null, "EnableHardLimit", true)]
+    [TestCase("--no-hard-limit", null, "EnableHardLimit", false)]
+    public async Task Partner_customer_update_patches_only_the_field_each_flag_sets(string option, string? value, string field, object expected)
     {
         using var run = PartnerApiFake.StartWithPartner();
         string[] flag = value is null ? [option] : [option, value];
@@ -333,7 +333,7 @@ public class PartnerCommandTests
             Assert.That(request.Method, Is.EqualTo("PATCH"));
             Assert.That(request.Path, Is.EqualTo(TestData.CustomerPath(TestData.CustomerOrgId)));
             Assert.That(JsonRead.PropertyNameList(body), Is.EqualTo(field).IgnoreCase);
-            Assert.That(Raw(body, field), Is.EqualTo(json));
+            Assert.That(Raw(body, field), Is.EqualTo(Json(expected)));
             Assert.That(Unchanged(result.StdoutJson, ApiJson.Customer(TestData.CustomerOrgId, TestData.CustomerName)), Is.True, result.ToString());
         });
     }
@@ -351,12 +351,12 @@ public class PartnerCommandTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(body), Is.EquivalentTo(fields).IgnoreCase);
-            Assert.That(Raw(body, "Name"), Is.EqualTo("\"Globex Limited\""));
-            Assert.That(Raw(body, "ContactName"), Is.EqualTo("\"Jo Bloggs\""));
-            Assert.That(Raw(body, "LicensedAgentsCount"), Is.EqualTo("30"));
-            Assert.That(Raw(body, "LicensedGatewaysCount"), Is.EqualTo("2"));
-            Assert.That(Raw(body, "IndustryDiscount"), Is.EqualTo("false"));
-            Assert.That(Raw(body, "EnableHardLimit"), Is.EqualTo("true"));
+            Assert.That(Raw(body, "Name"), Is.EqualTo(Json("Globex Limited")));
+            Assert.That(Raw(body, "ContactName"), Is.EqualTo(Json("Jo Bloggs")));
+            Assert.That(Raw(body, "LicensedAgentsCount"), Is.EqualTo(Json(30)));
+            Assert.That(Raw(body, "LicensedGatewaysCount"), Is.EqualTo(Json(2)));
+            Assert.That(Raw(body, "IndustryDiscount"), Is.EqualTo(Json(false)));
+            Assert.That(Raw(body, "EnableHardLimit"), Is.EqualTo(Json(true)));
         });
     }
 
@@ -506,7 +506,7 @@ public class PartnerCommandTests
             Assert.That(request.Method, Is.EqualTo("POST"));
             Assert.That(request.Path, Is.EqualTo(TestData.CustomerPath(TestData.CustomerOrgId, "invites")));
             Assert.That(JsonRead.PropertyNameList(body), Is.EqualTo("emailAddress"));
-            Assert.That(Raw(body, "emailAddress"), Is.EqualTo($"\"{TestData.CustomerInviteEmail}\""));
+            Assert.That(Raw(body, "emailAddress"), Is.EqualTo(Json(TestData.CustomerInviteEmail)));
             Assert.That(Unchanged(result.StdoutJson, PartnerApiFake.NewInviteBody), Is.True, result.ToString());
         });
     }
@@ -638,7 +638,7 @@ public class PartnerCommandTests
             Assert.That(singularRun.Calls(), Is.Not.Empty);
             Assert.That(pluralRun.Calls(), Is.EqualTo(singularRun.Calls()));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
+            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
         });
     }
 
@@ -721,7 +721,7 @@ public class PartnerCommandTests
         var result = await run.RunAsync(ForCustomer(verb, option, value));
 
         CliAssert.Rejected(run, result);
-        Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(option), result.ToString());
+        CliAssert.Problems(result.Error, option);
     }
 
     // A blank name would cost the customer lookup and match nothing, or reach the API, which refuses
@@ -742,7 +742,7 @@ public class PartnerCommandTests
         var result = await run.RunAsync(Line(verb, rest));
 
         CliAssert.Rejected(run, result);
-        Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(key), result.ToString());
+        CliAssert.Problems(result.Error, key);
     }
 
     // Sent as given, a blank owner is refused (portal CustomerCreateModelValidator, EmailAddress;
@@ -769,7 +769,7 @@ public class PartnerCommandTests
         CliAssert.Rejected(withoutToken, second);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(first.Error, "errors")), Is.EqualTo(option), first.ToString());
+            CliAssert.Problems(first.Error, option);
             Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
         });
     }
@@ -928,7 +928,7 @@ public class PartnerCommandTests
     // Compared as values, so indentation does not matter and a field the model drops or retypes
     // shows.
     private static bool Unchanged(JsonElement printed, string body) =>
-        JsonElement.DeepEquals(printed, JsonRead.Parse(body));
+        JsonElement.DeepEquals(JsonRead.WithoutTrace(printed), JsonRead.Parse(body));
 
     private static bool Unchanged(JsonElement printedItems, string[] bodies) =>
         printedItems.ValueKind == JsonValueKind.Array
@@ -936,6 +936,8 @@ public class PartnerCommandTests
         && printedItems.EnumerateArray().Zip(bodies).All(pair => Unchanged(pair.First, pair.Second));
 
     private static string Raw(JsonElement body, string field) => JsonAssert.Property(body, field).GetRawText();
+
+    private static string Json<T>(T value) => JsonSerializer.Serialize(value);
 
     // Test names show each case as the command line it runs, with placeholders for the fixed IDs.
     private static string Display(string[] args) => string.Join(' ', args.Select(DisplayArg));

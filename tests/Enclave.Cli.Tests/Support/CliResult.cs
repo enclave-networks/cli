@@ -12,23 +12,21 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
     // The non-blank lines of stdout, with any trailing carriage return removed.
     public string[] StdoutLines => Lines(Stdout);
 
-    // Each non-blank line of stderr parsed as JSON. Fails the test when a line is not JSON.
-    public IReadOnlyList<JsonElement> StderrJson => Lines(Stderr).Select(line => ParseJson(line, "each stderr line")).ToArray();
+    // Fails the test when stderr is not one JSON value.
+    public JsonElement StderrJson => ParseJson(Stderr, "stderr");
 
-    // The "error" object of the one error stderr holds. Fails the test unless stderr holds exactly
-    // one non-blank line and that line is a JSON object with an "error" object.
+    // Fails the test unless stdout is a JSON object whose last property is a "trace" object.
+    public JsonElement StdoutTrace => TraceOf(StdoutJson, "stdout");
+
+    public JsonElement StderrTrace => TraceOf(StderrJson, "stderr");
+
+    // The "error" object of the one error stderr holds. Fails the test unless that error is a JSON
+    // object with an "error" object.
     public JsonElement Error
     {
         get
         {
-            var lines = Lines(Stderr);
-
-            if (lines.Length != 1)
-            {
-                throw Failure($"Expected exactly one line on stderr, found {lines.Length}.");
-            }
-
-            var root = ParseJson(lines[0], "stderr");
+            var root = StderrJson;
 
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("error", out var error)
@@ -67,6 +65,15 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
         {
             throw Failure($"Expected {source} to be JSON: {ex.Message}");
         }
+    }
+
+    private JsonElement TraceOf(JsonElement document, string source)
+    {
+        var properties = document.ValueKind == JsonValueKind.Object ? document.EnumerateObject().ToArray() : [];
+
+        return properties is [.., { Name: "trace", Value.ValueKind: JsonValueKind.Object } last]
+            ? last.Value
+            : throw Failure($"Expected {source} to be a JSON object whose last property is a \"trace\" object.");
     }
 
     // Assert.Fail inside Assert.Multiple records the failure and returns

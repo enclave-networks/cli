@@ -68,8 +68,28 @@ internal static class CliAssert
         Assert.That(ErrorCode(result.Error), Is.EqualTo(code), result.ToString());
     }
 
-    // Asserts the run exited 0 and printed exactly { "kind", "items", "total" } with this kind and
-    // total equal to the number of items, and returns the items.
+    // Asserts the error reports a problem with each of these options or arguments and no other.
+    // detail names a single problem, and errors stays empty since it would only repeat detail;
+    // errors keys several (spec/cli-surface.md "Errors and exit codes").
+    public static void Problems(JsonElement error, params string[] keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        var errors = JsonRead.PropertyNames(JsonAssert.Property(error, "errors"));
+
+        if (keys.Length == 1)
+        {
+            Assert.That(JsonAssert.Property(error, "detail").GetString(), Does.Contain(keys[0]), error.ToString());
+            Assert.That(errors, Is.Empty, error.ToString());
+        }
+        else
+        {
+            Assert.That(errors, Is.EquivalentTo(keys), error.ToString());
+        }
+    }
+
+    // Asserts the run exited 0 and printed exactly { "kind", "items", "total" }, and any trace after
+    // them, with this kind and total equal to the number of items, and returns the items.
     // total counts the items printed, the matches when the CLI filters them (spec/cli-surface.md
     // "Filters").
     public static JsonElement List(CliResult result, string kind)
@@ -83,7 +103,7 @@ internal static class CliAssert
         var output = result.StdoutJson;
 
         Assert.That(output.ValueKind, Is.EqualTo(JsonValueKind.Object), result.ToString());
-        Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(ListFields), result.ToString());
+        Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(ListFields), result.ToString());
 
         var items = output.GetProperty("items");
         Assert.That(items.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
@@ -98,14 +118,14 @@ internal static class CliAssert
     }
 
     // Asserts the run exited 0 and printed exactly
-    // { "requested": requested, "affected": affected }.
+    // { "requested": requested, "affected": affected }, and any trace after them.
     public static void Bulk(CliResult result, int requested, int affected)
     {
         Succeeded(result);
         var output = result.StdoutJson;
 
         Assert.That(output.ValueKind, Is.EqualTo(JsonValueKind.Object), result.ToString());
-        Assert.That(JsonRead.PropertyNames(output), Is.EquivalentTo(BulkFields), result.ToString());
+        Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(BulkFields), result.ToString());
         Assert.Multiple(() =>
         {
             Assert.That(Integer(output, "requested"), Is.EqualTo(requested), result.ToString());

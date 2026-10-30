@@ -78,8 +78,8 @@ public class NamingTests
             Assert.That(pluralRequests.Select(request => request.Query), Is.EqualTo(singularRequests.Select(request => request.Query)));
             Assert.That(pluralRequests.Select(request => request.Body), Is.EqualTo(singularRequests.Select(request => request.Body)));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
-            Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
+            Assert.That(pluralRun.Comparable(pluralResult.Stderr), Is.EqualTo(singularRun.Comparable(singularResult.Stderr)));
         });
     }
 
@@ -111,8 +111,8 @@ public class NamingTests
             Assert.That(singularRun.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
             Assert.That(pluralRun.Calls(), Is.EqualTo(singularRun.Calls()));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
-            Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
+            Assert.That(pluralRun.Comparable(pluralResult.Stderr), Is.EqualTo(singularRun.Comparable(singularResult.Stderr)));
         });
     }
 
@@ -135,7 +135,7 @@ public class NamingTests
             Assert.That(pluralRun.Requests, Is.Empty);
             Assert.That(singularRun.Files.ReadText(singularRun.CliConfigPath), Is.Not.Null);
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
+            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
             Assert.That(pluralRun.Files.ReadText(pluralRun.CliConfigPath), Is.EqualTo(singularRun.Files.ReadText(singularRun.CliConfigPath)));
         });
     }

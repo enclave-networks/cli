@@ -36,7 +36,7 @@ internal static class CredentialsFile
     }
 
     // Readable by the current user only. Exits 2 when there is no home directory.
-    public static void Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
+    public static string Write(CliHost host, string token, string baseUrl, string? partnerApiBaseUrl = null)
     {
         ArgumentNullException.ThrowIfNull(host);
 
@@ -53,6 +53,7 @@ internal static class CredentialsFile
         }
 
         host.Files.WriteText(path, file.ToJsonString(CliJson.Output) + "\n", privateToUser: true);
+        return path;
     }
 
     private static string? Text(JsonObject file, string name)

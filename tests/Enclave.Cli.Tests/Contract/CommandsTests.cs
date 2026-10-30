@@ -138,7 +138,7 @@ public class CommandsTests
     private static readonly string[] SystemListOptions =
     [
         "--filter", "--tag", "--state", "--os", "--type", "--gateway", "--key", "--key-id", "--not-seen-for",
-        "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id", "--verbose",
+        "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id",
     ];
 
     // Portal SystemQuerySortMode in lower-case, hyphenated form. --sort with --pending takes
@@ -194,9 +194,9 @@ public class CommandsTests
         yield return Options("partner customer invite", "--org-id --email --partner-id --dry-run", "--limit");
         yield return Options("log", "--limit --since --until --user --level --filter --org --org-id", "--dry-run");
         yield return Options("login", "--token-stdin", "--dry-run --org --org-id --partner-id");
-        yield return Options("logout", "--verbose", "--dry-run --org --org-id --partner-id");
+        yield return Options("logout", string.Empty, "--dry-run --org --org-id --partner-id");
         yield return Options("status", "--org --org-id --partner-id", "--dry-run");
-        yield return Options("commands", "--search-keys --pending --org --org-id --verbose", "--dry-run --partner-id");
+        yield return Options("commands", "--search-keys --pending --org --org-id", "--dry-run --partner-id");
     }
 
     // The lists Enclave.Sdk.Api reads search keys for (GetSearchKeysAsync on ISystemsClient,
@@ -332,7 +332,6 @@ public class CommandsTests
 
         var names = OptionNames(entries[command]);
         var expected = present
-            .Append("--verbose")
             .Concat(OrganisationCommands.Contains(command) ? ["--org", "--org-id"] : [])
             .Concat(ChangeCommands.Contains(command) ? ["--dry-run"] : [])
             .Distinct(StringComparer.Ordinal);
@@ -345,7 +344,7 @@ public class CommandsTests
 
     // Lists read every page, so log alone takes --limit ("Command options").
     [Test]
-    public async Task Every_command_takes_verbose_and_none_takes_a_removed_option()
+    public async Task No_command_takes_a_removed_option()
     {
         using var run = CliRun.Start();
 
@@ -357,7 +356,6 @@ public class CommandsTests
             foreach (var (name, entry) in CommandEntries(result.StdoutJson))
             {
                 var options = OptionNames(entry);
-                Assert.That(options, Does.Contain("--verbose"), name);
                 Assert.That(options.Intersect(OptionsNoCommandHas, StringComparer.Ordinal), Is.Empty, name);
 
                 if (!string.Equals(name, "log", StringComparison.Ordinal))
@@ -697,7 +695,7 @@ public class CommandsTests
         var result = await run.RunAsync(["commands", .. rejected.Split(' ')]);
 
         CliAssert.Rejected(run, result);
-        Assert.That(JsonRead.PropertyNames(result.Error.GetProperty("errors")), Is.EqualTo(new[] { key }), result.ToString());
+        CliAssert.Problems(result.Error, key);
 
         run.Environment["ENCLAVE_TOKEN"] = TestData.Token;
         run.Environment["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString();
@@ -721,7 +719,7 @@ public class CommandsTests
     }
 
     private static TestCaseData Options(string command, string present, string absent) =>
-        new TestCaseData(command, present.Split(' '), absent.Split(' ')).SetArgDisplayNames(command);
+        new TestCaseData(command, present.Split(' ', StringSplitOptions.RemoveEmptyEntries), absent.Split(' ')).SetArgDisplayNames(command);
 
     private static TestCaseData Values(string command, string option, params string[] values) =>
         new TestCaseData(command, option, values).SetArgDisplayNames(command, option);

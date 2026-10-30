@@ -427,20 +427,20 @@ public partial class PolicyCommandTests
     private static string EnableUntilPath(int id) => PolicyPath(id) + "/enable-until";
 
     // Built on ApiJson.Policy, so the body keeps the shape HarnessTests proves Enclave.Sdk.Api reads.
-    private static string PolicyWith(int id, string description, params (string Name, string Json)[] changes)
+    private static string PolicyWith(int id, string description, params (string Name, JsonNode? Value)[] changes)
     {
         var policy = JsonNode.Parse(ApiJson.Policy(id, description))!.AsObject();
 
-        foreach (var (name, json) in changes)
+        foreach (var (name, value) in changes)
         {
-            policy[name] = JsonNode.Parse(json);
+            policy[name] = value;
         }
 
         return policy.ToJsonString();
     }
 
     private static string DisabledPolicy(int id, string description) =>
-        PolicyWith(id, description, ("isEnabled", "false"), ("state", "\"Disabled\""));
+        PolicyWith(id, description, ("isEnabled", false), ("state", "Disabled"));
 
     // Ports are compared without spaces, since the API reads "8000-8100" and "8000 - 8100" alike and
     // writes the second (portal AclConversionExtensions.TryParsePorts,

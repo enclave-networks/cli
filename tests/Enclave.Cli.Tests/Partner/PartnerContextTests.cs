@@ -67,7 +67,7 @@ public class PartnerContextTests
         var saved = Saved(run, "partner");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(printed), Is.EqualTo("id"), use.ToString());
+            Assert.That(string.Join(",", JsonRead.PropertyNamesBeforeTrace(printed)), Is.EqualTo("id"), use.ToString());
             Assert.That(JsonRead.IdOf(printed), Is.EqualTo(TestData.PartnerId), use.ToString());
             Assert.That(JsonRead.PropertyNameList(saved), Is.EqualTo("id"), saved.ToString());
             Assert.That(JsonRead.IdOf(saved), Is.EqualTo(TestData.PartnerId), saved.ToString());
@@ -399,7 +399,7 @@ public class PartnerContextTests
 
             // partner use rejects a malformed ID, so only a hand edit could save one.
             case SavedDefault:
-                run.Files.WriteText(run.CliConfigPath, """{ "partner": { "id": "not-a-guid" } }""", privateToUser: false);
+                run.SaveDefaults(partnerId: "not-a-guid");
                 break;
 
             default:

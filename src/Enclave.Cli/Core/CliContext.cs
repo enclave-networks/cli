@@ -52,8 +52,7 @@ internal sealed class CliContext : IDisposable
         _ => false,
     };
 
-    // Never pass the token.
-    public void Verbose(string message) => Output.Verbose(message);
+    public CliTrace Trace => Output.Trace;
 
     // Exits 3 with token_missing when there is no token.
     public ApiAccess Access
@@ -63,7 +62,7 @@ internal sealed class CliContext : IDisposable
             if (_access is null)
             {
                 _access = ApiAccess.Resolve(Host);
-                Verbose($"Token from {_access.TokenSource}; API at {_access.BaseUrl}.");
+                Trace.TokenSource = _access.TokenSource;
             }
 
             return _access;
@@ -72,7 +71,11 @@ internal sealed class CliContext : IDisposable
 
     // For calls outside an organisation. Exits 3 with token_missing when there is no token; makes no
     // call.
-    public EnclaveClient GetClient() => _client ??= CreateClient(Access);
+    public EnclaveClient GetClient()
+    {
+        Trace.Api = Access.BaseUrl;
+        return Client;
+    }
 
     // For login, which checks a token of its own; every other command uses GetClient. Makes no
     // call.
@@ -80,7 +83,9 @@ internal sealed class CliContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(access);
 
-        return access.CreateClient(_handler ??= new ApiRequestHandler(Output, DryRun, Host.CreateNetworkHandler?.Invoke()));
+        Trace.TokenSource = access.TokenSource;
+        Trace.Api = access.BaseUrl;
+        return access.CreateClient(Handler);
     }
 
     // Call it after checking the command's own arguments, which come before the token
@@ -89,6 +94,7 @@ internal sealed class CliContext : IDisposable
     public async Task<OrganisationInUse> GetOrganisationAsync()
     {
         var organisation = await OrganisationResolver.ResolveAsync(this, GetClient());
+        Trace.Organisation = organisation;
 
         if (DryRun is { } dryRun)
         {
@@ -99,13 +105,15 @@ internal sealed class CliContext : IDisposable
     }
 
     // Call it after checking the command's own arguments, as GetOrganisationAsync. Makes no call.
+    // A partner command calls the partner API only, so the trace names that API alone.
     public Task<PartnerInUse> GetPartnerAsync()
     {
-        var client = GetClient();
+        var client = Client;
         var choice = PartnerResolver.Resolve(this);
-        Verbose($"Partner {choice.Id} from {choice.Source}.");
 
         var partner = new PartnerInUse(choice.Id, choice.Source, client.CreatePartnerClient(PartnerId.FromGuid(choice.Id)));
+        Trace.PartnerApi = Access.PartnerApiUrl;
+        Trace.Partner = partner;
 
         if (DryRun is { } dryRun)
         {
@@ -172,4 +180,8 @@ internal sealed class CliContext : IDisposable
     // Enclave.Sdk.Api never disposes a handler given in EnclaveClientOptions.HttpMessageHandler, and
     // the clients built here live for one command.
     public void Dispose() => _handler?.Dispose();
+
+    private EnclaveClient Client => _client ??= Access.CreateClient(Handler);
+
+    private ApiRequestHandler Handler => _handler ??= new ApiRequestHandler(Trace, DryRun, Host.CreateNetworkHandler?.Invoke());
 }

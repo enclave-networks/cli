@@ -4,23 +4,24 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Safety;
 
 // spec/cli-surface.md "Login, logout and status". Each test also checks what the command did, so a
-// command that printed nothing because it did nothing does not pass. Partner/ covers the partner
-// commands.
+// command that printed nothing because it did nothing does not pass, and a command that calls the
+// API is checked to print a trace, so the check covers it. Partner/ covers the partner commands.
 public class TokenOutputTests
 {
     // The change request carrying the token shows the CLI held the token it left out.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
-    public async Task Command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr_under_verbose(ChangeCommand command)
+    public async Task Command_that_changes_something_prints_the_token_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();
         command.Arrange(run);
 
-        var result = await run.RunAsync([.. command.Args, "--verbose"]);
+        var result = await run.RunAsync(command.Args);
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -31,13 +32,14 @@ public class TokenOutputTests
         using var run = CliRun.Start();
         command.Arrange(run);
 
-        var result = await run.RunAsync([.. command.Args, "--verbose", "--dry-run"]);
+        var result = await run.RunAsync([.. command.Args, "--dry-run"]);
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(result.StdoutJson, "dryRun").GetBoolean(), Is.True);
             Assert.That(command.ChangeRequests(run), Is.Empty);
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -50,12 +52,13 @@ public class TokenOutputTests
         run.SaveCredentials(TestData.Token);
         command.Arrange(run);
 
-        var result = await run.RunAsync([.. command.Args, "--verbose"]);
+        var result = await run.RunAsync(command.Args);
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo(run.CredentialsPath), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -67,7 +70,7 @@ public class TokenOutputTests
         using var run = CliRun.Start();
         command.Arrange(run);
 
-        var result = await run.RunAsync([.. command.Args, "--verbose"]);
+        var result = await run.RunAsync(command.Args);
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>

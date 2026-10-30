@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Enclave.Api.Modules.AccountManagement.PublicAccount.Models;
 using Enclave.Api.Modules.SystemManagement.Systems.Models;
 using Enclave.Api.Scaffolding.Pagination.Models;
+using Enclave.Cli.Core;
 using Enclave.Configuration.Data.Enums;
 using Enclave.Configuration.Data.Identifiers;
 using Enclave.Sdk.Api;
@@ -30,6 +31,8 @@ public class HarnessTests
 
     // The options Enclave.Sdk.Api's EnclaveClient.ReadCredentialsFile reads credentials.json with.
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    private static readonly string EmptyObject = Text(new JsonObject());
 
     public static IEnumerable<TestCaseData> ResourceBodies()
     {
@@ -145,6 +148,67 @@ public class HarnessTests
     }
 
     public static IEnumerable<string> KindsWithIds() => CliList.Kinds.Where(kind => kind != "log");
+
+    public static IEnumerable<TestCaseData> BodiesWithoutIds()
+    {
+        yield return Printed(new JsonObject { ["ids"] = "A" });
+        yield return Printed(new JsonObject { ["ids"] = new JsonArray(new JsonObject { ["id"] = 1 }) });
+        yield return Printed(new JsonObject { ["ids"] = new JsonArray(1.5) });
+        yield return Printed(new JsonObject { ["ids"] = new JsonArray((JsonNode?)null) });
+        yield return Printed(new JsonObject { ["other"] = new JsonArray() });
+        yield return new TestCaseData("not json").SetArgDisplayNames("not json");
+    }
+
+    public static IEnumerable<TestCaseData> SystemLists()
+    {
+        yield return Printed(ListOf("system", 0));
+        yield return Printed(new JsonObject { ["total"] = 1, ["items"] = new JsonArray(new JsonObject { ["systemId"] = "A" }), ["kind"] = "system" });
+        yield return Printed(new JsonObject { ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = 0, ["trace"] = new JsonObject() });
+    }
+
+    // A command reading a list from stdin rejects any other kind, so the kind is compared exactly.
+    // The other cases break the envelope, the rule that total counts the items, or the rule that
+    // trace comes last.
+    public static IEnumerable<TestCaseData> NotSystemLists()
+    {
+        yield return Printed(0, new JsonObject { ["trace"] = new JsonObject(), ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = 0 });
+        yield return Printed(0, ListOf("pending-system", 0));
+        yield return Printed(0, ListOf("System", 0));
+        yield return Printed(0, ListOf("system", 2, new JsonObject { ["systemId"] = "A" }));
+        yield return Printed(0, new JsonObject { ["kind"] = "system", ["items"] = new JsonArray() });
+        yield return Printed(0, new JsonObject { ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = 0, ["truncated"] = false });
+        yield return Printed(0, new JsonObject { ["kind"] = "system", ["items"] = new JsonObject(), ["total"] = 0 });
+        yield return Printed(0, new JsonObject { ["kind"] = "system", ["items"] = new JsonArray(), ["total"] = "0" });
+        yield return Printed(0, new JsonObject { ["items"] = new JsonArray(), ["total"] = 0 });
+        yield return Printed(0, new JsonArray());
+        yield return Printed(1, ListOf("system", 0));
+    }
+
+    public static IEnumerable<TestCaseData> DocumentsNotEndingInATrace()
+    {
+        yield return Printed(new JsonObject { ["requested"] = 1 });
+        yield return Printed(new JsonObject { ["trace"] = new JsonObject(), ["requested"] = 1 });
+        yield return Printed(new JsonObject { ["requested"] = 1, ["trace"] = "GET http://127.0.0.1/" });
+        yield return Printed(new JsonArray(new JsonObject { ["trace"] = new JsonObject() }));
+    }
+
+    public static IEnumerable<TestCaseData> BulkCounts()
+    {
+        yield return Printed(new JsonObject { ["requested"] = 3, ["affected"] = 2 });
+        yield return Printed(new JsonObject { ["affected"] = 2, ["requested"] = 3 });
+        yield return Printed(new JsonObject { ["requested"] = 3, ["affected"] = 2, ["trace"] = new JsonObject() });
+    }
+
+    public static IEnumerable<TestCaseData> NotBulkCounts()
+    {
+        yield return Printed(0, new JsonObject { ["trace"] = new JsonObject(), ["requested"] = 3, ["affected"] = 2 });
+        yield return Printed(0, new JsonObject { ["requested"] = 2, ["affected"] = 3 });
+        yield return Printed(0, new JsonObject { ["requested"] = 3 });
+        yield return Printed(0, new JsonObject { ["requested"] = 3, ["affected"] = 2, ["failed"] = 1 });
+        yield return Printed(0, new JsonObject { ["requested"] = "3", ["affected"] = "2" });
+        yield return Printed(0, new JsonArray(3, 2));
+        yield return Printed(1, new JsonObject { ["requested"] = 3, ["affected"] = 2 });
+    }
 
     // A misspelt name leaves the model's property at its default, which comparing the model written
     // back with the body reports, and a wrong value type fails the read.
@@ -650,14 +714,9 @@ public class HarnessTests
 
     [Test]
     public void BodyIds_reads_string_and_integer_ids_as_text() =>
-        Assert.That(string.Join(",", RequestWithBody("""{ "ids": ["A", 7, "tag-1"] }""").BodyIds("ids")), Is.EqualTo("A,7,tag-1"));
+        Assert.That(string.Join(",", RequestWithBody(Text(new JsonObject { ["ids"] = new JsonArray("A", 7, "tag-1") })).BodyIds("ids")), Is.EqualTo("A,7,tag-1"));
 
-    [TestCase("""{ "ids": "A" }""")]
-    [TestCase("""{ "ids": [{ "id": 1 }] }""")]
-    [TestCase("""{ "ids": [1.5] }""")]
-    [TestCase("""{ "ids": [null] }""")]
-    [TestCase("""{ "other": [] }""")]
-    [TestCase("not json")]
+    [TestCaseSource(nameof(BodiesWithoutIds))]
     public void BodyIds_fails_the_test_unless_the_property_is_an_array_of_strings_and_integers(string body) =>
         Assert.That(() => RequestWithBody(body).BodyIds("ids"), Throws.InstanceOf<AssertionException>());
 
@@ -801,10 +860,10 @@ public class HarnessTests
     [Test]
     public void TokenAssert_Absent_fails_the_test_when_the_token_is_on_stdout_or_stderr()
     {
-        Assert.That(() => TokenAssert.Absent(new CliResult(0, "{}", "{\"verbose\":\"GET /org\"}\n")), Throws.Nothing);
+        Assert.That(() => TokenAssert.Absent(new CliResult(0, EmptyObject, "GET /org\n")), Throws.Nothing);
 
-        AssertFails(() => TokenAssert.Absent(new CliResult(0, $"{{\"token\":\"{TestData.Token}\"}}", string.Empty)));
-        AssertFails(() => TokenAssert.Absent(new CliResult(1, string.Empty, $"{{\"verbose\":\"Bearer {TestData.Token}\"}}\n")));
+        AssertFails(() => TokenAssert.Absent(new CliResult(0, Text(new JsonObject { ["token"] = TestData.Token }), string.Empty)));
+        AssertFails(() => TokenAssert.Absent(new CliResult(1, string.Empty, $"Bearer {TestData.Token}\n")));
     }
 
     // The client with the addresses swapped sends each call to the wrong fake; the client with them
@@ -859,7 +918,7 @@ public class HarnessTests
     public async Task AssertSentToThePartnerApi_fails_the_test_unless_the_partner_api_address_alone_received_the_calls()
     {
         using var run = CliRun.Start();
-        var success = new CliResult(0, "{}", string.Empty);
+        var success = new CliResult(0, EmptyObject, string.Empty);
         run.Stub("GET", TestData.PartnerPath("customers"), json: ApiJson.Page());
 
         AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, success));
@@ -867,7 +926,7 @@ public class HarnessTests
         await PartnerOf(Connect(run.ApiBaseUrl, run.PartnerApiBaseUrl)).Customers.GetCustomersAsync();
 
         Assert.That(() => PartnerApiFake.AssertSentToThePartnerApi(run, success), Throws.Nothing);
-        AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, new CliResult(1, string.Empty, ErrorLine("api_error") + "\n")));
+        AssertFails(() => PartnerApiFake.AssertSentToThePartnerApi(run, ErrorOutput(1, "api_error")));
 
         Assert.ThrowsAsync<EnclaveApiException>(() => PartnerOf(Connect(run.ApiBaseUrl, run.ApiBaseUrl)).Customers.GetCustomersAsync());
 
@@ -935,12 +994,12 @@ public class HarnessTests
     {
         using var run = CliRun.Start();
 
-        var input = run.WriteFile("policy.json", "{}");
+        var input = run.WriteFile("policy.json", EmptyObject);
         run.SaveCredentials(TestData.Token);
 
         Assert.Multiple(() =>
         {
-            Assert.That(run.Files.ReadText(input), Is.EqualTo("{}"));
+            Assert.That(run.Files.ReadText(input), Is.EqualTo(EmptyObject));
             Assert.That(run.Files.IsPrivate(input), Is.False);
             Assert.That(run.Files.Exists(run.CredentialsPath), Is.True);
             Assert.That(Directory.Exists(run.Home), Is.False);
@@ -1006,15 +1065,63 @@ public class HarnessTests
     }
 
     [Test]
-    public void Result_error_returns_the_error_object_of_the_single_stderr_line()
+    public void Result_error_returns_the_error_object_of_the_indented_error()
     {
-        var result = new CliResult(5, string.Empty, "{\"error\":{\"code\":\"not_found\",\"status\":404}}\r\n");
+        // Every line ends in \r\n, as on Windows.
+        var result = new CliResult(5, string.Empty, ErrorText("not_found", 404).ReplaceLineEndings("\r\n"));
 
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(result.Error, "code").GetString(), Is.EqualTo("not_found"));
             Assert.That(JsonAssert.Property(result.Error, "Status").GetInt32(), Is.EqualTo(404));
-            Assert.That(result.StderrJson, Has.Count.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void Result_error_fails_the_test_when_stderr_holds_two_errors()
+    {
+        var result = new CliResult(5, string.Empty, ErrorText("not_found") + ErrorText("api_error"));
+
+        Assert.Throws<AssertionException>(() => _ = result.Error);
+    }
+
+    [Test]
+    public void Result_trace_returns_the_trace_object_that_ends_the_document()
+    {
+        var trace = new JsonObject { ["requests"] = new JsonArray("GET http://127.0.0.1/account/orgs") };
+        var stdout = new JsonObject { ["requested"] = 1, ["affected"] = 1, ["trace"] = trace.DeepClone() };
+        var stderr = new JsonObject { ["error"] = new JsonObject(), ["trace"] = trace.DeepClone() };
+        var result = new CliResult(0, stdout.ToJsonString(CliJson.Output), stderr.ToJsonString(CliJson.Output));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.StringList(result.StdoutTrace.GetProperty("requests")), Is.EqualTo("GET http://127.0.0.1/account/orgs"));
+            Assert.That(JsonRead.StringList(result.StderrTrace.GetProperty("requests")), Is.EqualTo("GET http://127.0.0.1/account/orgs"));
+        });
+    }
+
+    [TestCaseSource(nameof(DocumentsNotEndingInATrace))]
+    public void Result_trace_fails_the_test_unless_the_document_ends_with_a_trace_object(string json)
+    {
+        var result = new CliResult(0, json, json);
+
+        Assert.Multiple(() =>
+        {
+            Assert.Throws<AssertionException>(() => _ = result.StdoutTrace);
+            Assert.Throws<AssertionException>(() => _ = result.StderrTrace);
+        });
+    }
+
+    [Test]
+    public void WithoutTrace_leaves_out_only_a_trace_that_comes_last()
+    {
+        var last = JsonRead.Parse(Text(new JsonObject { ["id"] = 7, ["trace"] = new JsonObject() }));
+        var first = JsonRead.Parse(Text(new JsonObject { ["trace"] = new JsonObject(), ["id"] = 7 }));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.PropertyNameList(JsonRead.WithoutTrace(last)), Is.EqualTo("id"));
+            Assert.That(JsonRead.PropertyNameList(JsonRead.WithoutTrace(first)), Is.EqualTo("trace,id"));
         });
     }
 
@@ -1028,41 +1135,23 @@ public class HarnessTests
         Assert.That(JsonRead.IntFieldList(items, "id"), Is.EqualTo("7,8"));
     }
 
-    [TestCase("""{ "kind": "system", "items": [], "total": 0 }""")]
-    [TestCase("""{ "total": 1, "items": [{ "systemId": "A" }], "kind": "system" }""")]
+    [TestCaseSource(nameof(SystemLists))]
     public void List_passes_a_list_of_exactly_the_given_kind(string stdout) =>
         Assert.That(() => CliAssert.List(Output(stdout), "system"), Throws.Nothing);
 
-    // A command reading a list from stdin rejects any other kind, so the kind is compared exactly.
-    // The other cases break the envelope or the rule that total counts the items.
-    [TestCase(0, """{ "kind": "pending-system", "items": [], "total": 0 }""")]
-    [TestCase(0, """{ "kind": "System", "items": [], "total": 0 }""")]
-    [TestCase(0, """{ "kind": "system", "items": [{ "systemId": "A" }], "total": 2 }""")]
-    [TestCase(0, """{ "kind": "system", "items": [] }""")]
-    [TestCase(0, """{ "kind": "system", "items": [], "total": 0, "truncated": false }""")]
-    [TestCase(0, """{ "kind": "system", "items": {}, "total": 0 }""")]
-    [TestCase(0, """{ "kind": "system", "items": [], "total": "0" }""")]
-    [TestCase(0, """{ "items": [], "total": 0 }""")]
-    [TestCase(0, """[]""")]
-    [TestCase(1, """{ "kind": "system", "items": [], "total": 0 }""")]
+    [TestCaseSource(nameof(NotSystemLists))]
     public void List_fails_the_test_unless_the_run_printed_a_list_of_exactly_the_given_kind(int exitCode, string stdout) =>
         AssertFails(() => CliAssert.List(Output(stdout, exitCode), "system"));
 
     [Test]
     public void List_throws_for_a_kind_the_cli_does_not_print() =>
-        Assert.That(() => CliAssert.List(Output("""{ "kind": "systems", "items": [], "total": 0 }"""), "systems"), Throws.ArgumentException);
+        Assert.That(() => CliAssert.List(Output(Text(ListOf("systems", 0))), "systems"), Throws.ArgumentException);
 
-    [TestCase("""{ "requested": 3, "affected": 2 }""")]
-    [TestCase("""{ "affected": 2, "requested": 3 }""")]
+    [TestCaseSource(nameof(BulkCounts))]
     public void Bulk_passes_the_requested_and_affected_counts_given(string stdout) =>
         Assert.That(() => CliAssert.Bulk(Output(stdout), requested: 3, affected: 2), Throws.Nothing);
 
-    [TestCase(0, """{ "requested": 2, "affected": 3 }""")]
-    [TestCase(0, """{ "requested": 3 }""")]
-    [TestCase(0, """{ "requested": 3, "affected": 2, "failed": 1 }""")]
-    [TestCase(0, """{ "requested": "3", "affected": "2" }""")]
-    [TestCase(0, """[3, 2]""")]
-    [TestCase(1, """{ "requested": 3, "affected": 2 }""")]
+    [TestCaseSource(nameof(NotBulkCounts))]
     public void Bulk_fails_the_test_unless_the_run_printed_exactly_those_counts(int exitCode, string stdout) =>
         AssertFails(() => CliAssert.Bulk(Output(stdout, exitCode), requested: 3, affected: 2));
 
@@ -1078,10 +1167,10 @@ public class HarnessTests
     [Test]
     public void Failed_fails_the_test_for_another_code_output_on_stdout_or_more_than_one_error()
     {
-        var twoErrors = new CliResult(5, string.Empty, ErrorLine("not_found") + "\n" + ErrorLine("not_found") + "\n");
+        var twoErrors = new CliResult(5, string.Empty, ErrorText("not_found") + ErrorText("not_found"));
 
         AssertFails(() => CliAssert.Failed(ErrorOutput(5, "api_error"), "not_found"));
-        AssertFails(() => CliAssert.Failed(ErrorOutput(5, "not_found", stdout: "{}"), "not_found"));
+        AssertFails(() => CliAssert.Failed(ErrorOutput(5, "not_found", stdout: EmptyObject), "not_found"));
         AssertFails(() => CliAssert.Failed(twoErrors, "not_found"));
     }
 
@@ -1320,20 +1409,37 @@ public class HarnessTests
 
     private static CliResult Output(string stdout, int exitCode = 0) => new(exitCode, stdout, string.Empty);
 
-    private static string ErrorLine(string code) => new JsonObject
+    private static string Text(JsonNode json) => json.ToJsonString();
+
+    private static JsonObject ListOf(string kind, int total, params JsonNode[] items) => new()
+    {
+        ["kind"] = kind,
+        ["items"] = new JsonArray(items),
+        ["total"] = total,
+    };
+
+    // The JSON text is the case's name, so a failing case shows what it was given.
+    private static TestCaseData Printed(JsonNode stdout) =>
+        new TestCaseData(Text(stdout)).SetArgDisplayNames(Text(stdout));
+
+    private static TestCaseData Printed(int exitCode, JsonNode stdout) =>
+        new TestCaseData(exitCode, Text(stdout)).SetArgDisplayNames(exitCode.ToString(CultureInfo.InvariantCulture), Text(stdout));
+
+    // An error as the CLI writes it to stderr (CliOutput.WriteErrorAsync).
+    private static string ErrorText(string code, int? status = null) => new JsonObject
     {
         ["error"] = new JsonObject
         {
             ["code"] = code,
-            ["status"] = null,
+            ["status"] = status,
             ["title"] = null,
             ["detail"] = null,
-            ["errors"] = null,
+            ["errors"] = new JsonObject(),
         },
-    }.ToJsonString();
+    }.ToJsonString(CliJson.Output) + Environment.NewLine;
 
     private static CliResult ErrorOutput(int exitCode, string code, string stdout = "") =>
-        new(exitCode, stdout, ErrorLine(code) + "\n");
+        new(exitCode, stdout, ErrorText(code));
 
     // A failed assertion records the failure in the test's result as well as throwing. An
     // IsolatedContext discards its result on leaving (NUnit 4.4.0,

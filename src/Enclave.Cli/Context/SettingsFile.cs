@@ -54,15 +54,15 @@ internal static class SettingsFile
         return (id, name, path);
     }
 
-    public static void SaveOrganisation(CliHost host, OrganisationGuid id, string name) =>
+    public static string SaveOrganisation(CliHost host, OrganisationGuid id, string name) =>
         Save(host, "org", new JsonObject { ["id"] = id.ToString(), ["name"] = name });
 
-    public static void SavePartner(CliHost host, Guid id) =>
+    public static string SavePartner(CliHost host, Guid id) =>
         Save(host, "partner", new JsonObject { ["id"] = id.ToString("D") });
 
     // Keeps the other defaults the file holds; a file that is not a JSON object is replaced. Exits
     // 2 when there is no home directory.
-    public static void Save(CliHost host, string key, JsonObject value)
+    public static string Save(CliHost host, string key, JsonObject value)
     {
         ArgumentNullException.ThrowIfNull(host);
 
@@ -82,5 +82,6 @@ internal static class SettingsFile
 
         // The file holds no secret: an organisation's ID and name and a partner's ID.
         host.Files.WriteText(path, settings.ToJsonString(CliJson.Output) + "\n", privateToUser: false);
+        return path;
     }
 }

@@ -64,9 +64,9 @@ public class LogoutTests
     public async Task Logout_leaves_cli_json_in_place()
     {
         using var run = CliRun.Start();
-        const string Settings = "{}";
         run.SaveCredentials(TestData.Token);
-        run.Files.WriteText(run.CliConfigPath, Settings, privateToUser: false);
+        run.SaveDefaults();
+        var settings = run.Files.ReadText(run.CliConfigPath);
 
         var result = await run.RunAsync("logout");
 
@@ -74,7 +74,7 @@ public class LogoutTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Files.Exists(run.CredentialsPath), Is.False);
-            Assert.That(run.Files.ReadText(run.CliConfigPath), Is.EqualTo(Settings));
+            Assert.That(run.Files.ReadText(run.CliConfigPath), Is.EqualTo(settings));
         });
     }
 }

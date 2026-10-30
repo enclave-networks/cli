@@ -27,8 +27,7 @@ internal static class OrgUseCommand
                     ?? throw CliErrors.NameNotUnique(id.Name, $"The token sees no organisation with ID {guid:D}.", OrganisationResolver.Candidates([]))
                 : OrganisationResolver.MatchName(context.Get(name)!, organisations, name.Name);
 
-            SettingsFile.SaveOrganisation(context.Host, organisation.OrgId, organisation.OrgName);
-            context.Verbose($"Saved {organisation.OrgId} as the default organisation in {SettingsFile.PathFor(context.Host)}.");
+            context.Trace.Saved(SettingsFile.SaveOrganisation(context.Host, organisation.OrgId, organisation.OrgName));
 
             await context.Output.WriteAsync(organisation, context.CancellationToken);
         });

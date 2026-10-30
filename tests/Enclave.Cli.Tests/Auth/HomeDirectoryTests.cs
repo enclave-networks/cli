@@ -107,7 +107,7 @@ public class HomeDirectoryTests
         using var run = CliRun.Start();
         run.Home = home;
         run.Environment.Remove("ENCLAVE_ORG_ID");
-        run.Files.WriteText(run.CliConfigPath, SavedDefaults(), privateToUser: false);
+        SaveDefaults(run);
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
 
         var result = await run.RunAsync("status");
@@ -134,7 +134,7 @@ public class HomeDirectoryTests
         run.Home = home;
         run.StdinText = TestData.Token + "\n";
         run.SaveCredentials(FileToken);
-        run.Files.WriteText(run.CliConfigPath, SavedDefaults(), privateToUser: false);
+        SaveDefaults(run);
         var before = Snapshot(run);
         BothOrgs.Stub(run);
 
@@ -170,8 +170,8 @@ public class HomeDirectoryTests
     }
 
     // Globex and a partner, as org use and partner use save them.
-    private static string SavedDefaults() =>
-        $$"""{ "org": { "id": "{{TestData.OtherOrgId}}", "name": "{{TestData.OtherOrgName}}" }, "partner": { "id": "{{TestData.PartnerId}}" } }""";
+    private static void SaveDefaults(CliRun run) =>
+        run.SaveDefaults(TestData.OtherOrgId.ToString(), TestData.OtherOrgName, TestData.PartnerId.ToString());
 
     private static Dictionary<string, string?> Snapshot(CliRun run) =>
         run.Files.Paths.ToDictionary(path => path, path => run.Files.ReadText(path), StringComparer.Ordinal);

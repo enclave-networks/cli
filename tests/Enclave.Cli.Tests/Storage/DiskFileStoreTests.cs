@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Enclave.Cli.Storage;
 using NUnit.Framework;
 
@@ -15,6 +16,8 @@ public class DiskFileStoreTests
         UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
         | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
         | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+    private static readonly string EmptyObject = new JsonObject().ToJsonString();
 
     private readonly DiskFileStore _store = new();
 
@@ -62,13 +65,13 @@ public class DiskFileStoreTests
     [Test]
     public void WriteText_creates_the_missing_directory_and_the_file([Values] bool privateToUser)
     {
-        _store.WriteText(CredentialsPath, "{}", privateToUser);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser);
 
         Assert.Multiple(() =>
         {
             Assert.That(Directory.Exists(EnclaveDirectory), Is.True, "The directory was not created.");
             Assert.That(File.Exists(CredentialsPath), Is.True, "The file was not created.");
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
+            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo(EmptyObject));
         });
     }
 
@@ -84,7 +87,7 @@ public class DiskFileStoreTests
             return;
         }
 
-        _store.WriteText(Path.Combine(EnclaveDirectory, "cli.json"), "{}", privateToUser);
+        _store.WriteText(Path.Combine(EnclaveDirectory, "cli.json"), EmptyObject, privateToUser);
 
         Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
     }
@@ -103,7 +106,7 @@ public class DiskFileStoreTests
         Directory.CreateDirectory(EnclaveDirectory);
         File.SetUnixFileMode(EnclaveDirectory, DirectoryReadableByOthers);
 
-        _store.WriteText(CredentialsPath, "{}", privateToUser);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser);
 
         Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(DirectoryReadableByOthers));
     }
@@ -119,7 +122,7 @@ public class DiskFileStoreTests
             return;
         }
 
-        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser: true);
 
         Assert.That(File.GetUnixFileMode(CredentialsPath), Is.EqualTo(UserOnly));
     }
@@ -135,16 +138,16 @@ public class DiskFileStoreTests
         }
 
         Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, """{ "personalAccessToken": "old" }""");
+        File.WriteAllText(CredentialsPath, Credentials("old"));
         File.SetUnixFileMode(CredentialsPath, ReadableByOthers);
 
-        _store.WriteText(CredentialsPath, "{}", privateToUser: true);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser: true);
 
         var mode = File.GetUnixFileMode(CredentialsPath);
         Assert.Multiple(() =>
         {
             Assert.That(mode, Is.EqualTo(UserOnly));
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
+            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo(EmptyObject));
         });
     }
 
@@ -153,13 +156,13 @@ public class DiskFileStoreTests
     public void WriteText_replaces_the_text_of_an_existing_file([Values] bool privateToUser)
     {
         Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, """{ "personalAccessToken": "a much longer old token" }""");
+        File.WriteAllText(CredentialsPath, Credentials("a much longer old token"));
 
-        _store.WriteText(CredentialsPath, "{}", privateToUser);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser);
 
         Assert.Multiple(() =>
         {
-            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo("{}"));
+            Assert.That(_store.ReadText(CredentialsPath), Is.EqualTo(EmptyObject));
             Assert.That(Directory.GetFileSystemEntries(EnclaveDirectory), Is.EqualTo(new[] { CredentialsPath }));
         });
     }
@@ -169,7 +172,7 @@ public class DiskFileStoreTests
     public void Delete_removes_the_file_and_returns_true()
     {
         Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, "{}");
+        File.WriteAllText(CredentialsPath, EmptyObject);
 
         var deleted = _store.Delete(CredentialsPath);
 
@@ -206,12 +209,12 @@ public class DiskFileStoreTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(() => _store.WriteText(relativePath, "{}", privateToUser: true), Throws.ArgumentException);
+            Assert.That(() => _store.WriteText(relativePath, EmptyObject, privateToUser: true), Throws.ArgumentException);
             Assert.That(File.Exists(CredentialsPath), Is.False, "WriteText wrote the file.");
         });
 
         Directory.CreateDirectory(EnclaveDirectory);
-        File.WriteAllText(CredentialsPath, "{}");
+        File.WriteAllText(CredentialsPath, EmptyObject);
 
         Assert.Multiple(() =>
         {
@@ -220,4 +223,6 @@ public class DiskFileStoreTests
             Assert.That(File.Exists(CredentialsPath), Is.True, "Delete deleted the file.");
         });
     }
+
+    private static string Credentials(string token) => new JsonObject { ["personalAccessToken"] = token }.ToJsonString();
 }

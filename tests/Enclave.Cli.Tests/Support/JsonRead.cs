@@ -1,5 +1,7 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace Enclave.Cli.Tests.Support;
 
@@ -7,6 +9,11 @@ namespace Enclave.Cli.Tests.Support;
 // assertions (CA1861) and prints both sides readably when a test fails.
 internal static class JsonRead
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
+    // The element as CliJson.Output writes JSON: indented, with the relaxed encoder.
+    public static string Indented(JsonElement element) => JsonSerializer.Serialize(element, IndentedJson);
+
     // Parses JSON text into an element that outlives its document.
     public static JsonElement Parse(string json)
     {
@@ -18,6 +25,23 @@ internal static class JsonRead
         obj.EnumerateObject().Select(property => property.Name).ToArray();
 
     public static string PropertyNameList(JsonElement obj) => string.Join(",", PropertyNames(obj));
+
+    // A "trace" anywhere but last is kept, so a check of the names fails.
+    public static string[] PropertyNamesBeforeTrace(JsonElement obj) =>
+        PropertyNames(obj) is [.. var before, "trace"] ? before : PropertyNames(obj);
+
+    // A "trace" anywhere but last is kept, so a comparison fails.
+    public static JsonElement WithoutTrace(JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || PropertyNames(value) is not [.., "trace"])
+        {
+            return value;
+        }
+
+        var node = JsonNode.Parse(value.GetRawText())!.AsObject();
+        node.Remove("trace");
+        return Parse(node.ToJsonString());
+    }
 
     public static string StringList(JsonElement array) => string.Join(",", JsonAssert.Strings(array));
 
