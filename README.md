@@ -8,7 +8,19 @@
 
 1. Download `enclave-cli` for your platform from the [latest release](https://github.com/enclave-networks/cli/releases/latest).
 2. Create a personal access token for yourself or your AI agent in the [Enclave portal](https://portal.enclave.io/).
-3. Run `enclave-cli login` to authenticate and save your token locally. You only need to do this once.
+3. Log in with your token, which saves it locally. You only need to do this once.
+
+   **On Windows:**
+
+   ```cmd
+   echo <your token> | enclave-cli login --token-stdin
+   ```
+
+   **On Linux and macOS:**
+
+   ```bash
+   echo '<your token>' | enclave-cli login --token-stdin
+   ```
 
 Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json` on Windows or `~/.enclave/credentials.json` on Linux and macOS.
 
