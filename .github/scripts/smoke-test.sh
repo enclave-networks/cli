@@ -93,7 +93,7 @@ esac
 # (https://learn.microsoft.com/dotnet/api/system.text.json.jsonserializeroptions.newline).
 run commands
 [ "$status" -eq 0 ] || fail "enclave-cli commands exited $status: $(cat "$work/stderr")"
-# commands reads no token and makes no call, so it writes no diagnostics.
+# commands reads no token and makes no call, so stderr stays empty.
 [ ! -s "$work/stderr" ] || fail "enclave-cli commands wrote to stderr: $(cat "$work/stderr")"
 tr -d '\r' <"$work/stdout" >"$work/commands.json"
 [ "$(head -c 1 "$work/commands.json")" = "{" ] || fail "enclave-cli commands output does not start with {"

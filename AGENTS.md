@@ -9,7 +9,7 @@ Working with this repo:
 - `docs/agents/testing.md`: before writing a test.
 - `docs/agents/cli-contract.md`: before changing command input or output.
 - `docs/agents/comments-and-documentation.md`: before writing a comment or doc.
-- `docs/agents/ci.md`: before attempting to make changes local the git repo state.
+- `docs/agents/ci.md`: before changing `.github/`.
 
 Change workflow:
 

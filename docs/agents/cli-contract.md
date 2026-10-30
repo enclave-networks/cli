@@ -2,8 +2,9 @@
 
 - stdout: JSON, always. Emit `Enclave.Sdk.Api` models unchanged, so field names match the API. There is no output-format option.
 - Redirected stdout and stderr are UTF-8 without a byte order mark; stdin is read as UTF-8, or as a byte order mark at its start names, on every OS.
-- Lists: `{ "kind": "<noun>", "items": [...], "total": <n> }`. A list reads every page and prints once all are read; a failed page read prints nothing. `log` is the exception: the newest 100 entries, `--limit <n>` or `--since <when>` for more.
-- stderr: every run writes plain-text diagnostics to stderr before any error. An error is one indented JSON object, `{ "error": { "code", "status", "title", "detail", "errors" } }`, carrying the API's problem details through, and starts at the first line that starts with `{`. `code` comes from a fixed set that `commands` lists. NEVER write the token or the Authorization header to either stream.
+- Lists: `{ "kind": "<noun>", "items": [...], "total": <n>, "trace": { … } }`. A list reads every page and prints once all are read; a failed page read prints nothing. `log` is the exception: the newest 100 entries, `--limit <n>` or `--since <when>` for more.
+- Every document a command prints ends with `trace` (`spec/cli-surface.md` "Output").
+- stderr: only the error, one indented JSON object, `{ "error": { "code", "status", "title", "detail", "errors" }, "trace": { … } }`, carrying the API's problem details through. A successful command writes nothing to stderr. `code` comes from a fixed set that `commands` lists. NEVER write the token or the Authorization header to either stream.
 - Exit codes: 0 success; 1 `api_error`, `not_implemented`; 2 `invalid_argument`, `no_org`, `no_partner`; 3 `token_missing`, `token_invalid`; 4 `forbidden` (HTTP 403); 5 `not_found` (HTTP 404, single-item commands); 6 `transient` (network failure, timeout, HTTP 429 or 5xx).
 - NEVER prompt, and NEVER wait on interactive input. Changes run when given; there is no confirmation option.
 - Every command that changes something supports `--dry-run`: print the request it would send, send nothing, exit 0.
