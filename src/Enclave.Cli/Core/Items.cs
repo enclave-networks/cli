@@ -132,7 +132,7 @@ internal static class Items
 
             if (id is null || !format.TryParse(id, out var value))
             {
-                throw CliErrors.InvalidArgument(key, $"Item {ids.Count + 1} of the list on stdin has no {kind.IdField} that is {format.Describe}.");
+                throw CliErrors.InvalidArgument(key, $"\"{CliArguments.Stdin}\" expects {expected}; item {ids.Count + 1} has no {kind.IdField} that is {format.Describe}.");
             }
 
             ids.Add(value);

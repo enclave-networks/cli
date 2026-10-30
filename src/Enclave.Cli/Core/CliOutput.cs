@@ -18,15 +18,12 @@ internal sealed class CliOutput
     // Under --dry-run the command's own output comes from answers the API never sent (DryRun.Answer),
     // so it is dropped and WriteDryRunAsync prints the report in its place (spec/cli-surface.md "Dry
     // run").
-    public CliOutput(TextWriter stdout, TextWriter stderr, bool verbose, bool dryRun = false)
+    public CliOutput(TextWriter stdout, TextWriter stderr, bool dryRun = false)
     {
         _stdout = stdout;
         _stderr = stderr;
-        IsVerbose = verbose;
         _dropCommandOutput = dryRun;
     }
-
-    public bool IsVerbose { get; }
 
     // Under --dry-run it prints nothing. T decides the properties written, whatever the value's
     // runtime type.
@@ -63,14 +60,8 @@ internal sealed class CliOutput
         return Task.CompletedTask;
     }
 
-    // Never pass the token.
-    public void Verbose(string message)
-    {
-        if (IsVerbose)
-        {
-            _stderr.WriteLine(new JsonObject { ["verbose"] = message }.ToJsonString(CliJson.Compact));
-        }
-    }
+    // Written as it happens, on every run (spec/cli-surface.md "Details"). Never pass the token.
+    public void Diagnostic(string message) => _stderr.WriteLine(message);
 
     // Call once the command has succeeded.
     public async Task FlushAsync()
@@ -84,17 +75,24 @@ internal sealed class CliOutput
         ArgumentNullException.ThrowIfNull(error);
 
         _pending.Clear();
-        await _stderr.WriteLineAsync(Describe(error).ToJsonString(CliJson.Compact));
+        await _stderr.WriteLineAsync(Format(error));
     }
 
-    public static JsonObject Describe(CliException error)
+    public static string Format(CliException error) => Describe(error).ToJsonString(CliJson.Output);
+
+    private static JsonObject Describe(CliException error)
     {
         ArgumentNullException.ThrowIfNull(error);
 
+        // errors stays empty when its one message is detail's, so the person reading the error
+        // reads it once (spec/cli-surface.md "Errors and exit codes").
         var errors = new JsonObject();
-        foreach (var (key, messages) in error.Errors)
+        if (error.Errors.Values.SelectMany(messages => messages).ToArray() is not [var only] || only != error.Detail)
         {
-            errors[key] = new JsonArray(messages.Select(message => (JsonNode?)JsonValue.Create(message)).ToArray());
+            foreach (var (key, messages) in error.Errors)
+            {
+                errors[key] = new JsonArray(messages.Select(message => (JsonNode?)JsonValue.Create(message)).ToArray());
+            }
         }
 
         var body = new JsonObject

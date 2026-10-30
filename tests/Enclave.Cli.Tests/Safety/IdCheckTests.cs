@@ -407,10 +407,10 @@ public class IdCheckTests
                 run.Environment[source] = id;
                 break;
             case "cli.json org":
-                run.Files.WriteText(run.CliConfigPath, $$"""{ "org": { "id": "{{id}}", "name": "{{TestData.OrgName}}" } }""", privateToUser: false);
+                run.SaveDefaults(orgId: id, orgName: TestData.OrgName);
                 break;
             default:
-                run.Files.WriteText(run.CliConfigPath, $$"""{ "partner": { "id": "{{id}}" } }""", privateToUser: false);
+                run.SaveDefaults(partnerId: id);
                 break;
         }
     }

@@ -79,7 +79,7 @@ public class NamingTests
             Assert.That(pluralRequests.Select(request => request.Body), Is.EqualTo(singularRequests.Select(request => request.Body)));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
             Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
-            Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+            Assert.That(StderrOf(pluralRun, pluralResult), Is.EqualTo(StderrOf(singularRun, singularResult)));
         });
     }
 
@@ -112,7 +112,7 @@ public class NamingTests
             Assert.That(pluralRun.Calls(), Is.EqualTo(singularRun.Calls()));
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
             Assert.That(pluralResult.Stdout, Is.EqualTo(singularResult.Stdout));
-            Assert.That(pluralResult.Stderr, Is.EqualTo(singularResult.Stderr));
+            Assert.That(StderrOf(pluralRun, pluralResult), Is.EqualTo(StderrOf(singularRun, singularResult)));
         });
     }
 
@@ -251,6 +251,12 @@ public class NamingTests
 
     private static TestCaseData Hyphenated(string command, string pathSuffix, string json) =>
         new TestCaseData(command, TestData.OrgPath(pathSuffix), json).SetArgDisplayNames(command);
+
+    // The diagnostics name the fake APIs' addresses, and each run has its own ports.
+    private static string StderrOf(CliRun run, CliResult result) =>
+        result.Stderr
+            .Replace(run.PartnerApiBaseUrl, "<partner-api>", StringComparison.Ordinal)
+            .Replace(run.ApiBaseUrl, "<api>", StringComparison.Ordinal);
 
     private static string[] CommandNames(CliResult result) =>
         result.StdoutJson.GetProperty("commands").EnumerateArray()

@@ -12,23 +12,24 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
     // The non-blank lines of stdout, with any trailing carriage return removed.
     public string[] StdoutLines => Lines(Stdout);
 
-    // Each non-blank line of stderr parsed as JSON. Fails the test when a line is not JSON.
-    public IReadOnlyList<JsonElement> StderrJson => Lines(Stderr).Select(line => ParseJson(line, "each stderr line")).ToArray();
+    // The non-blank lines of stderr before the error, each a diagnostic. A diagnostic doesn't start
+    // with "{", so the error starts at the first line that does ("Details").
+    public string[] Diagnostics => Lines(Stderr[..ErrorStart]);
 
-    // The "error" object of the one error stderr holds. Fails the test unless stderr holds exactly
-    // one non-blank line and that line is a JSON object with an "error" object.
+    // stderr after its diagnostics: the error, or empty when there is none.
+    public string ErrorText => Stderr[ErrorStart..];
+
+    // The one JSON value stderr holds after its diagnostics. Fails the test unless there is exactly
+    // one.
+    public JsonElement StderrJson => ParseJson(ErrorText, "stderr after its diagnostics");
+
+    // The "error" object of the one error stderr holds. Fails the test unless that error is a JSON
+    // object with an "error" object.
     public JsonElement Error
     {
         get
         {
-            var lines = Lines(Stderr);
-
-            if (lines.Length != 1)
-            {
-                throw Failure($"Expected exactly one line on stderr, found {lines.Length}.");
-            }
-
-            var root = ParseJson(lines[0], "stderr");
+            var root = StderrJson;
 
             if (root.ValueKind != JsonValueKind.Object
                 || !root.TryGetProperty("error", out var error)
@@ -48,6 +49,22 @@ internal sealed record CliResult(int ExitCode, string Stdout, string Stderr)
     {
         builder.Append(Describe());
         return true;
+    }
+
+    private int ErrorStart
+    {
+        get
+        {
+            var start = 0;
+
+            while (start < Stderr.Length && Stderr[start] != '{')
+            {
+                var end = Stderr.IndexOf('\n', start);
+                start = end < 0 ? Stderr.Length : end + 1;
+            }
+
+            return start;
+        }
     }
 
     private static string[] Lines(string text) =>

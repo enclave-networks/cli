@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
@@ -24,7 +25,8 @@ public class ErrorTests
 
     private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
 
-    private static readonly string[] IdOptionOnly = ["--id"];
+    // As CliJson.Output writes JSON: indented, with the relaxed encoder.
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     // Each item is an ID, or an invite's email address, which the API cancels by (Enclave.Sdk.Api
     // OrganisationScopedClient.CancelInviteAync), so no lookup comes first and the failing request
@@ -62,6 +64,11 @@ public class ErrorTests
             .SelectMany(command => new[] { string.Empty, ",", " , " }
                 .Select(value => new TestCaseData(command, value).SetArgDisplayNames(command.Name, $"--id \"{value}\"")));
 
+    public static IEnumerable<TestCaseData> JsonThatIsNotProblemDetails()
+    {
+        yield return new TestCaseData(401, "application/json", new JsonObject { ["message"] = "Unauthorized" }.ToJsonString(), "token_invalid");
+    }
+
     // A list is not a single-ID command, so its 404 is api_error. errors is an object even when the
     // problem has none, so a caller reads every error in one shape (AGENTS.md "CLI contract").
     [TestCase(401, "token_invalid")]
@@ -86,7 +93,7 @@ public class ErrorTests
         var error = CliAssert.Failed(result, code);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(result.StderrJson[0]), Is.EqualTo(ErrorOnly));
+            Assert.That(JsonRead.PropertyNames(result.StderrJson), Is.EqualTo(ErrorOnly));
             Assert.That(JsonRead.PropertyNames(error), Is.EquivalentTo(ErrorFields));
             Assert.That(error.GetProperty("errors").ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(JsonRead.PropertyNames(error.GetProperty("errors")), Is.Empty);
@@ -94,6 +101,39 @@ public class ErrorTests
             Assert.That(error.GetProperty("title").GetString(), Is.EqualTo("Problem title"));
             Assert.That(error.GetProperty("detail").GetString(), Is.EqualTo("Problem detail"));
         });
+    }
+
+    // JSON on stderr is indented as stdout is, so the person reading the call can follow it
+    // ("Output"). Each case reaches stderr by a different path: a parse error, an API error, the
+    // check under --version, and a refused directive.
+    [TestCase("og")]
+    [TestCase("system show ABCDE")]
+    [TestCase("--version --bogus")]
+    [TestCase("[suggest] system list")]
+    public async Task An_error_is_printed_indented(string command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+
+        using var run = CliRun.Start();
+        run.StubProblem("GET", TestData.OrgPath("systems/ABCDE"), 404, "Not found");
+
+        var result = await run.RunAsync(command.Split(' '));
+
+        var indented = JsonSerializer.Serialize(result.StderrJson, IndentedJson) + Environment.NewLine;
+        Assert.That(result.ErrorText.ReplaceLineEndings(), Is.EqualTo(indented.ReplaceLineEndings()), result.ToString());
+    }
+
+    // A program finds the error at the first line that starts with "{" ("Details").
+    [Test]
+    public async Task The_error_follows_the_diagnostics()
+    {
+        using var run = CliRun.Start();
+        run.StubProblem("GET", SystemsPath, 403, "Forbidden");
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Failed(result, "forbidden");
+        Assert.That(result.Diagnostics, Has.Some.StartsWith("GET "), result.ToString());
     }
 
     // not_found tells the caller the item it named does not exist ("Several IDs").
@@ -152,7 +192,7 @@ public class ErrorTests
     // only for problem+json (ProblemDetailsHttpMessageHandler), so these reach the CLI as
     // HttpRequestException.
     [TestCase(401, "text/plain", "Unauthorized", "token_invalid")]
-    [TestCase(401, "application/json", """{ "message": "Unauthorized" }""", "token_invalid")]
+    [TestCaseSource(nameof(JsonThatIsNotProblemDetails))]
     [TestCase(403, "text/plain", "Forbidden", "forbidden")]
     [TestCase(429, "text/plain", "Too Many Requests", "transient")]
     [TestCase(500, "text/html", "<html><body><h1>500 Internal Server Error</h1></body></html>", "transient")]
@@ -253,7 +293,7 @@ public class ErrorTests
         var rejected = await run.RunAsync([.. command.Name.Split(' '), "--id", value]);
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(IdOptionOnly));
+        CliAssert.Problems(rejected.Error, "--id");
 
         var accepted = await run.RunAsync(command.Args(command.Ids(1)));
 

@@ -81,7 +81,7 @@ internal static class NameLookup
         var candidates = new JsonArray(matches
             .Select(item => (JsonNode?)new JsonObject
             {
-                ["id"] = JsonSerializer.SerializeToNode(idOf(item), CliJson.Compact),
+                ["id"] = JsonSerializer.SerializeToNode(idOf(item), CliJson.Output),
                 ["name"] = nameOf(item),
             })
             .ToArray());

@@ -53,7 +53,7 @@ internal sealed class CliContext : IDisposable
     };
 
     // Never pass the token.
-    public void Verbose(string message) => Output.Verbose(message);
+    public void Diagnostic(string message) => Output.Diagnostic(message);
 
     // Exits 3 with token_missing when there is no token.
     public ApiAccess Access
@@ -63,7 +63,7 @@ internal sealed class CliContext : IDisposable
             if (_access is null)
             {
                 _access = ApiAccess.Resolve(Host);
-                Verbose($"Token from {_access.TokenSource}; API at {_access.BaseUrl}.");
+                Diagnostic($"Token from {_access.TokenSource}; API at {_access.BaseUrl}.");
             }
 
             return _access;
@@ -103,7 +103,7 @@ internal sealed class CliContext : IDisposable
     {
         var client = GetClient();
         var choice = PartnerResolver.Resolve(this);
-        Verbose($"Partner {choice.Id} from {choice.Source}.");
+        Diagnostic($"Partner {choice.Id} from {choice.Source}.");
 
         var partner = new PartnerInUse(choice.Id, choice.Source, client.CreatePartnerClient(PartnerId.FromGuid(choice.Id)));
 

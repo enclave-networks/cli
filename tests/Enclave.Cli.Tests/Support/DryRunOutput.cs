@@ -31,7 +31,7 @@ internal static class DryRunOutput
             Assert.That(JsonAssert.Property(output, "dryRun").ValueKind, Is.EqualTo(JsonValueKind.True));
             Assert.That(org.ValueKind, Is.EqualTo(JsonValueKind.Object));
             Assert.That(requests.ValueKind, Is.EqualTo(JsonValueKind.Array));
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
 
         var items = requests.EnumerateArray().ToArray();

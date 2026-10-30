@@ -90,24 +90,28 @@ internal static partial class ApiJson
     }.ToJsonString();
 
     // A QueryAccountOrgsResponseModel, the GET /account/orgs body, of Org items.
-    public static string Orgs(params (Guid Id, string Name)[] orgs)
+    public static string Orgs(params (Guid Id, string Name)[] orgs) =>
+        OrgsOf(orgs.Select(org => Org(org.Id, org.Name)).ToArray());
+
+    // A QueryAccountOrgsResponseModel of the Org items given.
+    public static string OrgsOf(params string[] orgs)
     {
         var array = new JsonArray();
-        foreach (var (id, name) in orgs)
+        foreach (var org in orgs)
         {
-            array.Add(JsonNode.Parse(Org(id, name)));
+            array.Add(JsonNode.Parse(org));
         }
 
         return new JsonObject { ["orgs"] = array }.ToJsonString();
     }
 
-    // An AccountOrganisationModel with role Owner and partnerAccess false.
-    public static string Org(Guid id, string name) => new JsonObject
+    // An AccountOrganisationModel. The roles are portal UserOrganisationRole names.
+    public static string Org(Guid id, string name, string role = "Owner", bool partnerAccess = false) => new JsonObject
     {
         ["orgId"] = id.ToString("N"),
         ["orgName"] = name,
-        ["role"] = "Owner",
-        ["partnerAccess"] = false,
+        ["role"] = role,
+        ["partnerAccess"] = partnerAccess,
     }.ToJsonString();
 
     // A bulk action result, such as BulkSystemUpdateResult: one integer property.

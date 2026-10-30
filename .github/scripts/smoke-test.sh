@@ -93,6 +93,7 @@ esac
 # (https://learn.microsoft.com/dotnet/api/system.text.json.jsonserializeroptions.newline).
 run commands
 [ "$status" -eq 0 ] || fail "enclave-cli commands exited $status: $(cat "$work/stderr")"
+# commands reads no token and makes no call, so it writes no diagnostics.
 [ ! -s "$work/stderr" ] || fail "enclave-cli commands wrote to stderr: $(cat "$work/stderr")"
 tr -d '\r' <"$work/stdout" >"$work/commands.json"
 [ "$(head -c 1 "$work/commands.json")" = "{" ] || fail "enclave-cli commands output does not start with {"
@@ -105,18 +106,11 @@ echo "enclave-cli commands: exit 0, a JSON document on stdout"
 
 # With no token the CLI exits 3 before any call (spec/cli-surface.md "Errors and exit codes"). The
 # error names the credentials file, which shows the CLI looked in the home directory worked out
-# above.
+# above. The error is indented over several lines, so the code and the path are each found on
+# their own.
 run org list
 [ "$status" -eq 3 ] || fail "enclave-cli org list exited $status, expected 3: $(cat "$work/stderr")"
 [ ! -s "$work/stdout" ] || fail "enclave-cli org list wrote to stdout: $(cat "$work/stdout")"
-[ "$(wc -l <"$work/stderr" | tr -d ' ')" = 1 ] || fail "enclave-cli org list wrote other than one line to stderr: $(cat "$work/stderr")"
-error=$(tr -d '\r' <"$work/stderr")
-case "$error" in
-  '{"error":{"code":"token_missing",'*'}}') ;;
-  *) fail "expected a token_missing error from enclave-cli org list, got: $error" ;;
-esac
-case "$error" in
-  *"$named"*) ;;
-  *) fail "expected the token_missing error to name $credentials, got: $error" ;;
-esac
+grep -q 'token_missing' "$work/stderr" || fail "expected a token_missing error from enclave-cli org list, got: $(cat "$work/stderr")"
+grep -qF "$named" "$work/stderr" || fail "expected the token_missing error to name $credentials, got: $(cat "$work/stderr")"
 echo "enclave-cli org list: exit 3, token_missing on stderr"

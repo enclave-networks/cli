@@ -24,26 +24,29 @@ defaults:
     shell: bash
 
 jobs:
-  # YEAR.MONTH.DAY.RUN, the scheme other Enclave products use, worked out once so every job,
-  # archive and the release tag share it, even across midnight. A re-run keeps the run number
-  # (github.run_number, https://docs.github.com/actions/reference/workflows-and-actions/contexts)
-  # but takes that day's date, so after midnight UTC it publishes a second release of the same
-  # commit. Accepted: that release holds the same binaries, and a stable date would need a token
-  # here to read the run's creation time.
+  # Semantic version from GitVersion (GitVersion.yml), as in enclave.sdk.api: each merge to main
+  # releases the next patch, and "+semver: minor" or "+semver: major" in a commit message takes a
+  # bigger step. GitVersion reads the tags, so it needs the whole history. A re-run gives the same
+  # version, and the release step leaves an existing release as it was.
   version:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
       - id: version
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          version="$(date -u '+%Y.%-m.%-d').$GITHUB_RUN_NUMBER"
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            version="$version-pr.$PR_NUMBER"
-          fi
+          dotnet tool install GitVersion.Tool --version 6.8.2 --tool-path "$RUNNER_TEMP/gitversion"
+          version="$("$RUNNER_TEMP/gitversion/dotnet-gitversion" -showvariable SemVer)"
           echo "Version: $version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
   test:
@@ -101,14 +104,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $archive = "enclave-cli-$env:VERSION-$env:RID.zip"
+          $archive = "enclave-cli-$env:RID.zip"
           Compress-Archive -Path publish/enclave-cli.exe, LICENSE -DestinationPath $archive
           "ARCHIVE=$archive" >> $env:GITHUB_ENV
 
       - name: Package (tar.gz)
         if: runner.os != 'Windows'
         run: |
-          archive="enclave-cli-$VERSION-$RID.tar.gz"
+          archive="enclave-cli-$RID.tar.gz"
           cp LICENSE publish/
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
@@ -175,7 +178,7 @@ jobs:
       # Artifact uploads do not keep file permissions; tar keeps the executable bit.
       - name: Package (tar.gz)
         run: |
-          archive="enclave-cli-$VERSION-$RID.tar.gz"
+          archive="enclave-cli-$RID.tar.gz"
           cp LICENSE publish/
           tar -czf "$archive" -C publish enclave-cli LICENSE
           echo "ARCHIVE=$archive" >> "$GITHUB_ENV"
@@ -220,17 +223,21 @@ jobs:
           merge-multiple: true
           skip-decompress: true
 
-      # One file per RID in the build matrices, so a missing or renamed file stops the release.
+      # One file per RID in the build matrices, so a missing or renamed file stops the release. The
+      # names carry no version, so each archive in the latest release has a fixed URL,
+      # releases/latest/download/<name>
+      # (https://docs.github.com/repositories/releasing-projects-on-github/linking-to-releases);
+      # the tag and enclave-cli --version carry the version.
       - name: Collect release files
         run: |
           mkdir release
-          find downloaded -type f -name "enclave-cli-$VERSION-*" -exec mv {} release/ \;
+          find downloaded -type f -name "enclave-cli-*" -exec mv {} release/ \;
           expected=""
           for rid in win-x64 win-arm64; do
-            expected="$expected enclave-cli-$VERSION-$rid.zip"
+            expected="$expected enclave-cli-$rid.zip"
           done
           for rid in linux-x64 linux-arm64 linux-musl-x64 linux-musl-arm64 osx-x64 osx-arm64; do
-            expected="$expected enclave-cli-$VERSION-$rid.tar.gz"
+            expected="$expected enclave-cli-$rid.tar.gz"
           done
           missing=0
           for file in $expected; do
@@ -248,8 +255,8 @@ jobs:
           cat SHA256SUMS
 
       # gh release create stops when a published release has the tag (cli/cli v2.102.0,
-      # pkg/cmd/release/create, createRun and publishedReleaseExists), so a re-run on the same UTC
-      # day leaves the release as it was.
+      # pkg/cmd/release/create, createRun and publishedReleaseExists), so a re-run leaves the
+      # release as it was.
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}

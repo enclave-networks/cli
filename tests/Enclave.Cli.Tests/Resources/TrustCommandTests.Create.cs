@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 using static Enclave.Cli.Tests.Support.FieldText;
@@ -80,7 +81,7 @@ public partial class TrustCommandTests
             Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(Set(JsonRead.PropertyNames(configuration)), Is.EqualTo("authority"));
             Assert.That(configuration.GetProperty("authority").GetString(), Is.EqualTo(authority));
-            Assert.That(settings.GetProperty("conditions").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(settings.GetProperty("conditions").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
         });
     }
 
@@ -286,7 +287,7 @@ public partial class TrustCommandTests
             Assert.That(JsonRead.PropertyNames(body.GetProperty("settings")), Is.EquivalentTo(TrustSettingsFields));
             Assert.That(Text(body, "description"), Is.EqualTo("uk only"));
             Assert.That(Text(body, "type"), Is.EqualTo("PublicIp"));
-            Assert.That(body.GetProperty("settings").GetProperty("configuration").GetRawText(), Is.EqualTo("{}"));
+            Assert.That(body.GetProperty("settings").GetProperty("configuration").GetRawText(), Is.EqualTo(new JsonObject().ToJsonString()));
             Assert.That(Conditions(JsonAssert.Property(JsonAssert.Property(body, "settings"), "conditions")), Is.EqualTo(Set("country|GB|false|(none)", "ip|203.0.113.0/24|true|(none)")));
         });
     }

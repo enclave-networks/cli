@@ -14,11 +14,14 @@ internal static class CliJson
     // encoder writes + and non-ASCII letters as themselves; the output is never embedded in HTML,
     // the case the default encoder guards against.
 
-    // Indented, for people reading stdout as well as agents.
-    public static JsonSerializerOptions Output { get; } = Create(indented: true);
-
-    // For stderr, where each error is one line.
-    public static JsonSerializerOptions Compact { get; } = Create(indented: false);
+    // Indented, for the person reading the call (spec/cli-surface.md "Output").
+    public static JsonSerializerOptions Output { get; } = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter(), new UtcDateTimeConverter() },
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true,
+    };
 
     // System.Text.Json reads a time with an offset other than Z as local time in the machine's zone,
     // and one without a zone as Unspecified (dotnet/runtime release/10.0, JsonHelpers.Date.cs,
@@ -26,14 +29,6 @@ internal static class CliJson
     // machine's zone, outside CliHost. A time without a zone is UTC, as the API writes its times.
     public static DateTime ToUtc(DateTime value) =>
         value.Kind == DateTimeKind.Local ? value.ToUniversalTime() : DateTime.SpecifyKind(value, DateTimeKind.Utc);
-
-    private static JsonSerializerOptions Create(bool indented) => new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new GatewayPriorityTypeJsonConverter(), new JsonStringEnumConverter(), new UtcDateTimeConverter() },
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        WriteIndented = indented,
-    };
 
     // Output times are UTC (AGENTS.md "CLI contract"); System.Text.Json writes a time by its kind, so
     // a local one would print at the machine's offset. A DateTime? uses this converter through

@@ -96,18 +96,18 @@ public class PartnerSafetyTests
     }
 
     // "body" is null for a request with none ("Dry run").
-    [TestCase("create Initech", "initialSystemsCount", "50")]
-    [TestCase("create Initech", "initialGatewaysCount", "0")]
-    [TestCase("create Initech", "adminAutoSyncIsEnabled", "false")]
-    [TestCase("update --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --systems 30", "LicensedAgentsCount", "30")]
-    [TestCase("convert --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --billing-months 24", "billingPeriodMonths", "24")]
-    [TestCase("invite --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --email sam@globex.example", "emailAddress", "\"sam@globex.example\"")]
+    [TestCase("create Initech", "initialSystemsCount", 50)]
+    [TestCase("create Initech", "initialGatewaysCount", 0)]
+    [TestCase("create Initech", "adminAutoSyncIsEnabled", false)]
+    [TestCase("update --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --systems 30", "LicensedAgentsCount", 30)]
+    [TestCase("convert --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --billing-months 24", "billingPeriodMonths", 24)]
+    [TestCase("invite --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --email sam@globex.example", "emailAddress", "sam@globex.example")]
     [TestCase("add-admin --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --user-id 5b8e1c47-2d93-4f60-a7b1-c04e9d3f6a25", null, null)]
     [TestCase("remove-admin --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --user alex@example.com", null, null)]
     [TestCase("cancel-invite --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b --email sam@globex.example", null, null)]
     [TestCase("enable-auto-sync --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b", null, null)]
     [TestCase("disable-auto-sync --org-id 6f1c2a52-8a3e-4d7b-9a51-0c3d2e4f5a6b", null, null)]
-    public async Task A_dry_run_shows_the_body_the_change_would_send(string commandLine, string? field, string? json)
+    public async Task A_dry_run_shows_the_body_the_change_would_send(string commandLine, string? field, object? value)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
         using var run = PartnerApiFake.StartWithPartner();
@@ -125,14 +125,15 @@ public class PartnerSafetyTests
         }
         else
         {
-            Assert.That(JsonAssert.Property(body, field).GetRawText(), Is.EqualTo(json), result.ToString());
+            Assert.That(JsonAssert.Property(body, field).GetRawText(), Is.EqualTo(JsonSerializer.Serialize(value)), result.ToString());
         }
     }
 
     // A printed token lands in CI logs and agent transcripts, and does not expire (portal
     // TokensApiController.Create). Each run must succeed and send its requests with the token, so a
     // command that printed nothing because it did nothing does not pass. create under --dry-run
-    // sends nothing; its report shows it ran.
+    // sends nothing; its report shows it ran. stderr holds the diagnostics, each request among them
+    // ("Details").
     [TestCaseSource(nameof(CustomerCommandRuns))]
     public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command(string[] args, string[] calls, string? withheldChange)
     {
@@ -144,26 +145,7 @@ public class PartnerSafetyTests
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
-            Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
-        });
-        AssertReportedChange(result, withheldChange);
-    }
-
-    // Under --verbose stderr holds only { "verbose" } lines, each request among them ("Details").
-    [TestCaseSource(nameof(CustomerCommandRuns))]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_a_partner_customer_command_under_verbose(string[] args, string[] calls, string? withheldChange)
-    {
-        using var run = PartnerApiFake.StartWithPartner();
-
-        var result = await run.RunAsync([.. args, "--verbose"]);
-
-        TokenAssert.Absent(result);
-        Assert.Multiple(() =>
-        {
-            Assert.That(result.ExitCode, Is.Zero, result.ToString());
-            Assert.That(result.Stderr, Is.Not.Empty);
-            Assert.That(result.StderrJson.Select(JsonRead.PropertyNameList), Is.All.EqualTo("verbose"), result.ToString());
+            Assert.That(result.Diagnostics, Is.Not.Empty, result.ToString());
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
@@ -171,20 +153,21 @@ public class PartnerSafetyTests
     }
 
     // partner use has no dry run. The partner command afterwards shows the default was saved.
-    [TestCase(false)]
-    [TestCase(true)]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_partner_use(bool verbose)
+    [Test]
+    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_partner_use()
     {
         using var run = CliRun.Start();
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
-        string[] use = ["partner", "use", "--id", TestData.PartnerId.ToString()];
-        string[] args = verbose ? [.. use, "--verbose"] : use;
 
-        var result = await run.RunAsync(args);
+        var result = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
 
         TokenAssert.Absent(result);
         CliAssert.Succeeded(result);
-        Assert.That(run.Requests, Is.Empty);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Diagnostics, Is.Not.Empty, result.ToString());
+            Assert.That(run.Requests, Is.Empty);
+        });
 
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }

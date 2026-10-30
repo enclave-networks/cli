@@ -1,3 +1,4 @@
+using System.CommandLine;
 using Enclave.Api.Modules.SystemManagement.Dns.Models;
 using Enclave.Cli.Context;
 using Enclave.Cli.Core;
@@ -64,19 +65,22 @@ internal static class DnsLookup
     // The record name is what the API takes in place of the full name (portal
     // DnsRecordCreateModel, DnsRecordPatchModel). Exits 2 when the hostname is a zone's name or is
     // in no zone.
-    // hostname is the full name, such as db.eu.internal; errors name key, the option or argument
+    // hostname is the full name, such as db.eu.internal; errors name given, the option or argument
     // it came from.
-    public static (DnsZoneSummaryModel Zone, string RecordName) Place(string hostname, IReadOnlyCollection<DnsZoneSummaryModel> zones, string key)
+    public static (DnsZoneSummaryModel Zone, string RecordName) Place(string hostname, IReadOnlyCollection<DnsZoneSummaryModel> zones, Symbol given)
     {
         ArgumentNullException.ThrowIfNull(hostname);
         ArgumentNullException.ThrowIfNull(zones);
+
+        var key = CliVerb.KeyOf(given);
+        var source = CliVerb.Describe(given);
 
         // A zone's own name would otherwise be read as a record in a shorter zone it ends in:
         // eu.internal as the record "eu" in internal. These messages leave the hostname out, as
         // option errors do (CliOptions).
         if (zones.Any(zone => string.Equals(zone.Name, hostname, StringComparison.OrdinalIgnoreCase)))
         {
-            throw CliErrors.InvalidArgument(key, "The hostname given is the name of a zone. A hostname is a name within a zone, such as db.internal in the zone internal.");
+            throw CliErrors.InvalidArgument(key, $"{source} takes a name within a zone, such as db.internal in the zone internal, and the hostname given is the name of a zone.");
         }
 
         // The longest zone name the hostname ends in at a label boundary: with zones internal and
@@ -86,7 +90,7 @@ internal static class DnsLookup
             .Where(candidate => hostname.Length > candidate.Name.Length + 1
                 && hostname.EndsWith("." + candidate.Name, StringComparison.OrdinalIgnoreCase))
             .MaxBy(candidate => candidate.Name.Length)
-            ?? throw CliErrors.InvalidArgument(key, "The hostname given is in none of the organisation's zones. A hostname is written in full and ends in its zone's name, such as db.internal in the zone internal.");
+            ?? throw CliErrors.InvalidArgument(key, $"{source} takes a full hostname, which ends in its zone's name, such as db.internal in the zone internal, and the hostname given is in none of the organisation's zones.");
 
         return (zone, hostname[..^(zone.Name.Length + 1)]);
     }

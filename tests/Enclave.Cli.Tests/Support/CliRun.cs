@@ -309,6 +309,26 @@ internal sealed class CliRun : IDisposable
         Files.WriteText(CredentialsPath, credentials.ToJsonString(IndentedJson), privateToUser: true);
     }
 
+    // Puts ~/.enclave/cli.json in Files with the defaults given, in the form org use and partner use
+    // save them (spec/cli-surface.md "Login, logout and status"). The IDs are text, so a test can
+    // save one that is malformed, as only a hand edit could.
+    public void SaveDefaults(string? orgId = null, string? orgName = null, string? partnerId = null)
+    {
+        var settings = new JsonObject();
+
+        if (orgId is not null)
+        {
+            settings["org"] = new JsonObject { ["id"] = orgId, ["name"] = orgName };
+        }
+
+        if (partnerId is not null)
+        {
+            settings["partner"] = new JsonObject { ["id"] = partnerId };
+        }
+
+        Files.WriteText(CliConfigPath, settings.ToJsonString(IndentedJson), privateToUser: false);
+    }
+
     public void Dispose()
     {
         Api.Stop();

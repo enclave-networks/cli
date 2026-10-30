@@ -13,6 +13,8 @@ internal static class ParseProblems
     // The errors key of an unknown option reported without its name.
     private const string UnnamedOptionKey = "options";
 
+    private const string UnknownCommandKey = "command";
+
     // Null when the command line parsed.
     public static CliException? Find(ParseResult parseResult)
     {
@@ -21,12 +23,24 @@ internal static class ParseProblems
         var problems = new List<(string Key, string Message)>();
         AddUnmatchedTokens(parseResult, problems);
 
-        // A command's errors are about unmatched tokens, reported above, and repeat the token. They
-        // reach here under --version, whose action does not clear them, and for a token before a
-        // subcommand (`system --bogus list`), since clearing keeps the errors of outer commands.
-        foreach (var error in parseResult.Errors.Where(error => error.SymbolResult is not CommandResult))
+        // The options after an unknown command belong to a command the CLI can't identify, so the
+        // unknown command is the only problem reported (spec/cli-surface.md "Errors and exit codes").
+        var unknownCommand = problems.FindIndex(problem => problem.Key == UnknownCommandKey);
+
+        if (unknownCommand >= 0)
         {
-            problems.Add((KeyOf(error.SymbolResult), MessageOf(error)));
+            problems = [problems[unknownCommand]];
+        }
+        else
+        {
+            // A command's errors are about unmatched tokens, reported above, and repeat the token.
+            // They reach here under --version, whose action does not clear them, and for a token
+            // before a subcommand (`system --bogus list`), since clearing keeps the errors of outer
+            // commands.
+            foreach (var error in parseResult.Errors.Where(error => error.SymbolResult is not CommandResult))
+            {
+                problems.Add((KeyOf(error.SymbolResult), MessageOf(error)));
+            }
         }
 
         if (problems.Count == 0)
@@ -130,7 +144,7 @@ internal static class ParseProblems
                 if (!reportedUnknownCommand)
                 {
                     var suggestion = Suggestions.Closest(token, VisibleSubcommands(command).Select(subcommand => subcommand.Name));
-                    problems.Add(("command", $"`{commandName}` has no command by the name given.{DidYouMean(suggestion)} Its commands are: {string.Join(", ", VisibleSubcommands(command).Select(subcommand => subcommand.Name))}."));
+                    problems.Add((UnknownCommandKey, $"`{commandName}` has no command by the name given.{DidYouMean(suggestion)} Its commands are: {string.Join(", ", VisibleSubcommands(command).Select(subcommand => subcommand.Name))}."));
                     reportedUnknownCommand = true;
                 }
 

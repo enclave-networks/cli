@@ -67,7 +67,7 @@ public class ChangesRunWhenGivenTests
         Assert.Multiple(() =>
         {
             Assert.That(command.ChangeRequests(run), Has.Length.EqualTo(1));
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
 
         if (BulkCommand.All.Any(bulk => bulk.Name == command.Name))

@@ -68,6 +68,26 @@ internal static class CliAssert
         Assert.That(ErrorCode(result.Error), Is.EqualTo(code), result.ToString());
     }
 
+    // Asserts the error reports a problem with each of these options or arguments and no other.
+    // detail names a single problem, and errors stays empty since it would only repeat detail;
+    // errors keys several (spec/cli-surface.md "Errors and exit codes").
+    public static void Problems(JsonElement error, params string[] keys)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        var errors = JsonRead.PropertyNames(JsonAssert.Property(error, "errors"));
+
+        if (keys.Length == 1)
+        {
+            Assert.That(JsonAssert.Property(error, "detail").GetString(), Does.Contain(keys[0]), error.ToString());
+            Assert.That(errors, Is.Empty, error.ToString());
+        }
+        else
+        {
+            Assert.That(errors, Is.EquivalentTo(keys), error.ToString());
+        }
+    }
+
     // Asserts the run exited 0 and printed exactly { "kind", "items", "total" } with this kind and
     // total equal to the number of items, and returns the items.
     // total counts the items printed, the matches when the CLI filters them (spec/cli-surface.md

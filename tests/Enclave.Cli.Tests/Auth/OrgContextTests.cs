@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 
@@ -26,6 +27,14 @@ public class OrgContextTests
     // Enclave.Sdk.Api writes the organisation ID as 32 hex digits (Enclave.Sdk.Api.Data
     // OrganisationGuid.ToString).
     private static readonly string ThirdOrgSystems = $"/org/{ThirdOrgId:N}/systems";
+
+    public static IEnumerable<TestCaseData> DefaultsThatAreNotObjects()
+    {
+        yield return SavedAs("org", "3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17");
+        yield return SavedAs("org", new JsonArray());
+        yield return SavedAs("partner", "9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48");
+        yield return SavedAs("partner", 12);
+    }
 
     // The higher source names Globex and the lower Acme, and the token sees both. A name costs one
     // lookup and an ID none ("Calls per command"). The org use that saves a default makes its own
@@ -132,10 +141,7 @@ public class OrgContextTests
 
     // A command that read past a malformed default would act somewhere the caller did not choose.
     // The token sees one organisation, so a CLI that skipped the default would use it and succeed.
-    [TestCase("org", """{ "org": "3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17" }""")]
-    [TestCase("org", """{ "org": [] }""")]
-    [TestCase("partner", """{ "partner": "9e2d4f61-3c8b-4a05-b7e9-1d6a0c5f2b48" }""")]
-    [TestCase("partner", """{ "partner": 12 }""")]
+    [TestCaseSource(nameof(DefaultsThatAreNotObjects))]
     public async Task A_saved_default_that_is_not_an_object_exits_2_naming_cli_json(string noun, string settings)
     {
         using var run = CliRun.Start();
@@ -402,7 +408,7 @@ public class OrgContextTests
         CliAssert.Rejected(run, result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(JsonAssert.Property(result.Error, "errors")), Is.EqualTo(key), result.ToString());
+            CliAssert.Problems(result.Error, key);
             Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
         });
 
@@ -670,6 +676,13 @@ public class OrgContextTests
             Assert.That($"{request.Method} {request.Path}", Is.EqualTo(OrgLookup));
             Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
         });
+    }
+
+    // cli.json with the noun's default saved as the value given.
+    private static TestCaseData SavedAs(string noun, JsonNode value)
+    {
+        var settings = new JsonObject { [noun] = value }.ToJsonString();
+        return new TestCaseData(noun, settings).SetArgDisplayNames(noun, settings);
     }
 
     private static void StubBothOrgsAndTheirSystems(CliRun run)

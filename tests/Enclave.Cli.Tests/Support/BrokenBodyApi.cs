@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json.Nodes;
 
 namespace Enclave.Cli.Tests.Support;
 
@@ -14,7 +15,7 @@ namespace Enclave.Cli.Tests.Support;
 internal sealed class BrokenBodyApi : IDisposable
 {
     private static readonly byte[] Answer = Encoding.ASCII.GetBytes(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{\"items\":[");
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n" + new JsonObject { ["items"] = new JsonArray() }.ToJsonString()[..^2]);
 
     private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
 

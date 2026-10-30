@@ -28,7 +28,7 @@ internal static class OrgUseCommand
                 : OrganisationResolver.MatchName(context.Get(name)!, organisations, name.Name);
 
             SettingsFile.SaveOrganisation(context.Host, organisation.OrgId, organisation.OrgName);
-            context.Verbose($"Saved {organisation.OrgId} as the default organisation in {SettingsFile.PathFor(context.Host)}.");
+            context.Diagnostic($"Saved {organisation.OrgId} as the default organisation in {SettingsFile.PathFor(context.Host)}.");
 
             await context.Output.WriteAsync(organisation, context.CancellationToken);
         });

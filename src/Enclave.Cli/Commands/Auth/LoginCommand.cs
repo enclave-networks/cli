@@ -20,30 +20,35 @@ internal static class LoginCommand
             var host = context.Host;
             var token = await ReadTokenAsync(context, context.Get(tokenStdin));
 
-            // The file's baseUrl is kept and the token checked there, so a file pointing at another
-            // API address keeps pointing there; partnerApiBaseUrl is kept too, since staging means
-            // setting both (spec/cli-surface.md "Partner API").
+            // The token is checked at the API address in use and that address saved, so a file
+            // pointing at another API address keeps pointing there. partnerApiBaseUrl is saved from
+            // ENCLAVE_PARTNER_API_URL or kept, since staging means setting both (spec/cli-surface.md
+            // "Partner API").
             var stored = CredentialsFile.Read(host);
             var access = new ApiAccess(
                 token,
                 context.Get(tokenStdin) ? "stdin" : ApiAccess.TokenVariable,
                 ApiAccess.BaseUrlFrom(host, stored),
                 ApiAccess.PartnerApiBaseUrlFrom(host, stored));
-            context.Verbose($"Checking the token at {access.BaseUrl}.");
+            context.Diagnostic($"Checking the token at {access.BaseUrl}.");
 
             // A token the API refuses throws here, before anything is written, so it never replaces a
             // working one.
             var organisations = await context.CreateClient(access).GetOrganisationsAsync();
 
-            CredentialsFile.Write(host, token, stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri, stored?.PartnerApiBaseUrl);
-            context.Verbose($"Saved the token in {CredentialsFile.PathFor(host)}.");
+            CredentialsFile.Write(
+                host,
+                token,
+                ApiAccess.ApiUrlFromVariable(host)?.AbsoluteUri ?? stored?.BaseUrl ?? access.BaseUrl.AbsoluteUri,
+                ApiAccess.PartnerApiUrlFromVariable(host)?.AbsoluteUri ?? stored?.PartnerApiBaseUrl);
+            context.Diagnostic($"Saved the token in {CredentialsFile.PathFor(host)}.");
 
             // With several, the default the user chose with org use stays as it is.
             if (organisations.Count == 1)
             {
                 var only = organisations[0];
                 SettingsFile.SaveOrganisation(host, only.OrgId, only.OrgName);
-                context.Verbose($"Saved {only.OrgId} as the default organisation.");
+                context.Diagnostic($"Saved {only.OrgId} as the default organisation.");
             }
 
             await context.Output.WriteListAsync(ListKind.Org, organisations, context.CancellationToken);

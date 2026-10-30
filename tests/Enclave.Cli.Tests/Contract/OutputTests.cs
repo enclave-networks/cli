@@ -36,9 +36,38 @@ public class OutputTests
         yield return SingleItem("org show", string.Empty, typeof(OrganisationPropertiesModel), ApiJson.OrgProperties(TestData.OrgName));
     }
 
-    // A caller treats anything on stderr as an error ("Errors and exit codes").
+    // A read, a name lookup, a change, a dry run, the commands that save files, and a partner command.
+    public static IEnumerable<TestCaseData> SucceedingCommands()
+    {
+        yield return Succeeding("system", "list");
+        yield return Succeeding("system", "list", "--org", TestData.OrgName);
+        yield return Succeeding("system", "disable", "ABCDE");
+        yield return Succeeding("system", "disable", "ABCDE", "--dry-run");
+        yield return Succeeding("login");
+        yield return Succeeding("org", "use", TestData.OrgName);
+        yield return Succeeding("partner", "use", "--id", TestData.PartnerId.ToString());
+        yield return Succeeding("partner", "customer", "list", "--partner-id", TestData.PartnerId.ToString());
+    }
+
+    // stderr carries only the error ("Errors and exit codes").
+    [TestCaseSource(nameof(SucceedingCommands))]
+    public async Task A_command_that_succeeds_writes_nothing_to_stderr(string[] args)
+    {
+        using var run = CliRun.Start();
+        BothOrgs.Stub(run);
+        StubSystems(run, TestData.OrgPath("systems"));
+        run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
+        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
+
+        var result = await run.RunAsync(args);
+
+        CliAssert.Succeeded(result);
+        Assert.That(result.Stderr, Is.Empty);
+    }
+
+    // A caller finds an error at the first stderr line that starts with "{" ("Details").
     [TestCaseSource(nameof(SingleItemCommands))]
-    public async Task A_command_that_prints_one_item_prints_the_api_model_unchanged_and_nothing_on_stderr(string command, string path, Type model, string json)
+    public async Task A_command_that_prints_one_item_prints_the_api_model_unchanged_and_no_error(string command, string path, Type model, string json)
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
@@ -51,7 +80,7 @@ public class OutputTests
         var expected = await ApiJson.AsSdkModelAsync(json, model);
         Assert.Multiple(() =>
         {
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
             Assert.That(request.Method, Is.EqualTo("GET"));
             Assert.That(request.Path, Is.EqualTo(path));
             Assert.That(
@@ -115,33 +144,43 @@ public class OutputTests
         Assert.That(JsonAssert.Property(result.StdoutJson, "created").GetString(), Is.EqualTo(printed), result.ToString());
     }
 
-    // A caller can turn --verbose on without changing what it parses ("Options on every command").
-    // The token never appears ("Login, logout and status").
+    // Diagnostics are for the person reading the call, so each is a line of plain text, and every
+    // run writes them ("Details").
+    [Test]
+    public async Task Every_run_writes_each_diagnostic_as_a_line_of_plain_text()
+    {
+        using var run = CliRun.Start();
+        var path = TestData.OrgPath("systems");
+        StubSystems(run, path);
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Succeeded(result);
+        Assert.That(result.Diagnostics, Has.Some.StartsWith($"GET {run.ApiBaseUrl}{path}?"), result.ToString());
+    }
+
+    // The calling program parses stdout, which holds the JSON alone ("Output"). The token never
+    // appears ("Login, logout and status").
     [TestCase("system list", "systems")]
     [TestCase("system show ABCDE", "systems/ABCDE")]
-    public async Task Verbose_writes_diagnostics_to_stderr_and_leaves_stdout_and_the_requests_unchanged(string command, string pathSuffix)
+    public async Task Diagnostics_go_to_stderr_and_leave_stdout_to_the_json(string command, string pathSuffix)
     {
         ArgumentNullException.ThrowIfNull(command);
         ArgumentNullException.ThrowIfNull(pathSuffix);
-        using var quiet = CliRun.Start();
-        using var verbose = CliRun.Start();
+        using var run = CliRun.Start();
         var path = TestData.OrgPath(pathSuffix);
-        StubSystems(quiet, path);
-        StubSystems(verbose, path);
+        StubSystems(run, path);
 
-        var quietResult = await quiet.RunAsync(command.Split(' '));
-        var verboseResult = await verbose.RunAsync([.. command.Split(' '), "--verbose"]);
+        var result = await run.RunAsync(command.Split(' '));
 
-        CliAssert.Succeeded(quietResult);
-        CliAssert.Succeeded(verboseResult);
+        CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(quietResult.Stderr, Is.Empty);
-            Assert.That(quiet.Calls(), Is.Not.Empty.And.All.EqualTo($"GET {path}"));
-            Assert.That(verbose.Calls(), Is.EqualTo(quiet.Calls()));
-            Assert.That(verboseResult.Stdout, Is.EqualTo(quietResult.Stdout));
-            Assert.That(verboseResult.Stderr, Is.Not.Empty);
-            Assert.That(verboseResult.Stdout + verboseResult.Stderr, Does.Not.Contain(TestData.Token));
+            Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo($"GET {path}"));
+            Assert.That(result.StdoutJson.ValueKind, Is.EqualTo(JsonValueKind.Object));
+            Assert.That(result.Diagnostics, Is.Not.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
+            TokenAssert.Absent(result);
         });
     }
 
@@ -149,14 +188,14 @@ public class OutputTests
     // so a CLI that logged one request per command fails; the bulk disable covers a change.
     [TestCase("system list", "GET")]
     [TestCase("system disable ABCDE", "PUT")]
-    public async Task Verbose_logs_the_method_and_url_of_each_request_in_the_order_sent(string command, string method)
+    public async Task Diagnostics_log_the_method_and_url_of_each_request_in_the_order_sent(string command, string method)
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
         run.StubPages(TestData.OrgPath("systems"), 1, ApiJson.System("ABCDE"), ApiJson.System("FGHIJ"));
         run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
 
-        var result = await run.RunAsync([.. command.Split(' '), "--verbose"]);
+        var result = await run.RunAsync(command.Split(' '));
 
         CliAssert.Succeeded(result);
         var received = run.Requests.Select(request => Describe(request.Method, new Uri(run.ApiUrl, request.Path), request.Query)).ToArray();
@@ -221,7 +260,7 @@ public class OutputTests
 
     [TestCase("system list", "--filter")]
     [TestCase("policy create", "--acl")]
-    [TestCase("commands", "--verbose")]
+    [TestCase("commands", "--search-keys")]
     public async Task Help_on_a_command_prints_its_options_and_exits_0_without_a_request(string command, string option)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -251,20 +290,15 @@ public class OutputTests
         return $"{method} {url.GetLeftPart(UriPartial.Path)}?{parameters}";
     }
 
-    // The requests --verbose logged: each stderr line { "verbose": "<METHOD> <URL> …" } whose text
-    // starts with an HTTP method and an absolute URL.
+    // The requests the diagnostics logged: each diagnostic that starts with an HTTP method and an
+    // absolute URL.
     private static string[] LoggedRequests(CliResult result)
     {
         var logged = new List<string>();
 
-        foreach (var line in result.StderrJson)
+        foreach (var line in result.Diagnostics)
         {
-            if (!line.TryGetProperty("verbose", out var text) || text.ValueKind != JsonValueKind.String)
-            {
-                continue;
-            }
-
-            var words = text.GetString()!.Split(' ');
+            var words = line.Split(' ');
 
             if (words.Length >= 2
                 && words[0] is "GET" or "POST" or "PUT" or "PATCH" or "DELETE"

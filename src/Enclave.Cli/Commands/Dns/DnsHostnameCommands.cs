@@ -73,7 +73,7 @@ internal static class DnsHostnameCommands
         {
             var org = await context.GetOrganisationAsync();
             var zones = await DnsLookup.ReadZonesAsync(context, org);
-            var (zone, recordName) = DnsLookup.Place(context.Get(hostname)!, zones, hostname.Name);
+            var (zone, recordName) = DnsLookup.Place(context.Get(hostname)!, zones, hostname);
 
             // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter). The
             // hostname does not exist yet, so a 404 here is about the zone or a system and exits 1
@@ -121,7 +121,7 @@ internal static class DnsHostnameCommands
             if (newName is not null)
             {
                 var zones = await DnsLookup.ReadZonesAsync(context, org);
-                var (zone, recordName) = DnsLookup.Place(newName, zones, name.Name);
+                var (zone, recordName) = DnsLookup.Place(newName, zones, name);
 
                 // The patch takes a record name within the record's own zone, so it cannot move a
                 // record (portal DnsRecordPatchModel.Name). The message leaves the value out, as

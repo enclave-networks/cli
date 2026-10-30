@@ -166,7 +166,7 @@ public class SystemPendingCommandTests
         var rejected = await run.RunAsync("system", "list", "--pending", "--waiting-for", "1000000d");
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNameList(rejected.Error.GetProperty("errors")), Is.EqualTo("--waiting-for"));
+        CliAssert.Problems(rejected.Error, "--waiting-for");
         await CliAssert.AcceptedAsync(run, "GET", PendingPath, "system", "list", "--pending", "--waiting-for", "7d");
     }
 

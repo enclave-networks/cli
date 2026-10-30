@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 using static Enclave.Cli.Tests.Support.FieldText;
@@ -36,9 +37,9 @@ public partial class PolicyCommandTests
             Assert.That(JsonRead.StringList(body.GetProperty("senderTags")), Is.EqualTo("web"));
             Assert.That(JsonRead.StringList(body.GetProperty("receiverTags")), Is.EqualTo("db"));
             Assert.That(Acls(body.GetProperty("acls")), Is.EqualTo("Tcp|5432|(none)"));
-            Assert.That(body.GetProperty("senderTrustRequirements").GetRawText(), Is.EqualTo("[]"));
-            Assert.That(body.GetProperty("gateways").GetRawText(), Is.EqualTo("[]"));
-            Assert.That(body.GetProperty("gatewayAllowedIpRanges").GetRawText(), Is.EqualTo("[]"));
+            Assert.That(body.GetProperty("senderTrustRequirements").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
+            Assert.That(body.GetProperty("gateways").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
+            Assert.That(body.GetProperty("gatewayAllowedIpRanges").GetRawText(), Is.EqualTo(new JsonArray().ToJsonString()));
             Assert.That(body.GetProperty("gatewayTrafficDirection").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(body.GetProperty("gatewayPriority").ValueKind, Is.EqualTo(JsonValueKind.Null));
             Assert.That(body.GetProperty("notes").ValueKind, Is.EqualTo(JsonValueKind.Null));

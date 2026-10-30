@@ -93,7 +93,7 @@ public class OrgCommandTests
             Assert.That(result.StdoutJson.GetProperty("emailAddress").GetString(), Is.EqualTo(SamEmail), result.ToString());
             Assert.That(JsonRead.GuidOf(result.StdoutJson.GetProperty("id")), Is.EqualTo(SamId));
             Assert.That(result.StdoutJson.GetProperty("fullName").GetString(), Is.EqualTo("Sam Taylor"));
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
     }
 
@@ -201,7 +201,7 @@ public class OrgCommandTests
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
             Assert.That(JsonAssert.Property(request.BodyJson, "emailAddress").GetString(), Is.EqualTo(AlexEmail));
             Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(AlexStoredEmail), result.ToString());
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
     }
 
@@ -225,7 +225,7 @@ public class OrgCommandTests
             Assert.That(request.Path, Is.EqualTo(TestData.OrgPath("invites")));
             Assert.That(JsonAssert.Property(request.BodyJson, "emailAddress").GetString(), Is.EqualTo(SamEmail));
             Assert.That(JsonAssert.Property(result.StdoutJson, "emailAddress").GetString(), Is.EqualTo(SamStoredEmail), result.ToString());
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
     }
 
@@ -256,7 +256,7 @@ public class OrgCommandTests
         CliAssert.Rejected(withoutToken, second);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(first.Error.GetProperty("errors")), Is.EqualTo("email"), first.ToString());
+            CliAssert.Problems(first.Error, "email");
             Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
         });
     }

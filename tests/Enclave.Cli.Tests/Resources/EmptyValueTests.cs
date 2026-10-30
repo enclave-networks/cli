@@ -259,7 +259,7 @@ public class EmptyValueTests
         CliAssert.Rejected(withoutToken, second);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNameList(first.Error.GetProperty("errors")), Is.EqualTo(key), first.ToString());
+            CliAssert.Problems(first.Error, key);
             Assert.That(second.Error.GetRawText(), Is.EqualTo(first.Error.GetRawText()));
         });
     }

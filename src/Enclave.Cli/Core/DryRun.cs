@@ -45,7 +45,7 @@ internal sealed class DryRun
     // builds a request from it; tag set, which would, reads the tag instead (TagSetCommand).
     public static HttpResponseMessage Answer(HttpRequestMessage request) => new(HttpStatusCode.OK)
     {
-        Content = new StringContent("{}", Encoding.UTF8, MediaTypeNames.Application.Json),
+        Content = new StringContent(new JsonObject().ToJsonString(), Encoding.UTF8, MediaTypeNames.Application.Json),
         RequestMessage = request,
     };
 

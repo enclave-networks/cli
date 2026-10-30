@@ -35,7 +35,6 @@ internal sealed class CliVerb : Command
             DryRunOption = Common(CliOptions.Flag("--dry-run", "Print the requests the command would send, and send none of them."));
         }
 
-        VerboseOption = Common(CliOptions.Flag("--verbose", "Write diagnostics to stderr."));
         Action = new CliAction(this);
     }
 
@@ -48,8 +47,6 @@ internal sealed class CliVerb : Command
     public Option<Guid?>? PartnerIdOption { get; }
 
     public Option<bool>? DryRunOption { get; }
-
-    public Option<bool> VerboseOption { get; }
 
     // Help and `commands` list these after the command's own options.
     public IReadOnlyList<Option> CommonOptions => _commonOptions;

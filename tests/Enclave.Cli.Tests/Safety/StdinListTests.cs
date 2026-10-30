@@ -7,8 +7,6 @@ namespace Enclave.Cli.Tests.Safety;
 // spec/cli-surface.md "Several IDs".
 public class StdinListTests
 {
-    private static readonly string[] StdinKeyOnly = ["-"];
-
     [TestCaseSource(typeof(BulkCommand), nameof(BulkCommand.All))]
     public async Task Dash_acts_on_the_items_of_a_list_of_the_commands_kind_on_stdin(BulkCommand command)
     {
@@ -106,7 +104,7 @@ public class StdinListTests
         var rejected = await run.RunAsync(command.StdinArgs());
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(StdinKeyOnly));
+        CliAssert.Problems(rejected.Error, "-");
 
         run.StdinText = command.List(ids);
         var accepted = await run.RunAsync(command.StdinArgs());
@@ -164,7 +162,7 @@ public class StdinListTests
         Assert.Multiple(() =>
         {
             Assert.That(run.Requests, Is.Empty);
-            Assert.That(result.Stderr, Is.Empty);
+            Assert.That(result.ErrorText, Is.Empty);
         });
     }
 
@@ -221,17 +219,21 @@ public class StdinListTests
     private static IEnumerable<TestCaseData> NotAListCases()
     {
         yield return NotAList("ids one per line", "ABCDE\nFGHIJ\n");
-        yield return NotAList("a JSON array of ids", """["ABCDE","FGHIJ"]""");
-        yield return NotAList("a list without a kind", """{"items":[{"systemId":"ABCDE"}],"total":1}""");
-        yield return NotAList("a list without items", """{"kind":"system","total":0}""");
-        yield return NotAList("items that are not an array", """{"kind":"system","items":{},"total":0}""");
+        yield return NotAList("a JSON array of ids", new JsonArray("ABCDE", "FGHIJ"));
+        yield return NotAList("a list without a kind", new JsonObject { ["items"] = new JsonArray(new JsonObject { ["systemId"] = "ABCDE" }), ["total"] = 1 });
+        yield return NotAList("a list without items", new JsonObject { ["kind"] = "system", ["total"] = 0 });
+        yield return NotAList("items that are not an array", new JsonObject { ["kind"] = "system", ["items"] = new JsonObject(), ["total"] = 0 });
         yield return NotAList("one system", ApiJson.System("ABCDE"));
-        yield return NotAList("bulk output", """{"requested":2,"affected":2}""");
-        yield return NotAList("JSON cut short", """{"kind":"system","items":[""");
+        yield return NotAList("bulk output", new JsonObject { ["requested"] = 2, ["affected"] = 2 });
+
+        // A list cut short before its closing "]}".
+        yield return NotAList("JSON cut short", new JsonObject { ["kind"] = "system", ["items"] = new JsonArray() }.ToJsonString()[..^2]);
         yield return NotAList("nothing", string.Empty);
     }
 
     private static TestCaseData NotAList(string name, string stdin) => new TestCaseData(stdin).SetArgDisplayNames(name);
+
+    private static TestCaseData NotAList(string name, JsonNode stdin) => NotAList(name, stdin.ToJsonString());
 
     private static IEnumerable<TestCaseData> PipelineExamples()
     {

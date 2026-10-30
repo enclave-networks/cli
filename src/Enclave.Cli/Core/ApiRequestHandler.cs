@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Enclave.Cli.Core;
 
-// Logs each request under --verbose; under --dry-run sends the reads and captures each change in
+// Logs each request as a diagnostic; under --dry-run sends the reads and captures each change in
 // place of sending it.
 // It sits beneath Enclave.Sdk.Api's problem details handler, so it sees the Authorization header
 // (EnclaveClient.SetupHttpClient). It logs and captures only the method, URL and body, which keeps
@@ -35,12 +35,12 @@ internal sealed class ApiRequestHandler : DelegatingHandler
         // Enclave.Sdk.Api read is a GET.
         if (_dryRun is not null && request.Method != HttpMethod.Get)
         {
-            _output.Verbose($"{request.Method} {url} (not sent: --dry-run)");
+            _output.Diagnostic($"{request.Method} {url} (not sent: --dry-run)");
             await _dryRun.CaptureAsync(request, cancellationToken);
             return DryRun.Answer(request);
         }
 
-        _output.Verbose($"{request.Method} {url}");
+        _output.Diagnostic($"{request.Method} {url}");
         return await base.SendAsync(request, cancellationToken);
     }
 }

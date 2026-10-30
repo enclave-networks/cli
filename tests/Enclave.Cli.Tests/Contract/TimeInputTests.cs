@@ -157,7 +157,7 @@ public class TimeInputTests
         var rejected = await run.RunAsync([.. command.Split(' '), option, duration]);
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(JsonRead.PropertyNames(rejected.Error.GetProperty("errors")), Is.EqualTo(new[] { option }));
+        CliAssert.Problems(rejected.Error, option);
 
         await CliAssert.AcceptedAsync(run, method, path, [.. command.Split(' '), option, corrected]);
     }

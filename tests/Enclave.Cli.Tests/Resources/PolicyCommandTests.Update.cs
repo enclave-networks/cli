@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
 using static Enclave.Cli.Tests.Support.FieldText;
@@ -342,5 +343,12 @@ public partial class PolicyCommandTests
     private static string BuildToArtifactsPolicy() => PolicyWith(
         57,
         "build to artifacts",
-        ("acls", """[{ "protocol": "Tcp", "ports": "443", "description": "HTTPS" }, { "protocol": "Tcp", "ports": "8000 - 8100", "description": "Artifact store" }, { "protocol": "Udp", "ports": "53", "description": "DNS" }]"""));
+        ("acls", new JsonArray(Acl("Tcp", "443", "HTTPS"), Acl("Tcp", "8000 - 8100", "Artifact store"), Acl("Udp", "53", "DNS"))));
+
+    private static JsonObject Acl(string protocol, string ports, string description) => new()
+    {
+        ["protocol"] = protocol,
+        ["ports"] = ports,
+        ["description"] = description,
+    };
 }
