@@ -1,14 +1,14 @@
 # enclave-cli
 
-**Fully manage and automate the Enclave platform from your terminal.**
+**Give your AI agents the tooling to operate Enclave.**
 
-`enclave-cli` is a command-line interface for the [Enclave Platform API](https://api.enclave.io), built for agents and  MSP operators who want to manage resources, automate workflows, and integrate Enclave into their existing tooling — without writing API integrations from scratch.
+`enclave-cli` is a command-line interface for the [Enclave Platform API](https://api.enclave.io), enabling MSP operators and AI agents to manage tenants, automate workflows, and operate the entire Enclave platform from the terminal — without custom API integrations.
 
-## Get started
+## Quick start
 
 1. Download `enclave-cli` for your platform from the [latest release](https://github.com/enclave-networks/cli/releases/latest).
-2. Create a personal access token in the [Enclave portal](https://portal.enclave.io/).
-3. Use `enclave-cli login` to log in and save the Personal access token to your user directory (this only needs to be done once).
+2. Create a personal access token for yourself or your AI agent in the [Enclave portal](https://portal.enclave.io/).
+3. Run `enclave-cli login` to authenticate and save your token locally. You only need to do this once.
 
    **On Windows:**
 
@@ -76,5 +76,19 @@
    enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" - --dry-run
    enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" -
    ```
+
+## Command conventions
+
+- Names are accepted by default; use `--id 42` to specify an ID. Systems are identified by ID only.
+- Commands accept multiple targets: `enclave-cli system approve ABCDE FGHIJ`.
+- Use `-` to read targets from piped `enclave-cli` list output.
+- Changes take effect immediately without confirmation. Use `--dry-run` to preview API requests.
+- Use `--for 8h` or `--until <time>` for temporary changes, with `--then` to specify what happens afterwards.
+- Durations use whole minutes, hours or days (`30m`, `8h`, `7d`). Times without a time zone use your computer's local time zone.
+- `--set-` replaces a collection; `--add-` and `--remove-` modify it.
+- Use `--org <name>` to select an organisation per command, or `enclave-cli org use <name>` to set the default.
+- Ranges, ACLs and gateway subnets support optional labels using `=`, for example `192.168.1.0/24=Office`.
+- Empty values such as `--tag ""` are rejected to prevent unintended broad operations.
+- Every command output includes a `trace` showing the API, organisation and requests used.
 
 For the full CLI reference, see [docs.enclave.io](https://docs.enclave.io).
