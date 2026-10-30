@@ -22,7 +22,7 @@
    echo '<your token>' | enclave-cli login --token-stdin
    ```
 
-Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json` on Windows or `~/.enclave/credentials.json` on Linux and macOS.
+   Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json` on Windows or `~/.enclave/credentials.json` on Linux and macOS.
 
 ## Example usage
 
