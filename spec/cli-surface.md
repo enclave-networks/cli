@@ -27,7 +27,7 @@ Each command has a user-facing reference page under `docs/commands/`, named for 
 
 ```
 enclave-cli
-├── login --token-stdin                         check a personal access token and save it
+├── login                                       save a personal access token and a default organisation
 ├── logout                                      delete the saved credentials file
 ├── status                                      token source, organisation and partner in use, your role
 ├── org
@@ -218,9 +218,22 @@ enclave-cli
 
 Option values that name an API enum (`--sort`, `--type`, `--approval`, `--then`, `--state`, `--os`, `--level`, `--mode`) take lower-case, hyphenated names (`recently-connected`, `general`, `automatic`, `revoke`), matched ignoring case. A value is renamed where the API's name does not say what it does: `--then revoke` for `Delete` on a system. JSON output keeps the API's own names. `commands` lists the allowed values.
 
-The token comes from `ENCLAVE_TOKEN`, then `~/.enclave/credentials.json`. From either, and from `login --token-stdin`, the CLI drops a byte order mark at the start and white space around the token; an `ENCLAVE_TOKEN` left empty counts as unset. A token that then holds a space, a control character or a character outside ASCII exits 3 `token_invalid` before any call, with an error that names where the token came from and holds no part of it. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs` issues them with `TimeSpan.MaxValue`).
+Environment variables:
 
-The API address comes from `ENCLAVE_API_URL`, then `baseUrl` in `credentials.json`, then `https://api.enclave.io`. The partner API address comes from `ENCLAVE_PARTNER_API_URL`, then `partnerApiBaseUrl` in `credentials.json`, then `https://partner-api.enclave.io`. With these variables, a CI job reaches staging without writing a file, and its definition shows which API it calls. An address that isn't an absolute `http` or `https` URL exits 2 before any call, with an error that names where the address came from. An empty variable counts as unset.
+| Variable | Use |
+|---|---|
+| `ENCLAVE_CLI_PAT` | the personal access token; with it set, `login` isn't needed |
+| `ENCLAVE_CLI_ORG`, `ENCLAVE_CLI_ORG_ID` | the organisation to use, by name or ID (see "Context") |
+| `ENCLAVE_CLI_PARTNER_ID` | the partner to use (see "Context") |
+| `ENCLAVE_CLI_ENV` | hidden: `staging` sends `ENCLAVE_CLI_PAT` to staging (see "Environments") |
+
+Every variable the CLI reads starts with `ENCLAVE_CLI_`. An empty variable counts as unset.
+
+The token comes from `ENCLAVE_CLI_PAT`, then `~/.enclave/credentials.json`. From either, and from `login`'s question, the CLI drops a byte order mark at the start and white space around the token. A token that then holds a space, a control character or a character outside ASCII exits 3 `token_invalid` before any call, with an error that names where the token came from and holds no part of it. There is no `--token` option. Arguments end up in shell history, process listings, CI logs and agent transcripts, and personal access tokens do not expire (portal `Enclave.Accounts/Controllers/Api/TokensApiController.cs` issues them with `TimeSpan.MaxValue`).
+
+A token goes only to the environment it came with (see "Environments"). The token in `credentials.json` goes to the addresses saved beside it, `baseUrl` and `partnerApiBaseUrl`, or to production's when the file names none. `ENCLAVE_CLI_PAT` goes to production, or to staging with `ENCLAVE_CLI_ENV=staging`. `ENCLAVE_CLI_ENV` without `ENCLAVE_CLI_PAT` exits 2 before any call. An address in `credentials.json` that isn't an absolute `http` or `https` URL exits 2 before any call, with an error that names the file.
+
+While `ENCLAVE_CLI_PAT` is set, the CLI neither reads nor writes `~/.enclave`, so a CI job or agent session depends only on its own variables and options, whatever a login saved. `login`, `logout`, `org use` and `partner use` then exit 2 `invalid_argument`.
 
 ## Context
 
@@ -228,16 +241,16 @@ The organisation and the partner are chosen separately, and both can be set at o
 
 Organisation:
 
-- Precedence: `--org` or `--org-id`, then `ENCLAVE_ORG` (a name) or `ENCLAVE_ORG_ID` (an ID), then the default that `org use` saves in `~/.enclave/cli.json`. The environment variables let each agent session fix its organisation without writing the shared file.
+- Precedence: `--org` or `--org-id`, then `ENCLAVE_CLI_ORG` (a name) or `ENCLAVE_CLI_ORG_ID` (an ID), then the default that `login` or `org use` saves in `~/.enclave/cli.json`, which isn't read while `ENCLAVE_CLI_PAT` is set. The environment variables let each agent session fix its organisation without writing the shared file.
 - With none of these, the command looks up the token's organisations (one extra call). One organisation: it is used. Several: exit 2, with the `{ id, name }` list in the error so the caller can choose without another call.
-- `login` saves the default when the token sees one organisation.
+- `login` saves the default picked from the token's organisations, or none (see "Login, logout and status").
 - Names match exactly, ignoring case. A name that matches more than one organisation exits 2 with the candidates.
 - The default is saved as ID and name. Commands build the organisation client from the saved ID and make no lookup call.
 - A lookup needs the token's `ReadOrgList` scope.
 
 Partner:
 
-- Precedence: `--partner-id`, then `ENCLAVE_PARTNER_ID`, then the default that `partner use` saves in `~/.enclave/cli.json`.
+- Precedence: `--partner-id`, then `ENCLAVE_CLI_PARTNER_ID`, then the default that `partner use` saves in `~/.enclave/cli.json`, which isn't read while `ENCLAVE_CLI_PAT` is set.
 - With none of these, the command exits 2 with an error naming `--partner-id` and `partner use`.
 - The partner is given by ID. Looking partners up needs the `ReadPartnerList` scope, which personal access tokens cannot carry (see "Partner API").
 
@@ -293,7 +306,7 @@ The CLI checks every ID before any call: one malformed ID exits 2 with an error 
 |---|---|
 | system | letters and digits, read in upper case (see "Names and IDs") |
 | tag | `^([a-z0-9]+[-.])*[a-z0-9]+$`, the API's tag rule (portal `TagValidationExtensions.cs`); tags are given by name only |
-| organisation (a partner's customers included), account, partner | GUID other than all zeros (`00000000-0000-0000-0000-000000000000`), which names nothing; also in `ENCLAVE_ORG_ID`, `ENCLAVE_PARTNER_ID` and a saved default |
+| organisation (a partner's customers included), account, partner | GUID other than all zeros (`00000000-0000-0000-0000-000000000000`), which names nothing; also in `ENCLAVE_CLI_ORG_ID`, `ENCLAVE_CLI_PARTNER_ID` and a saved default |
 | key, policy, zone, hostname, trust requirement | integer, after `--id` or an option naming the item (portal `Enclave.Configuration.Data/Identifiers`, `IdBackingType.Int`). A name goes to the lookup and never into a URL path. |
 | partner API invite | found by email in the customer's invites, so the CLI never takes an invite ID from the user |
 
@@ -331,7 +344,7 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
   - `--auto-approve` with `--require-approval`;
   - `--industry-discount` with `--no-industry-discount`, and `--hard-limit` with `--no-hard-limit`;
   - `--enable-gateway-for` with `--disable-gateway`;
-  - a name with its ID option: `--org` with `--org-id`, `--user` with `--user-id`, a name argument with `--id`, or `ENCLAVE_ORG` with `ENCLAVE_ORG_ID`.
+  - a name with its ID option: `--org` with `--org-id`, `--user` with `--user-id`, a name argument with `--id`, or `ENCLAVE_CLI_ORG` with `ENCLAVE_CLI_ORG_ID`.
 - An option a command does not take, such as `--dry-run` on a read or `--partner-id` on an organisation command, is unknown to it and exits 2.
 - `--pending` with options only enrolled systems have (`--state`, `--os`, `--type`, `--gateway`, `--include-disabled`, `--not-seen-for`, the gateway flags) exits 2, and so does `--waiting-for` without `--pending`. With `--pending`, `--sort` takes the waiting-systems sort values. The waiting-systems search also takes `os:` and `type:` terms, but `--os` and `--type` stay on enrolled systems by design; `--filter "os:Windows"` reaches those terms with `--pending`.
 - An update with no change flag exits 2, `tag set` included.
@@ -362,7 +375,7 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 - JSON, using the `Enclave.Sdk.Api` models unchanged, with `trace` added at the end. There's one output format, which serves both the calling program and the person reading the call.
 - JSON on stdout and stderr is indented, so the person reading the call can follow it.
 - `trace` shows how the command ran: which API and organisation it used, and what it sent. It comes last in every document a command prints, on success and on failure:
-  - `token`: `{ "source" }`, where the token came from: `ENCLAVE_TOKEN`, the path of `credentials.json`, or stdin for `login --token-stdin`.
+  - `token`: `{ "source" }`, where the token came from: `ENCLAVE_CLI_PAT`, the path of `credentials.json`, or `prompt` for `login`.
   - `api`, and `partnerApi` for `partner` commands: the addresses the command called.
   - `org`: `{ "id", "name", "source" }`, with the sources `status` uses. `name` is null when the organisation was given by ID, since no lookup ran.
   - `partner`: `{ "id", "source" }`, for `partner` commands.
@@ -373,14 +386,14 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
   A part is left out when its step didn't happen, and `trace` is left out when nothing happened, as for a parse error or `commands`. `trace` never holds the token or the Authorization header. A command reading a list from `-` reads only `kind` and `items`, so `trace` doesn't affect it.
 - Lists: `{ "kind": "system", "items": [...], "total": <n>, "trace": { … } }`. `total` is the number of items printed, `log` included. `kind` names what the items are (`system`, `pending-system`, `key`, `policy`, `tag`, `zone`, `hostname`, `trust`, `log`, `org` for `org list` and `login`, `user` for `org list-users`, `invite` for `org list-invites` and `partner customer list-invites`, `customer`, `admin`), so a command reading the list from stdin can check it.
 - A list is printed once every page has been read. If a page read fails, the command exits with that error and prints nothing, so stdout never holds part of a list.
-- Redirected stdout and stderr are UTF-8 without a byte order mark (RFC 8259 section 8.1), on every OS. stdin is read as UTF-8, or in the encoding a byte order mark at its start names, so a list one run prints reads back in the next, and a token file saved with a byte order mark works. Windows PowerShell 5.1 shows non-ASCII characters in captured output correctly only after `[Console]::OutputEncoding = [Text.Encoding]::UTF8`.
+- Redirected stdout and stderr are UTF-8 without a byte order mark (RFC 8259 section 8.1), on every OS. stdin is read as UTF-8, or in the encoding a byte order mark at its start names, so a list one run prints reads back in the next. Windows PowerShell 5.1 shows non-ASCII characters in captured output correctly only after `[Console]::OutputEncoding = [Text.Encoding]::UTF8`.
 - Enrolment key output includes the key's secret, `key` (`EnrolmentKeyModel.Key`).
 - `commands system list` describes one command, its options and their allowed values.
 - Common questions have a filter, so a script needs `jq` only to pull out a single field, such as a new key's secret.
 
 ## Errors and exit codes
 
-stderr carries only the error, one JSON object: `{ "error": { "code", "status", "title", "detail", "errors" }, "trace": { … } }`, with `trace` as "Output" describes it. A command that succeeds writes nothing to stderr. `code` comes from a fixed set the CLI owns, listed by `commands`. `status`, `title`, `detail` and `errors` carry the API's problem details when the API sent them.
+stderr carries only the error, one JSON object: `{ "error": { "code", "status", "title", "detail", "errors" }, "trace": { … } }`, with `trace` as "Output" describes it. A command that succeeds writes nothing to stderr, except `login`'s questions (see "Login, logout and status"). `code` comes from a fixed set the CLI owns, listed by `commands`. `status`, `title`, `detail` and `errors` carry the API's problem details when the API sent them.
 
 | Exit | `code` | Meaning |
 |---|---|---|
@@ -403,15 +416,33 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 
 ## Login, logout and status
 
-- `login --token-stdin` reads the token from stdin, without a trailing newline; with `ENCLAVE_TOKEN` set, `login` saves that token. `--token-stdin` wins over `ENCLAVE_TOKEN`. It never prompts: `--token-stdin` with stdin a terminal exits 2, and no token, or empty stdin, exits 3 `token_missing`. An empty `ENCLAVE_TOKEN` counts as unset, as does any empty environment variable the CLI reads.
-- `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope), writes `~/.enclave/credentials.json`, and prints the organisations the token can see as an `org` list. It saves the default organisation when the token sees exactly one, and otherwise leaves the saved default as it is.
-- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's (see "Partner API"), the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`). `login` checks the token at the API address in use and saves that address as `baseUrl`: `ENCLAVE_API_URL` when it's set, otherwise the file's own `baseUrl`, or the default. It saves `ENCLAVE_PARTNER_API_URL` as `partnerApiBaseUrl` when it's set, and otherwise keeps the file's. On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
-- The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory. A token from `ENCLAVE_TOKEN` uses the same API addresses as one from the file.
-- When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables still work, against `ENCLAVE_API_URL` or the default API address, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
+- `login` sets up the CLI for a person at a terminal: it asks for a personal access token, checks it, then asks for a default organisation. Programs don't run it; they set `ENCLAVE_CLI_PAT`.
+- It asks only when stdin and stderr are both terminals, and the questions go to stderr, so stdout holds only the JSON. Otherwise it exits 3 `token_missing`, with an error that says to run `login` in a terminal such as Windows Terminal, cmd or PowerShell, or to set `ENCLAVE_CLI_PAT`. Git Bash's own window (mintty) gives .NET pipes, not a terminal, so `login` can't ask there.
+- The token question names the API host and shows `*` for each character typed or pasted: `Personal access token for api.enclave.io:`. When `credentials.json` already holds a token saved for that API address, the question ends `[saved]`, and Enter keeps it. Any other empty answer exits 3 `token_missing`.
+- `login` checks the token with one call (`GetOrganisationsAsync`, which needs the `ReadOrgList` scope). A token the API refuses exits 3 `token_invalid`, and nothing is saved.
+- It then shows the token's organisations in a picker (Spectre.Console's selection prompt) that scrolls and takes type-to-search, since a partner's staff can see hundreds. The saved default comes first when the token sees it, and `No default` comes last. With `No default`, a command given no organisation exits 2 `no_org` when the token sees several, so it can't act on a customer by mistake. A token that sees no organisation gets no picker.
+- `login` then writes `credentials.json`, saves the choice in `cli.json` (`No default` removes the saved organisation), and prints the token's organisations as an `org` list. It keeps the saved partner only when it logged in to the same environment, since a partner ID belongs to one environment.
+- `credentials.json` holds `personalAccessToken` and `baseUrl`, and `partnerApiBaseUrl` where the partner API is not production's, the format `Enclave.Sdk.Api` reads (`EnclaveClient.ReadCredentialsFile`). `login` writes the addresses of the environment it logged in to (see "Environments"). On Linux and macOS it creates `~/.enclave` as 0700 and the file as 0600.
+- The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and supply each environment's addresses through the host, so a run with `ENCLAVE_CLI_PAT` reaches the test server.
+- When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI reads neither `credentials.json` nor `cli.json`, the environment variables still work, and `login`, `logout`, `org use` and `partner use` exit 2 `invalid_argument` and write nothing.
 - `logout` deletes `credentials.json` and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
-- `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
+- `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_CLI_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
 - `org use` saves `{ "org": { "id", "name" } }` in `~/.enclave/cli.json` and prints the organisation's model; `org use --id` makes one lookup call for the name, and an ID the token does not see exits 2. `partner use --id` saves `{ "partner": { "id" } }` beside it, makes no call, and prints `{ "id" }`. Each leaves the other's default as it is. On Linux and macOS, either one run before `login` creates `~/.enclave` as 0700, since `login` later writes the token into it; `cli.json` holds no secret and is written with the default file mode.
 - No command prints the token, including under `--dry-run`. A test runs every command that changes something with a known token and checks the token appears on neither stdout nor stderr.
+
+## Environments
+
+The CLI works against production unless told otherwise. Staging is for Enclave's own staff, so `login --staging` and `ENCLAVE_CLI_ENV` are hidden: no help, `commands` output, README or `docs/commands` page names them or staging, and no error names them unless the command line or environment gave them.
+
+| Environment | API | Partner API |
+|---|---|---|
+| production | `https://api.enclave.io` | `https://partner-api.enclave.io` |
+| staging | `https://staging-api.enclave.io` | `https://staging-partner-api.enclave.io` |
+
+- `login` saves production's API address in `credentials.json` beside the token, and `login --staging` saves both of staging's addresses. Later commands send the token to them, and so do other tools built on `Enclave.Sdk.Api`, which read the same file. The environment's name isn't saved.
+- `ENCLAVE_CLI_ENV` takes `production` or `staging`, ignoring case, and applies only to `ENCLAVE_CLI_PAT`. Any other value exits 2 `invalid_argument`, with an error that doesn't list the values.
+- `credentials.json` holds one token, so `login --staging` replaces a production login, and the other way round. To work in both, keep one login and use `ENCLAVE_CLI_PAT` and `ENCLAVE_CLI_ENV` for the other.
+- The `api` and `partnerApi` parts of `trace` show which environment a command reached.
 
 ## Calls per command
 
@@ -429,7 +460,7 @@ One `Enclave.Sdk.Api` call per command, with these exceptions:
 
 The partner API is a separate service (portal `src/Enclave.Partner.Api`) with every route under `/partner/{partnerId}/`. It covers the partner (properties, users, invites) and its customers (properties, admins, invites, auto-sync). The CLI uses the customer routes only, the ones a personal access token can reach.
 
-- It runs on its own host: `https://partner-api.enclave.io` in production and `https://staging-partner-api.enclave.io` in staging, beside `https://api.enclave.io` and `https://staging-api.enclave.io`. `Enclave.Sdk.Api`'s `EnclaveClientOptions.PartnerApiBaseUrl` defaults to production, as `BaseUrl` does. To reach staging, set `ENCLAVE_API_URL` and `ENCLAVE_PARTNER_API_URL`, or `baseUrl` and `partnerApiBaseUrl` in `credentials.json` (see "Options on every command").
+- It runs on its own host, beside the main API's (see "Environments"). `Enclave.Sdk.Api`'s `EnclaveClientOptions.PartnerApiBaseUrl` defaults to production, as `BaseUrl` does.
 - Personal access tokens can carry the partner scopes `ReadCustomers` and `WriteCustomers`, and no other partner scope (portal `Enclave.Accounts/Config/EnclaveIdentityClientConfig.cs`). The partner API requires the scope claim on the token (portal `Enclave.Api.Scaffolding/Authorisation/AuthorizationExtensions.cs`). With a personal access token:
   - The customer routes work: reading needs `ReadCustomers`, and changes and the invite list need `WriteCustomers` (portal `CustomersController.cs`).
   - The partner's own properties, users and invites need `ReadPartnerList`, `ReadPartnerInfo` or `WritePartnerSettings` (portal `Enclave.Partner.Api/WebStartup.cs`), which a personal access token cannot carry, so the CLI has no commands for them.
@@ -461,7 +492,7 @@ Known, and left as they are. The CLI passes the API's answers on as they come.
 - `key create --tags a,a` sends `a` twice, and the API keeps both.
 - An error marked `application/problem+json` whose body is not valid JSON exits 1, whatever its status: `Enclave.Sdk.Api` fails to read it before the CLI sees the status.
 - A TLS failure exits 6 `transient`, like a network failure, though retrying does not fix it.
-- `ENCLAVE_ORG` set to only spaces makes a lookup, then exits 2.
+- `ENCLAVE_CLI_ORG` set to only spaces makes a lookup, then exits 2.
 - `--notes ""` on a create sends an empty note.
 - `key enable --for` reads a one-key list from `-`; `system enable --for` refuses `-`.
 - What Ctrl+C prints and exits with is not specified.
@@ -477,7 +508,7 @@ These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API it
 2. `EnclaveClientOptions.HttpMessageHandler` sends every request through a caller's handler, which `--dry-run` uses to capture the requests.
 3. `PatchClient.Set` takes `null`, so an update flag given an empty value (`--set-active-hours ""`) clears the field.
 4. Enrolment key delete, single and bulk, for `key delete`.
-5. `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, with `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
+5. `CreateOrganisationClient(OrganisationGuid)` returns `IOrganisationScopedClient`, with `OrgId` and every call but no `Organisation`, and makes no organisation lookup. The CLI builds its organisation client this way from `--org-id`, `ENCLAVE_CLI_ORG_ID` and the saved default; `OrganisationGuid.TryParse` reads an ID.
 6. A failed response that is not problem+json throws `HttpRequestException` with its status, on every call, including `RemoveUserAsync`, `InviteUserAsync` and `CancelInviteAync`, which reported such failures as success.
 7. `GetSearchKeysAsync` on the systems, unapproved systems, enrolment keys, policies and tags clients, so `commands` can describe the keys `--filter` accepts.
 8. `CreatePartnerClient(PartnerId)`, whose `Customers` client covers the customer routes. `EnclaveClientOptions.PartnerApiBaseUrl` defaults to `https://partner-api.enclave.io`.
@@ -488,14 +519,14 @@ These were added to `Enclave.Sdk.Api`, with tests there, for the CLI. The API it
 ## Examples
 
 ```sh
-# 1. Log in from a saved token and work in the Acme organisation
-enclave-cli login --token-stdin < ~/.secrets/enclave-token
+# 1. Log in, then change the default organisation
+enclave-cli login
 enclave-cli org use Acme
 enclave-cli org use --id 3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17
 
 # 2. In CI, list the connected Linux build servers in one organisation without touching the shared default
-ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG=Acme enclave-cli system list --tag build --os linux --state connected
-ENCLAVE_TOKEN="$CI_ENCLAVE_TOKEN" ENCLAVE_ORG_ID=3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17 enclave-cli system list --tag build --os linux --state connected
+ENCLAVE_CLI_PAT="$CI_ENCLAVE_PAT" ENCLAVE_CLI_ORG=Acme enclave-cli system list --tag build --os linux --state connected
+ENCLAVE_CLI_PAT="$CI_ENCLAVE_PAT" ENCLAVE_CLI_ORG_ID=3f2a9c1e-7b4d-4e8a-9c61-2d5b8e0f4a17 enclave-cli system list --tag build --os linux --state connected
 
 # 3. Approve every system waiting that enrolled with key 12
 enclave-cli system list --pending --key-id 12 | enclave-cli system approve -

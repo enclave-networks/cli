@@ -11,7 +11,7 @@ internal static class LogoutCommand
     {
         var verb = new CliVerb(
             "logout",
-            "Delete ~/.enclave/credentials.json. The token stays valid until it is revoked in the portal, and other tools built on Enclave.Sdk.Api, which read the same file, lose it too. Prints { path, deleted }.");
+            "Deletes ~/.enclave/credentials.json.");
 
         EnclaveDirectory.RequireHome(verb);
 
