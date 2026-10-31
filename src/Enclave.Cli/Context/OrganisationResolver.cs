@@ -10,9 +10,9 @@ namespace Enclave.Cli.Context;
 // spec/cli-surface.md "Context".
 internal static class OrganisationResolver
 {
-    public const string NameVariable = "ENCLAVE_ORG";
+    public const string NameVariable = "ENCLAVE_CLI_ORG";
 
-    public const string IdVariable = "ENCLAVE_ORG_ID";
+    public const string IdVariable = "ENCLAVE_CLI_ORG_ID";
 
     // The source when the token sees one organisation and nothing else chose it.
     public const string OnlyOrganisation = "only-organisation";
@@ -125,8 +125,20 @@ internal static class OrganisationResolver
             .ToArray());
     }
 
-    private static OrganisationChoice? Saved(CliHost host) =>
-        SettingsFile.ReadDefault(host, "org", "organisation", "enclave-cli org use") is { } saved
-            ? new OrganisationChoice(OrganisationGuid.FromGuid(saved.Id), saved.Name, saved.Path)
-            : null;
+    // The default saved in credentials.json as defaultOrgID, which has no name; null when none is
+    // saved. One that is not an organisation ID exits 2 naming the file: org use and login never
+    // save one, so only a missing default means none is chosen.
+    public static OrganisationChoice? Saved(CliHost host)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+
+        if (CredentialsFile.PathFor(host) is not { } path || CredentialsFile.Read(host)?.DefaultOrgId is not { } text)
+        {
+            return null;
+        }
+
+        return IdFormats.Guid.TryParse(text, out var id)
+            ? new OrganisationChoice(OrganisationGuid.FromGuid(id), null, path)
+            : throw CliErrors.InvalidArgument($"The defaultOrgID in {path} is not an organisation ID. Save the default again with `enclave-cli org use`.");
+    }
 }

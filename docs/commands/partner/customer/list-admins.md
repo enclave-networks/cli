@@ -1,6 +1,6 @@
 # `enclave-cli partner customer list-admins`
 
-List the customer's admins.
+Lists a customer's admins.
 
 ## Synopsis
 

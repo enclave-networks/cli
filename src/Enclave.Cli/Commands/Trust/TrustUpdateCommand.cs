@@ -12,7 +12,7 @@ internal static class TrustUpdateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("update", "Change a trust requirement and print it. Each --set- flag replaces only the conditions of its own kind.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("update", "Updates a trust requirement.", CommandScope.Organisation, changes: true);
         var requirement = verb.Add(CliArguments.OptionalName("trust", "The trust requirement's description, matched whole and ignoring case.", "a trust requirement's description"));
         var id = verb.Add(CliOptions.Id("--id", "The trust requirement's ID.", IdFormats.Int32));
         // The API refuses a blank description and takes empty notes, which clear them (portal

@@ -21,7 +21,7 @@ public class TokenOutputTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -39,7 +39,7 @@ public class TokenOutputTests
         {
             Assert.That(JsonAssert.Property(result.StdoutJson, "dryRun").GetBoolean(), Is.True);
             Assert.That(command.ChangeRequests(run), Is.Empty);
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -48,7 +48,7 @@ public class TokenOutputTests
     public async Task Token_from_credentials_json_is_printed_on_neither_stdout_nor_stderr(ChangeCommand command)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.SaveCredentials(TestData.Token);
         command.Arrange(run);
 
@@ -63,24 +63,22 @@ public class TokenOutputTests
         });
     }
 
-    // Whether the file exists afterwards shows the command ran.
-    [TestCaseSource(nameof(LocalCommands))]
+    // The change to credentials.json shows the command ran.
+    [TestCaseSource(typeof(LocalCommand), nameof(LocalCommand.All))]
     public async Task Command_that_changes_local_files_prints_the_token_on_neither_stdout_nor_stderr(LocalCommand command)
     {
         using var run = CliRun.Start();
         command.Arrange(run);
+        var before = LocalCommand.Saved(run);
 
         var result = await run.RunAsync(command.Args);
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(run.Files.Exists(command.FilePath(run)), Is.EqualTo(command.FileExistsAfter));
+            Assert.That(LocalCommand.Saved(run), Is.Not.EqualTo(before));
+            Assert.That(run.Terminal.Output, Does.Not.Contain(TestData.Token));
             TokenAssert.Absent(result);
         });
     }
-
-    // partner use is covered with the other partner commands in Partner/.
-    private static IEnumerable<LocalCommand> LocalCommands() =>
-        LocalCommand.All.Where(command => command.Name != "partner use");
 }

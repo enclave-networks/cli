@@ -45,7 +45,7 @@ public class EmptyFilterTests
         ArgumentNullException.ThrowIfNull(command);
         using var withToken = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
 
         foreach (var suffix in ListSuffixes)
         {

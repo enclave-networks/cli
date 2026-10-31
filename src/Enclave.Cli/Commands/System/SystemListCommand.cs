@@ -11,7 +11,7 @@ internal static class SystemListCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("list", "List the enrolled systems, or with --pending the systems waiting for approval, reading every page.", CommandScope.Organisation);
+        var verb = new CliVerb("list", "Lists systems.", CommandScope.Organisation);
 
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var tags = verb.Add(CliOptions.TagFilter("--tag", "Systems with every tag given."));

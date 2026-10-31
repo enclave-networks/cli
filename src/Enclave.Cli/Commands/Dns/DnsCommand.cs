@@ -6,7 +6,7 @@ internal static class DnsCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("dns", null, "The organisation's DNS zones and hostnames.");
+        var noun = new CliNoun("dns", null, "DNS zones and hostnames.");
 
         noun.Add(Show());
         noun.Add(DnsZoneCommands.List());
@@ -25,7 +25,7 @@ internal static class DnsCommand
 
     private static CliVerb Show()
     {
-        var verb = new CliVerb("show", "Show the organisation's DNS summary.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows the organisation's DNS summary.", CommandScope.Organisation);
 
         verb.SetHandler(async context =>
         {

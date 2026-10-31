@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Enclave.Cli.Context;
 using Enclave.Cli.Tests.Support;
 using NUnit.Framework;
@@ -10,6 +11,8 @@ public class TokenTests
 {
     private const string FileToken = "file-token-2b8e61";
 
+    private static readonly string[] OrgLookupOnly = ["GET /account/orgs"];
+
     private static readonly string OrgSystems = TestData.OrgPath("systems");
 
     private static readonly string OtherOrgSystems = TestData.OtherOrgPath("systems");
@@ -19,10 +22,10 @@ public class TokenTests
     private static readonly string[] TokenRuns =
     [
         "login",
-        "login --token-stdin",
+        "login keeping the saved token",
         "login with a refused token",
         "logout",
-        "status with ENCLAVE_TOKEN",
+        "status with ENCLAVE_CLI_PAT",
         "status with credentials.json",
         "status with no organisation chosen",
         "status with a refused token",
@@ -35,7 +38,7 @@ public class TokenTests
 
     // An agent session can use its own token without replacing the one saved for the user.
     [Test]
-    public async Task ENCLAVE_TOKEN_takes_precedence_over_credentials_json()
+    public async Task ENCLAVE_CLI_PAT_takes_precedence_over_credentials_json()
     {
         using var run = CliRun.Start();
         run.SaveCredentials(FileToken);
@@ -46,21 +49,72 @@ public class TokenTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
     }
 
-    // An empty ENCLAVE_TOKEN is what a CI job gets when its secret is missing ("Login, logout and
+    // A CI job or agent session depends only on its own variables and options, whatever a login
+    // saved. The saved default is Globex and the saved address a second fake's; the token sees both
+    // organisations, so a CLI that used the default lists Globex's systems, and one that read the
+    // address sends there.
+    [Test]
+    public async Task While_ENCLAVE_CLI_PAT_is_set_the_cli_reads_nothing_under_the_enclave_directory()
+    {
+        using var run = CliRun.Start();
+        var (other, otherUrl) = LoopbackApi.Start();
+        using var otherApi = other;
+        LoopbackApi.Stub(otherApi, "GET", "/account/orgs", 200, BothOrgs.Body);
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
+        run.SaveCredentials(FileToken, otherUrl, defaultOrgId: TestData.OtherOrgId.ToString());
+        BothOrgs.Stub(run);
+        run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
+
+        var result = await run.RunAsync("system", "list");
+
+        CliAssert.Failed(result, "no_org");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
+            Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {TestData.Token}"));
+            Assert.That(LoopbackApi.Received(otherApi), Is.Empty);
+            Assert.That(run.Files.WasRead(run.CredentialsPath), Is.False);
+        });
+    }
+
+    // The error names the variable, so the caller knows what to unset. login asks nothing.
+    [TestCaseSource(nameof(SavingRuns))]
+    public async Task While_ENCLAVE_CLI_PAT_is_set_a_command_that_saves_or_deletes_a_file_exits_2_and_writes_nothing(string[] args)
+    {
+        using var run = CliRun.Start();
+        run.SaveCredentials(FileToken, defaultOrgId: TestData.OtherOrgId.ToString());
+        var before = run.Files.ReadText(run.CredentialsPath);
+        run.StdinIsTerminal = true;
+        run.StderrIsTerminal = true;
+        run.AnswerLogin(TestData.Token);
+        BothOrgs.Stub(run);
+
+        var result = await run.RunAsync(args);
+
+        CliAssert.Rejected(run, result);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Files.ReadText(run.CredentialsPath), Is.EqualTo(before));
+            Assert.That(run.Terminal.Output, Is.Empty);
+            Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain("ENCLAVE_CLI_PAT"));
+        });
+    }
+
+    // An empty ENCLAVE_CLI_PAT is what a CI job gets when its secret is missing ("Login, logout and
     // status").
     [TestCase(false)]
     [TestCase(true)]
-    public async Task Credentials_json_supplies_the_token_when_ENCLAVE_TOKEN_is_unset_or_empty(bool empty)
+    public async Task Credentials_json_supplies_the_token_when_ENCLAVE_CLI_PAT_is_unset_or_empty(bool empty)
     {
         using var run = CliRun.Start();
 
         if (empty)
         {
-            run.Environment["ENCLAVE_TOKEN"] = string.Empty;
+            run.Environment["ENCLAVE_CLI_PAT"] = string.Empty;
         }
         else
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
         }
 
         run.SaveCredentials(FileToken);
@@ -73,10 +127,10 @@ public class TokenTests
 
     // Sending "Bearer " would turn a missing secret into a 401 and token_invalid.
     [Test]
-    public async Task An_empty_ENCLAVE_TOKEN_with_no_credentials_file_exits_3_with_token_missing()
+    public async Task An_empty_ENCLAVE_CLI_PAT_with_no_credentials_file_exits_3_with_token_missing()
     {
         using var run = CliRun.Start();
-        run.Environment["ENCLAVE_TOKEN"] = string.Empty;
+        run.Environment["ENCLAVE_CLI_PAT"] = string.Empty;
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
         var result = await run.RunAsync("system", "list");
@@ -84,51 +138,66 @@ public class TokenTests
         CliAssert.Rejected(run, result, "token_missing");
     }
 
-    // The CLI reads the file itself and passes EnclaveClientOptions to Enclave.Sdk.Api, so
-    // ENCLAVE_TOKEN keeps the file's baseUrl ("Login, logout and status").
+    // A token goes only to the environment it came with ("Options on every command"). The file's
+    // apiBaseUrl is a second fake's, so the request each fake receives shows which address the
+    // token went to.
     [TestCase(false)]
     [TestCase(true)]
-    public async Task Credentials_json_base_url_is_the_api_address_whichever_source_supplies_the_token(bool tokenFromEnvironment)
+    public async Task A_token_goes_only_to_the_api_address_it_came_with(bool tokenFromEnvironment)
     {
         using var run = CliRun.Start();
         var (other, otherUrl) = LoopbackApi.Start();
         using var otherApi = other;
         LoopbackApi.Stub(otherApi, "GET", OrgSystems, 200, ApiJson.Page());
+        run.Stub("GET", OrgSystems, json: ApiJson.Page());
         run.SaveCredentials(FileToken, otherUrl);
 
         if (!tokenFromEnvironment)
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
         }
 
         var result = await run.RunAsync("system", "list");
 
-        var received = LoopbackApi.Received(otherApi);
-        var expectedToken = tokenFromEnvironment ? TestData.Token : FileToken;
+        var received = LoopbackApi.Received(tokenFromEnvironment ? run.Api : otherApi);
+        var passedOver = tokenFromEnvironment ? LoopbackApi.Received(otherApi) : run.ApiRequests;
 
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(run.Requests, Is.Empty, "The request went to the default API address.");
+            Assert.That(passedOver, Is.Empty);
             Assert.That(received.Select(request => request.Call), Is.EqualTo(new[] { $"GET {OrgSystems}" }));
-            Assert.That(received.Select(request => request.Authorization), Is.EqualTo(new[] { $"Bearer {expectedToken}" }));
+            Assert.That(received.Select(request => request.Authorization), Is.EqualTo(new[] { $"Bearer {(tokenFromEnvironment ? TestData.Token : FileToken)}" }));
         });
     }
 
     // Enclave.Sdk.Api builds the partner API's HttpClient when the EnclaveClient is made
-    // (EnclaveClient.SetupPartnerHttpClient), so a bad address fails every command, partner or not.
-    [TestCase("not a url")]
-    [TestCase("ftp://partner-api.example")]
-    public async Task A_partner_api_base_url_that_is_not_an_http_or_https_url_exits_2_naming_the_file(string partnerApiBaseUrl)
+    // (EnclaveClient.SetupPartnerHttpClient), so a bad partner address fails every command, partner
+    // or not.
+    [TestCase("apiBaseUrl", "not a url")]
+    [TestCase("apiBaseUrl", "api.enclave.io")]
+    [TestCase("apiBaseUrl", "ftp://api.example")]
+    [TestCase("partnerApiBaseUrl", "not a url")]
+    [TestCase("partnerApiBaseUrl", "ftp://partner-api.example")]
+    public async Task An_address_in_credentials_json_that_is_not_an_http_or_https_url_exits_2_naming_the_file(string field, string address)
     {
         using var run = CliRun.Start();
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
-        run.SaveCredentials(FileToken, partnerApiBaseUrl: partnerApiBaseUrl);
+
+        if (field == "apiBaseUrl")
+        {
+            run.SaveCredentials(FileToken, address);
+        }
+        else
+        {
+            run.SaveCredentials(FileToken, partnerApiBaseUrl: address);
+        }
 
         var result = await run.RunAsync("system", "list");
 
         CliAssert.Rejected(run, result);
-        Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain(run.CredentialsPath).And.Contain("partnerApiBaseUrl"));
+        Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain(run.CredentialsPath).And.Contain(field));
     }
 
     // Nothing is sent, the lookup a name makes included.
@@ -140,7 +209,7 @@ public class TokenTests
     public async Task A_command_exits_3_with_token_missing_and_sends_nothing_when_there_is_no_token(params string[] args)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
@@ -156,8 +225,8 @@ public class TokenTests
     public async Task The_token_is_checked_before_the_organisation_and_the_partner(string[] args, string choice)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
         BothOrgs.Stub(run);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
@@ -166,21 +235,21 @@ public class TokenTests
         {
             case "none chosen":
                 break;
-            case "ENCLAVE_ORG":
-                run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
+            case "ENCLAVE_CLI_ORG":
+                run.Environment["ENCLAVE_CLI_ORG"] = TestData.OrgName;
                 break;
-            case "ENCLAVE_ORG with ENCLAVE_ORG_ID":
-                run.Environment["ENCLAVE_ORG"] = TestData.OrgName;
-                run.Environment["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString();
+            case "ENCLAVE_CLI_ORG with ENCLAVE_CLI_ORG_ID":
+                run.Environment["ENCLAVE_CLI_ORG"] = TestData.OrgName;
+                run.Environment["ENCLAVE_CLI_ORG_ID"] = TestData.OrgId.ToString();
                 break;
-            case "ENCLAVE_ORG_ID that is not a GUID":
-                run.Environment["ENCLAVE_ORG_ID"] = "not-a-guid";
+            case "ENCLAVE_CLI_ORG_ID that is not a GUID":
+                run.Environment["ENCLAVE_CLI_ORG_ID"] = "not-a-guid";
                 break;
-            case "ENCLAVE_PARTNER_ID that is not a GUID":
-                run.Environment["ENCLAVE_PARTNER_ID"] = "12";
+            case "ENCLAVE_CLI_PARTNER_ID that is not a GUID":
+                run.Environment["ENCLAVE_CLI_PARTNER_ID"] = "12";
                 break;
-            case "cli.json that is not JSON":
-                run.Files.WriteText(run.CliConfigPath, "{ not json", privateToUser: false);
+            case "a saved default that is not an organisation ID":
+                run.Files.WriteText(run.CredentialsPath, new JsonObject { ["defaultOrgID"] = "not-a-guid" }.ToJsonString(), privateToUser: true);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(choice), choice, "No arrangement for this choice.");
@@ -198,7 +267,7 @@ public class TokenTests
     {
         using var withToken = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
 
         foreach (var run in new[] { withToken, withoutToken })
         {
@@ -216,7 +285,7 @@ public class TokenTests
     }
 
     // A token given as an argument ends up in shell history, process listings, CI logs and agent
-    // transcripts, and does not expire (portal TokensApiController.Create). ENCLAVE_TOKEN is unset
+    // transcripts, and does not expire (portal TokensApiController.Create). ENCLAVE_CLI_PAT is unset
     // and no file is saved, so a CLI that took the option as a token source runs the command.
     [TestCase("login", "--token", TestData.Token)]
     [TestCase("status", "--token", TestData.Token)]
@@ -225,7 +294,7 @@ public class TokenTests
     public async Task Token_is_not_an_option_and_the_error_does_not_repeat_its_value(params string[] args)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
@@ -257,6 +326,7 @@ public class TokenTests
             Assert.That(result.ExitCode, Is.EqualTo(command.ExitCode), result.ToString());
             Assert.That(result.Stdout, Does.Not.Contain(TestData.Token));
             Assert.That(result.Stderr, Does.Not.Contain(TestData.Token));
+            Assert.That(run.Terminal.Output, Does.Not.Contain(TestData.Token));
 
             if (command.SendsRequests)
             {
@@ -277,7 +347,7 @@ public class TokenTests
     [Test]
     public void Saved_credentials_leave_the_token_out_of_their_text()
     {
-        var credentials = new StoredCredentials(TestData.Token, "https://api.example", "https://partner-api.example", true);
+        var credentials = new StoredCredentials(TestData.Token, "https://api.example", "https://partner-api.example", TestData.OrgId.ToString(), true);
 
         Assert.That(credentials.ToString(), Does.Not.Contain(TestData.Token));
     }
@@ -304,14 +374,13 @@ public class TokenTests
         yield return BadArguments("org", "use", " \t ");
     }
 
-    // status reads both the organisation and the partner; a partner command reads cli.json for its
-    // partner.
+    // status reads both the organisation and the partner.
     private static IEnumerable<TestCaseData> ContextChoices()
     {
         string[] systemList = ["system", "list"];
         string[] status = ["status"];
         string[] partnerList = ["partner", "customer", "list"];
-        string[] organisationChoices = ["none chosen", "ENCLAVE_ORG", "ENCLAVE_ORG with ENCLAVE_ORG_ID", "ENCLAVE_ORG_ID that is not a GUID", "cli.json that is not JSON"];
+        string[] organisationChoices = ["none chosen", "ENCLAVE_CLI_ORG", "ENCLAVE_CLI_ORG with ENCLAVE_CLI_ORG_ID", "ENCLAVE_CLI_ORG_ID that is not a GUID", "a saved default that is not an organisation ID"];
 
         foreach (var choice in organisationChoices)
         {
@@ -319,9 +388,21 @@ public class TokenTests
             yield return ContextChoice(status, choice);
         }
 
-        yield return ContextChoice(status, "ENCLAVE_PARTNER_ID that is not a GUID");
-        yield return ContextChoice(partnerList, "ENCLAVE_PARTNER_ID that is not a GUID");
-        yield return ContextChoice(partnerList, "cli.json that is not JSON");
+        yield return ContextChoice(status, "ENCLAVE_CLI_PARTNER_ID that is not a GUID");
+        yield return ContextChoice(partnerList, "ENCLAVE_CLI_PARTNER_ID that is not a GUID");
+    }
+
+    private static IEnumerable<TestCaseData> SavingRuns()
+    {
+        string[][] commands =
+        [
+            ["login"],
+            ["logout"],
+            ["org", "use", TestData.OtherOrgName],
+            ["org", "use", "--id", TestData.OtherOrgId.ToString()],
+        ];
+
+        return commands.Select(args => new TestCaseData((object)args).SetArgDisplayNames(string.Join(" ", args)));
     }
 
     private static TestCaseData ContextChoice(string[] args, string choice) =>
@@ -338,29 +419,34 @@ public class TokenTests
         switch (name)
         {
             case "login":
+                run.AtTerminal();
+                run.AnswerLogin(TestData.Token);
                 run.Stub("GET", "/account/orgs", json: oneOrg);
                 return Command(0, "login");
-            case "login --token-stdin":
-                run.Environment.Remove("ENCLAVE_TOKEN");
-                run.StdinText = TestData.Token + "\n";
+            case "login keeping the saved token":
+                run.SaveLogin();
+                run.AtTerminal();
+                run.AnswerLogin(string.Empty);
                 run.Stub("GET", "/account/orgs", json: oneOrg);
-                return Command(0, "login", "--token-stdin");
+                return Command(0, "login");
             case "login with a refused token":
+                run.AtTerminal();
+                run.AnswerLogin(TestData.Token);
                 run.StubProblem("GET", "/account/orgs", 401, "Unauthorized");
                 return Command(3, "login");
             case "logout":
-                run.SaveCredentials(TestData.Token);
+                run.SaveLogin();
                 return LocalCommand("logout");
-            case "status with ENCLAVE_TOKEN":
+            case "status with ENCLAVE_CLI_PAT":
                 BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with credentials.json":
-                run.Environment.Remove("ENCLAVE_TOKEN");
+                run.Environment.Remove("ENCLAVE_CLI_PAT");
                 run.SaveCredentials(TestData.Token);
                 BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with no organisation chosen":
-                run.Environment.Remove("ENCLAVE_ORG_ID");
+                run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
                 BothOrgs.Stub(run);
                 return Command(0, "status");
             case "status with a refused token":
@@ -370,9 +456,11 @@ public class TokenTests
                 BothOrgs.Stub(run);
                 return Command(0, "org", "list");
             case "org use by name":
+                run.SaveLogin();
                 BothOrgs.Stub(run);
                 return Command(0, "org", "use", TestData.OtherOrgName);
             case "org use --id":
+                run.SaveLogin();
                 BothOrgs.Stub(run);
                 return Command(0, "org", "use", "--id", TestData.OtherOrgId.ToString());
             case "an organisation looked up by name":
@@ -380,7 +468,7 @@ public class TokenTests
                 run.Stub("GET", OtherOrgSystems, json: ApiJson.Page());
                 return Command(0, "system", "list", "--org", TestData.OtherOrgName);
             case "several organisations and none chosen":
-                run.Environment.Remove("ENCLAVE_ORG_ID");
+                run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
                 BothOrgs.Stub(run);
                 return Command(2, "system", "list");
             default:

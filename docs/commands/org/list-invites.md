@@ -1,6 +1,6 @@
 # `enclave-cli org list-invites`
 
-List the organisation's pending invites.
+Lists the organisation's pending invites.
 
 ## Synopsis
 

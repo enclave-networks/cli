@@ -44,11 +44,11 @@ public class OutputTests
         yield return Succeeding("system", "disable", "ABCDE", "--dry-run");
         yield return Succeeding("login");
         yield return Succeeding("org", "use", TestData.OrgName);
-        yield return Succeeding("partner", "use", "--id", TestData.PartnerId.ToString());
         yield return Succeeding("partner", "customer", "list", "--partner-id", TestData.PartnerId.ToString());
     }
 
-    // stderr carries only the error ("Errors and exit codes").
+    // stderr carries only the error ("Errors and exit codes"); login asks its questions at the
+    // terminal.
     [TestCaseSource(nameof(SucceedingCommands))]
     public async Task A_command_that_succeeds_writes_nothing_to_stderr(string[] args)
     {
@@ -57,6 +57,16 @@ public class OutputTests
         StubSystems(run, TestData.OrgPath("systems"));
         run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
+
+        if (args is ["login"])
+        {
+            run.AtTerminal();
+            run.AnswerLogin(TestData.Token);
+        }
+        else if (args is ["org", "use", ..])
+        {
+            run.SaveLogin();
+        }
 
         var result = await run.RunAsync(args);
 
@@ -176,8 +186,8 @@ public class OutputTests
         using var help = CliRun.Start();
         foreach (var run in new[] { bare, help })
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
-            run.Environment.Remove("ENCLAVE_ORG_ID");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
+            run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
         }
 
         var bareResult = await bare.RunAsync();
@@ -203,8 +213,8 @@ public class OutputTests
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var result = await run.RunAsync([.. command.Split(' '), "--help"]);
 

@@ -1,6 +1,6 @@
 # `enclave-cli dns show-zone`
 
-Show a zone.
+Shows a DNS zone.
 
 ## Synopsis
 

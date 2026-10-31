@@ -14,7 +14,7 @@ internal static class LogCommand
     {
         var verb = new CliVerb(
             "log",
-            "Print the organisation's activity log, newest first: the newest 100 entries, --limit entries, or every entry back to --since.",
+            "Shows the organisation's activity log.",
             CommandScope.Organisation);
 
         // log is a noun with a plural, and runs as a command itself.

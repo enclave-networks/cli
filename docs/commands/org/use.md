@@ -1,6 +1,6 @@
 # `enclave-cli org use`
 
-The default is saved in `~/.enclave/cli.json`. Use `--id <orgId>` when a name is ambiguous. A command's `--org` or `--org-id` overrides the default.
+The default is saved in `~/.enclave/credentials.json`, beside the token. Use `--id <orgId>` when a name is ambiguous. A command's `--org` or `--org-id` overrides the default.
 
 ## Synopsis
 

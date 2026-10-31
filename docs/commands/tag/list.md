@@ -1,6 +1,6 @@
 # `enclave-cli tag list`
 
-List the tags, reading every page.
+Lists tags.
 
 ## Synopsis
 

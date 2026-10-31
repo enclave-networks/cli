@@ -1,6 +1,6 @@
 # `enclave-cli org invite`
 
-Invite someone to the organisation by email address.
+Invites someone to the organisation.
 
 ## Synopsis
 

@@ -7,7 +7,7 @@ internal static class OrgListCommand
     public static CliVerb Create()
     {
         // No organisation scope: org list is how a caller finds an organisation.
-        var verb = new CliVerb("list", "List the organisations the token sees, with the token's role in each.");
+        var verb = new CliVerb("list", "Lists the organisations the token sees.");
 
         verb.SetHandler(async context =>
         {

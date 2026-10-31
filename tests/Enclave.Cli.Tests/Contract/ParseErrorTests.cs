@@ -305,8 +305,8 @@ public class ParseErrorTests
         ArgumentNullException.ThrowIfNull(command);
         using var withContext = CliRun.Start();
         using var withoutContext = CliRun.Start();
-        withoutContext.Environment.Remove("ENCLAVE_TOKEN");
-        withoutContext.Environment.Remove("ENCLAVE_ORG_ID");
+        withoutContext.Environment.Remove("ENCLAVE_CLI_PAT");
+        withoutContext.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var withResult = await withContext.RunAsync(command.Split(' '));
         var withoutResult = await withoutContext.RunAsync(command.Split(' '));

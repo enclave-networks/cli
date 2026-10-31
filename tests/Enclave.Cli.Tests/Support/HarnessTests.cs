@@ -15,6 +15,7 @@ using Enclave.Sdk.Api.Clients.Interfaces;
 using Enclave.Sdk.Api.Exceptions;
 using NUnit.Framework;
 using NUnit.Framework.Internal;
+using Spectre.Console;
 using static System.FormattableString;
 
 namespace Enclave.Cli.Tests.Support;
@@ -31,6 +32,11 @@ public class HarnessTests
 
     // The options Enclave.Sdk.Api's EnclaveClient.ReadCredentialsFile reads credentials.json with.
     private static readonly JsonSerializerOptions CredentialsJsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    // login writes the fields in this order (CredentialsFile.Write).
+    private static readonly string[] CredentialsFields = ["personalAccessToken", "apiBaseUrl", "defaultOrgID"];
+
+    private static readonly string[] TokenAndOrganisationVariables = ["ENCLAVE_CLI_ORG_ID", "ENCLAVE_CLI_PAT"];
 
     private static readonly string EmptyObject = Text(new JsonObject());
 
@@ -720,22 +726,91 @@ public class HarnessTests
     public void BodyIds_fails_the_test_unless_the_property_is_an_array_of_strings_and_integers(string body) =>
         Assert.That(() => RequestWithBody(body).BodyIds("ids"), Throws.InstanceOf<AssertionException>());
 
+    // Enclave.Sdk.Api reads the token from the same file (EnclaveClient.ReadCredentialsFile).
     [Test]
-    public void SaveCredentials_writes_the_file_Enclave_Sdk_Api_reads()
+    public void SaveCredentials_writes_the_file_login_writes()
     {
         using var run = CliRun.Start();
 
-        run.SaveCredentials("saved-token");
+        run.SaveCredentials("saved-token", defaultOrgId: TestData.OrgId.ToString());
 
-        var options = JsonSerializer.Deserialize<EnclaveClientOptions>(run.Files.ReadText(run.CredentialsPath)!, CredentialsJsonOptions);
+        var text = run.Files.ReadText(run.CredentialsPath)!;
+        var options = JsonSerializer.Deserialize<EnclaveClientOptions>(text, CredentialsJsonOptions);
+        var file = JsonRead.Parse(text);
 
         Assert.Multiple(() =>
         {
             Assert.That(run.CredentialsPath, Is.EqualTo(Path.Combine(run.Home, ".enclave", "credentials.json")));
             Assert.That(options!.PersonalAccessToken, Is.EqualTo("saved-token"));
-            Assert.That(options.BaseUrl, Is.EqualTo(run.ApiBaseUrl));
+            Assert.That(JsonRead.PropertyNames(file), Is.EqualTo(CredentialsFields));
+            Assert.That(JsonAssert.Property(file, "apiBaseUrl").GetString(), Is.EqualTo(run.ApiBaseUrl));
+            Assert.That(JsonAssert.Property(file, "defaultOrgID").GetString(), Is.EqualTo(TestData.OrgId.ToString()));
             Assert.That(run.Files.IsPrivate(run.CredentialsPath), Is.True);
         });
+    }
+
+    [Test]
+    public void SaveLogin_leaves_the_token_in_credentials_json_alone()
+    {
+        using var run = CliRun.Start();
+
+        run.SaveLogin(defaultOrgId: TestData.OtherOrgId.ToString());
+
+        var file = JsonRead.Parse(run.Files.ReadText(run.CredentialsPath)!);
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.Environment.ContainsKey("ENCLAVE_CLI_PAT"), Is.False);
+            Assert.That(JsonAssert.Property(file, "personalAccessToken").GetString(), Is.EqualTo(TestData.Token));
+            Assert.That(JsonAssert.Property(file, "defaultOrgID").GetString(), Is.EqualTo(TestData.OtherOrgId.ToString()));
+        });
+    }
+
+    // Terminal answers in the order pushed, and a question with no answer left fails rather than
+    // waits.
+    [Test]
+    public async Task Terminal_answers_questions_in_order_with_any_character_and_fails_a_question_with_none_left()
+    {
+        using var run = CliRun.Start();
+        run.Type("é1");
+        run.Type(string.Empty);
+
+        var first = await new TextPrompt<string>("First").AllowEmpty().ShowAsync(run.Terminal, CancellationToken.None);
+        var second = await new TextPrompt<string>("Second").AllowEmpty().ShowAsync(run.Terminal, CancellationToken.None);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(first, Is.EqualTo("é1"));
+            Assert.That(second, Is.Empty);
+            Assert.That(async () => await new TextPrompt<string>("Third").ShowAsync(run.Terminal, CancellationToken.None), Throws.InvalidOperationException);
+        });
+    }
+
+    [Test]
+    public void AtTerminal_unsets_ENCLAVE_CLI_PAT_and_makes_stdin_and_stderr_terminals()
+    {
+        using var run = CliRun.Start();
+
+        run.AtTerminal();
+
+        var host = run.CreateHost();
+        Assert.Multiple(() =>
+        {
+            Assert.That(host.GetEnvironmentVariable("ENCLAVE_CLI_PAT"), Is.Null);
+            Assert.That(host.StdinIsTerminal, Is.True);
+            Assert.That(host.StderrIsTerminal, Is.True);
+            Assert.That(host.CreatePromptConsole(), Is.SameAs(run.Terminal));
+        });
+    }
+
+    [Test]
+    public async Task VariablesRead_lists_each_environment_variable_the_cli_asked_for()
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", TestData.OrgPath("systems"), json: ApiJson.Page());
+
+        CliAssert.Succeeded(await run.RunAsync("system", "list"));
+
+        Assert.That(run.VariablesRead, Is.SupersetOf(TokenAndOrganisationVariables));
     }
 
     // The environment of the process running the tests can hold a real token.
@@ -745,7 +820,7 @@ public class HarnessTests
         const string ProbeName = "ENCLAVE_CLI_HARNESS_PROBE";
         using var run = CliRun.Start();
         run.Environment["ENCLAVE_EXTRA"] = "extra";
-        run.Environment["ENCLAVE_ORG_ID"] = null;
+        run.Environment["ENCLAVE_CLI_ORG_ID"] = null;
         run.StdinText = "line one\nline two\n";
 
         Environment.SetEnvironmentVariable(ProbeName, "from-process");
@@ -759,9 +834,9 @@ public class HarnessTests
             {
                 Assert.That(host.GetEnvironmentVariable(ProbeName), Is.Null);
                 Assert.That(host.GetEnvironmentVariable("PATH"), Is.Null);
-                Assert.That(host.GetEnvironmentVariable("ENCLAVE_TOKEN"), Is.EqualTo(TestData.Token));
+                Assert.That(host.GetEnvironmentVariable("ENCLAVE_CLI_PAT"), Is.EqualTo(TestData.Token));
                 Assert.That(host.GetEnvironmentVariable("ENCLAVE_EXTRA"), Is.EqualTo("extra"));
-                Assert.That(host.GetEnvironmentVariable("ENCLAVE_ORG_ID"), Is.Null);
+                Assert.That(host.GetEnvironmentVariable("ENCLAVE_CLI_ORG_ID"), Is.Null);
                 Assert.That(host.HomeDirectory, Is.EqualTo(run.Home));
                 Assert.That(host.HomeDirectory, Does.StartWith(Path.GetTempPath()));
                 Assert.That(Directory.Exists(host.HomeDirectory), Is.False);
@@ -769,11 +844,15 @@ public class HarnessTests
                 Assert.That(run.Files.Paths, Is.Empty);
                 Assert.That(host.Stdin.ReadToEnd(), Is.EqualTo("line one\nline two\n"));
                 Assert.That(host.StdinIsTerminal, Is.False);
+                Assert.That(host.StderrIsTerminal, Is.False);
                 Assert.That(terminalHost.StdinIsTerminal, Is.True);
                 Assert.That(terminalHost.Stdin, Is.InstanceOf<TerminalStdin>());
+                Assert.That(host.CreatePromptConsole(), Is.SameAs(run.Terminal));
                 Assert.That(host.DefaultApiUrl, Is.EqualTo(run.ApiUrl));
                 Assert.That(host.DefaultApiUrl.Host, Is.EqualTo("127.0.0.1"));
                 Assert.That(host.DefaultPartnerApiUrl, Is.EqualTo(run.PartnerApiUrl));
+                Assert.That(host.StagingApiUrl.Host, Is.EqualTo("127.0.0.1"));
+                Assert.That(host.StagingPartnerApiUrl.Host, Is.EqualTo("127.0.0.1"));
                 Assert.That(host.CreateNetworkHandler, Is.Null);
             });
         }
@@ -981,11 +1060,12 @@ public class HarnessTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(run.Environment["ENCLAVE_TOKEN"], Is.EqualTo(TestData.Token));
-            Assert.That(run.Environment["ENCLAVE_ORG_ID"], Is.EqualTo(TestData.OrgId.ToString()));
-            Assert.That(run.Environment.ContainsKey("ENCLAVE_ORG"), Is.False);
+            Assert.That(run.Environment["ENCLAVE_CLI_PAT"], Is.EqualTo(TestData.Token));
+            Assert.That(run.Environment["ENCLAVE_CLI_ORG_ID"], Is.EqualTo(TestData.OrgId.ToString()));
+            Assert.That(run.Environment.ContainsKey("ENCLAVE_CLI_ORG"), Is.False);
             Assert.That(run.StdinText, Is.Empty);
             Assert.That(run.StdinIsTerminal, Is.False);
+            Assert.That(run.StderrIsTerminal, Is.False);
         });
     }
 

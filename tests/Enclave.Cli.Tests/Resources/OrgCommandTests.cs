@@ -243,7 +243,7 @@ public class OrgCommandTests
     {
         using var withToken = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         withToken.Stub("POST", TestData.OrgPath("invites"), json: ApiJson.Invite(AlexEmail));
         withToken.Stub("DELETE", TestData.OrgPath("invites"), json: ApiJson.Invite(SamEmail));
         withToken.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail)));

@@ -1,6 +1,6 @@
 # `enclave-cli trust list`
 
-List the trust requirements, reading every page.
+Lists trust requirements.
 
 ## Synopsis
 

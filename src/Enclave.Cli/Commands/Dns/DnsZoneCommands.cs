@@ -8,7 +8,7 @@ internal static class DnsZoneCommands
 {
     public static CliVerb List()
     {
-        var verb = new CliVerb("list-zones", "List the DNS zones, reading every page.", CommandScope.Organisation);
+        var verb = new CliVerb("list-zones", "Lists DNS zones.", CommandScope.Organisation);
 
         verb.SetHandler(async context =>
         {
@@ -23,7 +23,7 @@ internal static class DnsZoneCommands
 
     public static CliVerb Show()
     {
-        var (verb, zone, id) = ForZone("show-zone", "Show a zone.", changes: false);
+        var (verb, zone, id) = ForZone("show-zone", "Shows a DNS zone.", changes: false);
 
         verb.SetHandler(async context =>
         {
@@ -39,7 +39,7 @@ internal static class DnsZoneCommands
 
     public static CliVerb Create()
     {
-        var verb = new CliVerb("create-zone", "Create a DNS zone and print it.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("create-zone", "Creates a DNS zone.", CommandScope.Organisation, changes: true);
         var name = verb.Add(CliArguments.Name("zone", "The zone's name, such as internal.", "a zone's name"));
         var autoDnsTags = verb.Add(CliOptions.TagList("--auto-dns-tags", "Give systems with these tags a name in the zone automatically.", needsEntries: true));
         var notes = verb.Add(CliOptions.Text("--notes", "The zone's notes."));
@@ -66,7 +66,7 @@ internal static class DnsZoneCommands
 
     public static CliVerb Update()
     {
-        var (verb, zone, id) = ForZone("update-zone", "Change a zone and print it.", changes: true);
+        var (verb, zone, id) = ForZone("update-zone", "Updates a DNS zone.", changes: true);
         // The API refuses a blank zone name and takes empty notes, which clear them (portal
         // DnsZonePatchValidator).
         var name = verb.Add(CliOptions.NonBlank("--name", "The zone's new name.", "a zone's name", "name"));
@@ -110,7 +110,7 @@ internal static class DnsZoneCommands
 
     public static CliVerb Delete()
     {
-        var (verb, zone, id) = ForZone("delete-zone", "Delete a zone and print it. Takes one zone; the API has no bulk zone delete.", changes: true);
+        var (verb, zone, id) = ForZone("delete-zone", "Deletes a DNS zone.", changes: true);
 
         verb.SetHandler(async context =>
         {

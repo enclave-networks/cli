@@ -4,14 +4,19 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Contract;
 
-// Every other test points both APIs at fakes, so these are the tests that check the addresses a
-// released CLI uses (spec/cli-surface.md "Partner API").
+// Every other test points the APIs at fakes, so these are the tests that check the addresses a
+// released CLI uses (spec/cli-surface.md "Partner API", "Environments").
 public class ProductionAddressTests
 {
     // Enclave.Sdk.Api Constants.ApiUrl and Constants.PartnerApiUrl.
     private const string ProductionApi = "https://api.enclave.io";
 
     private const string ProductionPartnerApi = "https://partner-api.enclave.io";
+
+    // spec/cli-surface.md "Environments".
+    private const string StagingApi = "https://staging-api.enclave.io";
+
+    private const string StagingPartnerApi = "https://staging-partner-api.enclave.io";
 
     private static readonly string[] PostOnly = ["POST"];
 
@@ -39,8 +44,31 @@ public class ProductionAddressTests
         {
             Assert.That(host.DefaultApiUrl, Is.EqualTo(new Uri(ProductionApi)));
             Assert.That(host.DefaultPartnerApiUrl, Is.Null);
+            Assert.That(host.StagingApiUrl, Is.EqualTo(new Uri(StagingApi)));
+            Assert.That(host.StagingPartnerApiUrl, Is.EqualTo(new Uri(StagingPartnerApi)));
             Assert.That(host.CreateNetworkHandler, Is.Null);
         });
+    }
+
+    // login's questions go to stderr, so stdout holds only the JSON ("Login, logout and status").
+    [Test]
+    public void The_host_outside_tests_asks_login_s_questions_on_stderr()
+    {
+        var stdout = Console.Out;
+        var stderr = Console.Error;
+        CliHost host;
+
+        try
+        {
+            host = CliHost.FromProcess();
+        }
+        finally
+        {
+            Console.SetOut(stdout);
+            Console.SetError(stderr);
+        }
+
+        Assert.That(host.CreatePromptConsole().Profile.Out.Writer, Is.SameAs(Console.Error));
     }
 
     // --dry-run prints the URL without sending, and create makes no read. The network beneath the

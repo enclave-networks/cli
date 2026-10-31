@@ -1,6 +1,6 @@
 # `enclave-cli policy delete`
 
-Delete policies. Takes policy descriptions, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Deletes policies.
 
 ## Synopsis
 

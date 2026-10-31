@@ -1,6 +1,6 @@
 # `enclave-cli partner customer update`
 
-Change a customer's name, contact, licensed systems and gateways, discount request and hard limit.
+Updates a customer.
 
 ## Synopsis
 

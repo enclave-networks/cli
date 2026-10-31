@@ -1,6 +1,6 @@
 # `enclave-cli partner customer invite`
 
-Invite someone to be an admin of the customer.
+Invites someone to be an admin of a customer.
 
 ## Synopsis
 

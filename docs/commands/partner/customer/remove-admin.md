@@ -1,6 +1,6 @@
 # `enclave-cli partner customer remove-admin`
 
-Remove an admin from the customer, given by email address or account ID.
+Removes an admin from a customer.
 
 ## Synopsis
 

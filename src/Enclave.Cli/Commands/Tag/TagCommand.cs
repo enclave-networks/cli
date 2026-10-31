@@ -7,7 +7,7 @@ internal static class TagCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("tag", "tags", "Tags, which decide policy membership.");
+        var noun = new CliNoun("tag", "tags", "Tags.");
 
         noun.Add(List());
         noun.Add(Show());
@@ -19,7 +19,7 @@ internal static class TagCommand
 
     private static CliVerb List()
     {
-        var verb = new CliVerb("list", "List the tags, reading every page.", CommandScope.Organisation);
+        var verb = new CliVerb("list", "Lists tags.", CommandScope.Organisation);
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var sort = verb.Add(CliOptions.Enum("--sort", "The order to list tags in.", TagQuerySortOrder.Alphabetical, TagQuerySortOrder.RecentlyUsed, TagQuerySortOrder.ReferencedSystems));
 
@@ -40,7 +40,7 @@ internal static class TagCommand
 
     private static CliVerb Show()
     {
-        var verb = new CliVerb("show", "Show a tag.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows a tag.", CommandScope.Organisation);
         var tag = verb.Add(CliArguments.Id("tag", "The tag's name.", IdFormats.Tag));
 
         verb.SetHandler(async context =>
@@ -57,7 +57,7 @@ internal static class TagCommand
 
     private static CliVerb Delete()
     {
-        var verb = new CliVerb("delete", "Delete tags. Takes any number of tag names, or \"-\" to read a list from stdin, and prints { requested, affected }.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("delete", "Deletes tags.", CommandScope.Organisation, changes: true);
         var tags = verb.Add(CliArguments.Many("tag", "A tag's name.", IdFormats.Tag));
 
         verb.SetHandler(async context =>

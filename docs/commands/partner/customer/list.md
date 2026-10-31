@@ -1,6 +1,6 @@
 # `enclave-cli partner customer list`
 
-List the partner's customers.
+Lists the partner's customers.
 
 ## Synopsis
 

@@ -8,7 +8,7 @@ internal static class PolicyUpdateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("update", "Change a policy's settings and print the policy.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("update", "Updates a policy.", CommandScope.Organisation, changes: true);
         var policy = verb.Add(CliArguments.OptionalName("policy", "The policy's description, matched whole and ignoring case.", "a policy's description"));
         var id = verb.Add(CliOptions.Id("--id", "The policy's ID.", IdFormats.Int32));
         // The API refuses a blank description and takes empty notes, which clear them (portal

@@ -17,8 +17,6 @@ public class TraceTests
 
     private static readonly string[] PartnerFields = ["id", "source"];
 
-    private static readonly string[] SavedOnly = ["saved"];
-
     private static readonly string[] ErrorThenTrace = ["error", "trace"];
 
     private static readonly string[] ErrorOnly = ["error"];
@@ -31,7 +29,6 @@ public class TraceTests
         yield return Document("dryRun,org,requests", "system", "disable", "ABCDE", "--dry-run");
         yield return Document("token,org,partner", "status");
         yield return Document("orgId,orgName,role,partnerAccess", "org", "use", TestData.OrgName);
-        yield return Document("id", "partner", "use", "--id", TestData.PartnerId.ToString());
     }
 
     // An empty list after "-" needs no token ("Several IDs").
@@ -68,6 +65,11 @@ public class TraceTests
         run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"));
         run.StubBulk("PUT", TestData.OrgPath("systems/disable"), "systemsUpdated", 1);
 
+        if (args is ["org", "use", ..])
+        {
+            run.SaveLogin();
+        }
+
         var result = await run.RunAsync(args);
 
         CliAssert.Succeeded(result);
@@ -96,9 +98,9 @@ public class TraceTests
         });
     }
 
-    [TestCase("ENCLAVE_TOKEN")]
+    [TestCase("ENCLAVE_CLI_PAT")]
     [TestCase("credentials.json")]
-    [TestCase("stdin")]
+    [TestCase("prompt")]
     public async Task The_trace_names_where_the_token_came_from(string source)
     {
         using var run = CliRun.Start();
@@ -109,15 +111,15 @@ public class TraceTests
 
         if (source == "credentials.json")
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
             run.SaveCredentials(TestData.Token);
             expected = run.CredentialsPath;
         }
-        else if (source == "stdin")
+        else if (source == "prompt")
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
-            run.StdinText = TestData.Token;
-            args = ["login", "--token-stdin"];
+            run.AtTerminal();
+            run.AnswerLogin(TestData.Token);
+            args = ["login"];
         }
 
         var result = await run.RunAsync(args);
@@ -149,13 +151,12 @@ public class TraceTests
         });
     }
 
-    // The default is saved as ID and name, so its name comes with it; an ID given any other way
-    // has no name, since no lookup ran ("Context").
-    [TestCase("ENCLAVE_ORG_ID")]
+    // An ID has no name, the saved default's included, since no lookup ran ("Context").
+    [TestCase("ENCLAVE_CLI_ORG_ID")]
     [TestCase("--org-id")]
     [TestCase("--org")]
-    [TestCase("ENCLAVE_ORG")]
-    [TestCase("cli.json")]
+    [TestCase("ENCLAVE_CLI_ORG")]
+    [TestCase("credentials.json")]
     [TestCase("only-organisation")]
     public async Task The_trace_names_the_organisation_and_what_chose_it(string source)
     {
@@ -174,14 +175,14 @@ public class TraceTests
             BothOrgs.Stub(run);
         }
 
-        if (source != "ENCLAVE_ORG_ID")
+        if (source != "ENCLAVE_CLI_ORG_ID")
         {
-            run.Environment.Remove("ENCLAVE_ORG_ID");
+            run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
         }
 
         switch (source)
         {
-            case "ENCLAVE_ORG_ID":
+            case "ENCLAVE_CLI_ORG_ID":
                 expected = (TestData.OrgId, null, source);
                 break;
             case "--org-id":
@@ -191,12 +192,12 @@ public class TraceTests
             case "--org":
                 args = [.. args, source, TestData.OtherOrgName];
                 break;
-            case "ENCLAVE_ORG":
-                run.Environment["ENCLAVE_ORG"] = TestData.OtherOrgName;
+            case "ENCLAVE_CLI_ORG":
+                run.Environment["ENCLAVE_CLI_ORG"] = TestData.OtherOrgName;
                 break;
-            case "cli.json":
-                run.SaveDefaults(TestData.OtherOrgId.ToString(), TestData.OtherOrgName);
-                expected = (TestData.OtherOrgId, TestData.OtherOrgName, run.CliConfigPath);
+            case "credentials.json":
+                run.SaveLogin(defaultOrgId: TestData.OtherOrgId.ToString());
+                expected = (TestData.OtherOrgId, null, run.CredentialsPath);
                 break;
             default:
                 expected = (TestData.OrgId, TestData.OrgName, source);
@@ -218,27 +219,20 @@ public class TraceTests
 
     // A partner command calls the partner API only ("Partner API").
     [TestCase("--partner-id")]
-    [TestCase("ENCLAVE_PARTNER_ID")]
-    [TestCase("cli.json")]
+    [TestCase("ENCLAVE_CLI_PARTNER_ID")]
     public async Task The_trace_of_a_partner_command_names_the_partner_api_and_the_partner(string source)
     {
         using var run = CliRun.Start();
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
         string[] args = ["partner", "customer", "list"];
-        var expected = source;
 
-        switch (source)
+        if (source == "--partner-id")
         {
-            case "--partner-id":
-                args = [.. args, source, TestData.PartnerId.ToString()];
-                break;
-            case "ENCLAVE_PARTNER_ID":
-                run.Environment[source] = TestData.PartnerId.ToString();
-                break;
-            default:
-                run.SaveDefaults(partnerId: TestData.PartnerId.ToString());
-                expected = run.CliConfigPath;
-                break;
+            args = [.. args, source, TestData.PartnerId.ToString()];
+        }
+        else
+        {
+            run.Environment[source] = TestData.PartnerId.ToString();
         }
 
         var result = await run.RunAsync(args);
@@ -253,7 +247,7 @@ public class TraceTests
             Assert.That(trace.TryGetProperty("org", out _), Is.False, result.ToString());
             Assert.That(JsonRead.PropertyNames(partner), Is.EqualTo(PartnerFields), result.ToString());
             Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId), result.ToString());
-            Assert.That(JsonAssert.Property(partner, "source").GetString(), Is.EqualTo(expected), result.ToString());
+            Assert.That(JsonAssert.Property(partner, "source").GetString(), Is.EqualTo(source), result.ToString());
         });
     }
 
@@ -342,12 +336,16 @@ public class TraceTests
         ArgumentNullException.ThrowIfNull(name);
         using var run = CliRun.Start();
         string[] args = name == "org use" ? ["org", "use", TestData.OrgName] : ["login"];
-        var expected = name switch
+
+        if (name == "org use")
         {
-            "login with one organisation" => $"{run.CredentialsPath},{run.CliConfigPath}",
-            "login with two organisations" => run.CredentialsPath,
-            _ => run.CliConfigPath,
-        };
+            run.SaveLogin();
+        }
+        else
+        {
+            run.AtTerminal();
+            run.AnswerLogin(TestData.Token);
+        }
 
         if (name == "login with one organisation")
         {
@@ -361,25 +359,7 @@ public class TraceTests
         var result = await run.RunAsync(args);
 
         CliAssert.Succeeded(result);
-        Assert.That(JsonRead.StringList(JsonAssert.Property(result.StdoutTrace, "saved")), Is.EqualTo(expected), result.ToString());
-    }
-
-    // partner use makes no call and reads no token ("Login, logout and status"), so saving is all
-    // that happened.
-    [Test]
-    public async Task The_trace_of_partner_use_holds_only_the_file_saved()
-    {
-        using var run = CliRun.Start();
-
-        var result = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
-
-        CliAssert.Succeeded(result);
-        var trace = result.StdoutTrace;
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.PropertyNames(trace), Is.EqualTo(SavedOnly), result.ToString());
-            Assert.That(JsonRead.StringList(JsonAssert.Property(trace, "saved")), Is.EqualTo(run.CliConfigPath), result.ToString());
-        });
+        Assert.That(JsonRead.StringList(JsonAssert.Property(result.StdoutTrace, "saved")), Is.EqualTo(run.CredentialsPath), result.ToString());
     }
 
     [Test]
@@ -396,7 +376,7 @@ public class TraceTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(result.StderrJson), Is.EqualTo(ErrorThenTrace), result.ToString());
-            Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
+            Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             Assert.That(JsonAssert.Property(trace, "api").GetString(), Is.EqualTo(run.ApiUrl.AbsoluteUri), result.ToString());
             Assert.That(JsonRead.IdOf(JsonAssert.Property(trace, "org")), Is.EqualTo(TestData.OrgId), result.ToString());
             Assert.That(JsonRead.StringList(JsonAssert.Property(trace, "requests")), Is.EqualTo($"GET {run.ApiBaseUrl}{path}"), result.ToString());
@@ -469,7 +449,7 @@ public class TraceTests
 
         if (args is ["system", "list"])
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
         }
 
         var result = await run.RunAsync(args);

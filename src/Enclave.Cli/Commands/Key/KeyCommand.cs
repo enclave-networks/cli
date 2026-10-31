@@ -6,7 +6,7 @@ internal static class KeyCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("key", "keys", "Enrolment keys, which systems enrol with.");
+        var noun = new CliNoun("key", "keys", "Enrolment keys.");
 
         noun.Add(KeyListCommand.Create());
         noun.Add(KeyShowCommand.Create());

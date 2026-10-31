@@ -9,7 +9,7 @@ internal static class TrustCreateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("create", "Create a trust requirement and print it: --authority makes a sign-in requirement, --allow-* and --block-* a public IP requirement.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("create", "Creates a trust requirement.", CommandScope.Organisation, changes: true);
         var description = verb.Add(CliArguments.Name("description", "The trust requirement's description.", "a trust requirement's description"));
         var notes = verb.Add(CliOptions.Text("--notes", "The trust requirement's notes."));
         var authority = verb.Add(CliOptions.ChoiceText("--authority", "Require a sign-in with this authority.", TrustSettings.Authorities));

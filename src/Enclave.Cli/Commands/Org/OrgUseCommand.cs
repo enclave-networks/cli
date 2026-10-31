@@ -10,7 +10,7 @@ internal static class OrgUseCommand
     {
         var verb = new CliVerb(
             "use",
-            "Save the default organisation in ~/.enclave/cli.json, chosen by name or by --id; later commands use it with no lookup. Makes one call, to find the name for an ID or the ID for a name, and prints the organisation.");
+            "Saves the default organisation.");
 
         var name = verb.Add(CliArguments.OptionalText("name", "The organisation's name, matched whole and ignoring case."));
         var id = verb.Add(CliOptions.Id("--id", "The organisation's ID.", IdFormats.Guid, "orgId"));
@@ -27,7 +27,7 @@ internal static class OrgUseCommand
                     ?? throw CliErrors.NameNotUnique(id.Name, $"The token sees no organisation with ID {guid:D}.", OrganisationResolver.Candidates([]))
                 : OrganisationResolver.MatchName(context.Get(name)!, organisations, name.Name);
 
-            context.Trace.Saved(SettingsFile.SaveOrganisation(context.Host, organisation.OrgId, organisation.OrgName));
+            context.Trace.Saved(CredentialsFile.SaveDefaultOrganisation(context.Host, organisation.OrgId));
 
             await context.Output.WriteAsync(organisation, context.CancellationToken);
         });

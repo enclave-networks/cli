@@ -1,6 +1,6 @@
 # `enclave-cli system disable`
 
-Disable systems. Takes any number of system IDs, or "-" to read a list from stdin, and prints { requested, affected }.
+Disables systems.
 
 ## Synopsis
 

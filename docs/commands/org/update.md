@@ -1,6 +1,6 @@
 # `enclave-cli org update`
 
-Change the organisation's name, website or phone number, and print its properties.
+Updates the organisation.
 
 ## Synopsis
 

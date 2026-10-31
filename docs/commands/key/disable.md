@@ -1,6 +1,6 @@
 # `enclave-cli key disable`
 
-Disable keys, so no system can enrol with them. Takes key descriptions, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Disables enrolment keys.
 
 ## Synopsis
 

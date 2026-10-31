@@ -1,6 +1,6 @@
 # `enclave-cli policy disable`
 
-Disable policies. Takes policy descriptions, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Disables policies.
 
 ## Synopsis
 

@@ -1,6 +1,6 @@
 # `enclave-cli partner customer show`
 
-Show a customer.
+Shows a customer.
 
 ## Synopsis
 

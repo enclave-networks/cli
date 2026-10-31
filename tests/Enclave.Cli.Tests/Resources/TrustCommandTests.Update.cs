@@ -251,7 +251,7 @@ public partial class TrustCommandTests
     {
         using var run = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         var trust = authority == "azure"
             ? SignInTrust(5, "entra staff", Azure(Tenant))
             : SignInTrust(5, "sso", new JsonObject { ["authority"] = "oidc", ["authorityUri"] = "https://sso.example.com", ["clientId"] = "enclave-portal", ["aud"] = "api://enclave" });

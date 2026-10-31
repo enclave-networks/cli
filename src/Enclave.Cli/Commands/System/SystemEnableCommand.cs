@@ -8,7 +8,7 @@ internal static class SystemEnableCommand
     {
         var verb = new CliVerb(
             "enable",
-            SystemBulkCommand.Describe("Enable systems; with --for or --until, enable one system until then."),
+            "Enables systems.",
             CommandScope.Organisation,
             changes: true);
 

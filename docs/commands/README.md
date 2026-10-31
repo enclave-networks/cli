@@ -4,7 +4,7 @@
 
 ## Shared rules
 
-- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands use [`partner use`](partner/use.md) or `--partner-id`.
+- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.
 - Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.
 - Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.
 - Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.
@@ -27,120 +27,114 @@
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli login`](login.md) | Check a personal access token with one call and save it in ~/.enclave/credentials.json. |
-| [`enclave-cli logout`](logout.md) | Delete ~/.enclave/credentials.json. |
-| [`enclave-cli status`](status.md) | Show where the token comes from, the organisation and partner a command would use and what chose them, and the token's role in the organisation. |
-| [`enclave-cli log`](log.md) | Print the organisation's activity log, newest first: the newest 100 entries, --limit entries, or every entry back to --since. |
-| [`enclave-cli commands`](commands.md) | Describe every command, its arguments and options, the values each option allows, and the error codes with their exit codes, as JSON. |
+| [`enclave-cli login`](login.md) | Saves a personal access token and a default organisation. |
+| [`enclave-cli logout`](logout.md) | Deletes ~/.enclave/credentials.json. |
+| [`enclave-cli status`](status.md) | Shows the organisation and partner commands will use, and your role. |
+| [`enclave-cli log`](log.md) | Shows the organisation's activity log. |
+| [`enclave-cli commands`](commands.md) | Describes the commands as JSON. |
 
 ## Org
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli org list`](org/list.md) | List the organisations the token sees, with the token's role in each. |
-| [`enclave-cli org use`](org/use.md) | Save the default organisation in ~/.enclave/cli.json, chosen by name or by --id; later commands use it with no lookup. |
-| [`enclave-cli org show`](org/show.md) | Show the organisation's properties. |
-| [`enclave-cli org update`](org/update.md) | Change the organisation's name, website or phone number, and print its properties. |
-| [`enclave-cli org list-users`](org/list-users.md) | List the organisation's users. |
-| [`enclave-cli org remove-user`](org/remove-user.md) | Remove a user from the organisation, given by email address or by --id. |
-| [`enclave-cli org list-invites`](org/list-invites.md) | List the organisation's pending invites. |
-| [`enclave-cli org invite`](org/invite.md) | Invite someone to the organisation by email address. |
-| [`enclave-cli org cancel-invite`](org/cancel-invite.md) | Cancel the pending invite to an email address. |
-
-## Partner
-
-| Command | Purpose |
-| --- | --- |
-| [`enclave-cli partner use`](partner/use.md) | Save the default partner in ~/.enclave/cli.json; partner commands use it. |
+| [`enclave-cli org list`](org/list.md) | Lists the organisations the token sees. |
+| [`enclave-cli org use`](org/use.md) | Saves the default organisation. |
+| [`enclave-cli org show`](org/show.md) | Shows the organisation. |
+| [`enclave-cli org update`](org/update.md) | Updates the organisation. |
+| [`enclave-cli org list-users`](org/list-users.md) | Lists the organisation's users. |
+| [`enclave-cli org remove-user`](org/remove-user.md) | Removes a user from the organisation. |
+| [`enclave-cli org list-invites`](org/list-invites.md) | Lists the organisation's pending invites. |
+| [`enclave-cli org invite`](org/invite.md) | Invites someone to the organisation. |
+| [`enclave-cli org cancel-invite`](org/cancel-invite.md) | Cancels a pending invite. |
 
 ## Partner customer
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli partner customer list`](partner/customer/list.md) | List the partner's customers. |
-| [`enclave-cli partner customer show`](partner/customer/show.md) | Show a customer. |
-| [`enclave-cli partner customer create`](partner/customer/create.md) | Create a customer, sending every field of the API's customer model, with the partner portal's values for the flags left out. |
-| [`enclave-cli partner customer update`](partner/customer/update.md) | Change a customer's name, contact, licensed systems and gateways, discount request and hard limit. |
-| [`enclave-cli partner customer convert`](partner/customer/convert.md) | Convert a customer from trial to paid, with the billing period it commits to. |
-| [`enclave-cli partner customer list-admins`](partner/customer/list-admins.md) | List the customer's admins. |
-| [`enclave-cli partner customer add-admin`](partner/customer/add-admin.md) | Make one of the partner's users an admin of the customer, given by account ID, which the partner portal shows. |
-| [`enclave-cli partner customer remove-admin`](partner/customer/remove-admin.md) | Remove an admin from the customer, given by email address or account ID. |
-| [`enclave-cli partner customer list-invites`](partner/customer/list-invites.md) | List the customer's pending admin invites. |
-| [`enclave-cli partner customer invite`](partner/customer/invite.md) | Invite someone to be an admin of the customer. |
-| [`enclave-cli partner customer cancel-invite`](partner/customer/cancel-invite.md) | Cancel a pending admin invite to the customer, given by its email address. |
-| [`enclave-cli partner customer enable-auto-sync`](partner/customer/enable-auto-sync.md) | Turn on auto-sync for the customer, which keeps the partner's staff as its admins. |
-| [`enclave-cli partner customer disable-auto-sync`](partner/customer/disable-auto-sync.md) | Turn off auto-sync for the customer. |
+| [`enclave-cli partner customer list`](partner/customer/list.md) | Lists the partner's customers. |
+| [`enclave-cli partner customer show`](partner/customer/show.md) | Shows a customer. |
+| [`enclave-cli partner customer create`](partner/customer/create.md) | Creates a customer. |
+| [`enclave-cli partner customer update`](partner/customer/update.md) | Updates a customer. |
+| [`enclave-cli partner customer convert`](partner/customer/convert.md) | Converts a customer from trial to paid. |
+| [`enclave-cli partner customer list-admins`](partner/customer/list-admins.md) | Lists a customer's admins. |
+| [`enclave-cli partner customer add-admin`](partner/customer/add-admin.md) | Adds an admin to a customer. |
+| [`enclave-cli partner customer remove-admin`](partner/customer/remove-admin.md) | Removes an admin from a customer. |
+| [`enclave-cli partner customer list-invites`](partner/customer/list-invites.md) | Lists a customer's pending admin invites. |
+| [`enclave-cli partner customer invite`](partner/customer/invite.md) | Invites someone to be an admin of a customer. |
+| [`enclave-cli partner customer cancel-invite`](partner/customer/cancel-invite.md) | Cancels a pending admin invite to a customer. |
+| [`enclave-cli partner customer enable-auto-sync`](partner/customer/enable-auto-sync.md) | Turns on auto-sync for a customer. |
+| [`enclave-cli partner customer disable-auto-sync`](partner/customer/disable-auto-sync.md) | Turns off auto-sync for a customer. |
 
 ## System
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli system list`](system/list.md) | List the enrolled systems, or with --pending the systems waiting for approval, reading every page. |
-| [`enclave-cli system show`](system/show.md) | Show a system, or with --pending a system waiting for approval. |
-| [`enclave-cli system update`](system/update.md) | Change a system's description, notes, tags or gateway routes, or with --pending a waiting system's description, notes or tags, and print the system. |
-| [`enclave-cli system approve`](system/approve.md) | Approve systems waiting for approval. |
-| [`enclave-cli system decline`](system/decline.md) | Decline systems waiting for approval, removing them. |
-| [`enclave-cli system enable`](system/enable.md) | Enable systems; with --for or --until, enable one system until then. |
-| [`enclave-cli system disable`](system/disable.md) | Disable systems. |
-| [`enclave-cli system revoke`](system/revoke.md) | Revoke systems, removing them from the organisation. |
+| [`enclave-cli system list`](system/list.md) | Lists systems. |
+| [`enclave-cli system show`](system/show.md) | Shows a system. |
+| [`enclave-cli system update`](system/update.md) | Updates a system. |
+| [`enclave-cli system approve`](system/approve.md) | Approves systems waiting for approval. |
+| [`enclave-cli system decline`](system/decline.md) | Declines systems waiting for approval. |
+| [`enclave-cli system enable`](system/enable.md) | Enables systems. |
+| [`enclave-cli system disable`](system/disable.md) | Disables systems. |
+| [`enclave-cli system revoke`](system/revoke.md) | Revokes systems. |
 
 ## Key
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli key list`](key/list.md) | List the enrolment keys, with their secrets, reading every page. |
-| [`enclave-cli key show`](key/show.md) | Show a key, with its secret. |
-| [`enclave-cli key create`](key/create.md) | Create an enrolment key, sending every setting, and print it with its secret. |
-| [`enclave-cli key update`](key/update.md) | Change a key's settings and print the key. |
-| [`enclave-cli key enable`](key/enable.md) | Enable keys; with --for or --until, enable one key until then. |
-| [`enclave-cli key disable`](key/disable.md) | Disable keys, so no system can enrol with them. |
-| [`enclave-cli key delete`](key/delete.md) | Delete keys. |
+| [`enclave-cli key list`](key/list.md) | Lists enrolment keys. |
+| [`enclave-cli key show`](key/show.md) | Shows an enrolment key. |
+| [`enclave-cli key create`](key/create.md) | Creates an enrolment key. |
+| [`enclave-cli key update`](key/update.md) | Updates an enrolment key. |
+| [`enclave-cli key enable`](key/enable.md) | Enables enrolment keys. |
+| [`enclave-cli key disable`](key/disable.md) | Disables enrolment keys. |
+| [`enclave-cli key delete`](key/delete.md) | Deletes enrolment keys. |
 
 ## Policy
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli policy list`](policy/list.md) | List the policies, reading every page. |
-| [`enclave-cli policy show`](policy/show.md) | Show a policy. |
-| [`enclave-cli policy create`](policy/create.md) | Create a policy, sending every setting, and print it. |
-| [`enclave-cli policy update`](policy/update.md) | Change a policy's settings and print the policy. |
-| [`enclave-cli policy enable`](policy/enable.md) | Enable policies; with --for or --until, enable one policy until then. |
-| [`enclave-cli policy disable`](policy/disable.md) | Disable policies. |
-| [`enclave-cli policy delete`](policy/delete.md) | Delete policies. |
+| [`enclave-cli policy list`](policy/list.md) | Lists policies. |
+| [`enclave-cli policy show`](policy/show.md) | Shows a policy. |
+| [`enclave-cli policy create`](policy/create.md) | Creates a policy. |
+| [`enclave-cli policy update`](policy/update.md) | Updates a policy. |
+| [`enclave-cli policy enable`](policy/enable.md) | Enables policies. |
+| [`enclave-cli policy disable`](policy/disable.md) | Disables policies. |
+| [`enclave-cli policy delete`](policy/delete.md) | Deletes policies. |
 
 ## Tag
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli tag list`](tag/list.md) | List the tags, reading every page. |
-| [`enclave-cli tag show`](tag/show.md) | Show a tag. |
-| [`enclave-cli tag set`](tag/set.md) | Update a tag, creating it when it does not exist, which makes it permanent; print the tag. |
-| [`enclave-cli tag delete`](tag/delete.md) | Delete tags. |
+| [`enclave-cli tag list`](tag/list.md) | Lists tags. |
+| [`enclave-cli tag show`](tag/show.md) | Shows a tag. |
+| [`enclave-cli tag set`](tag/set.md) | Creates or updates a tag. |
+| [`enclave-cli tag delete`](tag/delete.md) | Deletes tags. |
 
 ## Dns
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli dns show`](dns/show.md) | Show the organisation's DNS summary. |
-| [`enclave-cli dns list-zones`](dns/list-zones.md) | List the DNS zones, reading every page. |
-| [`enclave-cli dns show-zone`](dns/show-zone.md) | Show a zone. |
-| [`enclave-cli dns create-zone`](dns/create-zone.md) | Create a DNS zone and print it. |
-| [`enclave-cli dns update-zone`](dns/update-zone.md) | Change a zone and print it. |
-| [`enclave-cli dns delete-zone`](dns/delete-zone.md) | Delete a zone and print it. |
-| [`enclave-cli dns list-hostnames`](dns/list-hostnames.md) | List the hostnames, reading every page. |
-| [`enclave-cli dns show-hostname`](dns/show-hostname.md) | Show a hostname. |
-| [`enclave-cli dns create-hostname`](dns/create-hostname.md) | Create a hostname in the zone its name ends in, and print it. |
-| [`enclave-cli dns update-hostname`](dns/update-hostname.md) | Change a hostname and print it. |
-| [`enclave-cli dns delete-hostname`](dns/delete-hostname.md) | Delete hostnames. |
+| [`enclave-cli dns show`](dns/show.md) | Shows the organisation's DNS summary. |
+| [`enclave-cli dns list-zones`](dns/list-zones.md) | Lists DNS zones. |
+| [`enclave-cli dns show-zone`](dns/show-zone.md) | Shows a DNS zone. |
+| [`enclave-cli dns create-zone`](dns/create-zone.md) | Creates a DNS zone. |
+| [`enclave-cli dns update-zone`](dns/update-zone.md) | Updates a DNS zone. |
+| [`enclave-cli dns delete-zone`](dns/delete-zone.md) | Deletes a DNS zone. |
+| [`enclave-cli dns list-hostnames`](dns/list-hostnames.md) | Lists hostnames. |
+| [`enclave-cli dns show-hostname`](dns/show-hostname.md) | Shows a hostname. |
+| [`enclave-cli dns create-hostname`](dns/create-hostname.md) | Creates a hostname. |
+| [`enclave-cli dns update-hostname`](dns/update-hostname.md) | Updates a hostname. |
+| [`enclave-cli dns delete-hostname`](dns/delete-hostname.md) | Deletes hostnames. |
 
 ## Trust
 
 | Command | Purpose |
 | --- | --- |
-| [`enclave-cli trust list`](trust/list.md) | List the trust requirements, reading every page. |
-| [`enclave-cli trust show`](trust/show.md) | Show a trust requirement. |
-| [`enclave-cli trust create`](trust/create.md) | Create a trust requirement and print it: --authority makes a sign-in requirement, --allow-* and --block-* a public IP requirement. |
-| [`enclave-cli trust update`](trust/update.md) | Change a trust requirement and print it. |
-| [`enclave-cli trust delete`](trust/delete.md) | Delete trust requirements. |
+| [`enclave-cli trust list`](trust/list.md) | Lists trust requirements. |
+| [`enclave-cli trust show`](trust/show.md) | Shows a trust requirement. |
+| [`enclave-cli trust create`](trust/create.md) | Creates a trust requirement. |
+| [`enclave-cli trust update`](trust/update.md) | Updates a trust requirement. |
+| [`enclave-cli trust delete`](trust/delete.md) | Deletes trust requirements. |
 
 For complete behaviour and defaults, see the [CLI specification](../../spec/cli-surface.md).

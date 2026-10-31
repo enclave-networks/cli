@@ -13,7 +13,7 @@ internal static class DnsHostnameCommands
 {
     public static CliVerb List()
     {
-        var verb = new CliVerb("list-hostnames", "List the hostnames, reading every page.", CommandScope.Organisation);
+        var verb = new CliVerb("list-hostnames", "Lists hostnames.", CommandScope.Organisation);
         var zone = verb.Add(CliOptions.Filter("--zone", "Hostnames in the zone of this name.", "name"));
         var zoneId = verb.Add(CliOptions.Id("--zone-id", "Hostnames in the zone of this ID.", IdFormats.Int32));
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
@@ -40,7 +40,7 @@ internal static class DnsHostnameCommands
 
     public static CliVerb Show()
     {
-        var (verb, hostname, id) = ForHostname("show-hostname", "Show a hostname.", changes: false);
+        var (verb, hostname, id) = ForHostname("show-hostname", "Shows a hostname.", changes: false);
 
         verb.SetHandler(async context =>
         {
@@ -59,7 +59,7 @@ internal static class DnsHostnameCommands
 
     public static CliVerb Create()
     {
-        var verb = new CliVerb("create-hostname", "Create a hostname in the zone its name ends in, and print it.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("create-hostname", "Creates a hostname.", CommandScope.Organisation, changes: true);
         var hostname = verb.Add(CliArguments.Name("hostname", "The full hostname, such as db.internal.", "a full hostname"));
         var tags = verb.Add(CliOptions.TagList("--tags", "The hostname answers with the systems that have these tags.", needsEntries: true));
         var systems = verb.Add(CliOptions.IdList("--systems", "The hostname answers with these systems.", IdFormats.System, "id,id", needsEntries: true));
@@ -97,7 +97,7 @@ internal static class DnsHostnameCommands
 
     public static CliVerb Update()
     {
-        var (verb, hostname, id) = ForHostname("update-hostname", "Change a hostname and print it.", changes: true);
+        var (verb, hostname, id) = ForHostname("update-hostname", "Updates a hostname.", changes: true);
         var name = verb.Add(CliOptions.NonBlank("--name", "The hostname's new full name, in the same zone.", "a full hostname", "hostname"));
         var setTags = verb.Add(CliOptions.TagList("--set-tags", "Replace the hostname's tags; \"\" removes them all."));
         var addTags = verb.Add(CliOptions.TagList("--add-tags", "Add tags, keeping the hostname's others.", needsEntries: true));
@@ -159,7 +159,7 @@ internal static class DnsHostnameCommands
 
     public static CliVerb Delete()
     {
-        var verb = new CliVerb("delete-hostname", "Delete hostnames. Takes full hostnames, IDs after --id, or \"-\" to read a list from stdin, and prints { requested, affected }.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("delete-hostname", "Deletes hostnames.", CommandScope.Organisation, changes: true);
         var hostnames = verb.Add(CliArguments.Names("hostname", "A full hostname, such as db.internal.", "a full hostname"));
         var ids = verb.Add(CliOptions.IdList("--id", "Hostname IDs, separated by commas.", IdFormats.Int32));
 

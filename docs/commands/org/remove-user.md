@@ -1,6 +1,6 @@
 # `enclave-cli org remove-user`
 
-Remove a user from the organisation, given by email address or by --id.
+Removes a user from the organisation.
 
 ## Synopsis
 

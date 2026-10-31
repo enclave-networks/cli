@@ -9,7 +9,7 @@ internal static class PolicySeveralCommand
 {
     public static CliVerb Enable()
     {
-        var verb = Several("enable", "Enable policies; with --for or --until, enable one policy until then.", out var policies, out var ids);
+        var verb = Several("enable", "Enables policies.", out var policies, out var ids);
         var timing = Timing.AddTo(verb, "Enable the policy", "policy");
 
         verb.SetHandler(async context =>
@@ -37,7 +37,7 @@ internal static class PolicySeveralCommand
 
     public static CliVerb Disable()
     {
-        var verb = Several("disable", "Disable policies.", out var policies, out var ids);
+        var verb = Several("disable", "Disables policies.", out var policies, out var ids);
 
         verb.SetHandler(async context =>
         {
@@ -50,7 +50,7 @@ internal static class PolicySeveralCommand
 
     public static CliVerb Delete()
     {
-        var verb = Several("delete", "Delete policies.", out var policies, out var ids);
+        var verb = Several("delete", "Deletes policies.", out var policies, out var ids);
 
         verb.SetHandler(async context =>
         {
@@ -63,7 +63,7 @@ internal static class PolicySeveralCommand
 
     private static CliVerb Several(string name, string description, out Argument<IReadOnlyList<string>> policies, out Option<IReadOnlyList<int>?> ids)
     {
-        var verb = new CliVerb(name, $"{description} Takes policy descriptions, IDs after --id, or \"-\" to read a list from stdin, and prints {{ requested, affected }}.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb(name, description, CommandScope.Organisation, changes: true);
         policies = verb.Add(CliArguments.Names("policy", "A policy's description, matched whole and ignoring case.", "a policy's description"));
         ids = verb.Add(CliOptions.IdList("--id", "Policy IDs, separated by commas.", IdFormats.Int32));
 

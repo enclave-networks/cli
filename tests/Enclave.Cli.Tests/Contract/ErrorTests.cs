@@ -256,7 +256,8 @@ public class ErrorTests
     {
         using var run = CliRun.Start();
         using var api = new BrokenBodyApi(reset: connection == "is reset");
-        run.SaveCredentials(TestData.Token, baseUrl: api.Url);
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.SaveCredentials(TestData.Token, api.Url);
 
         var result = await run.RunAsync("system", "list");
 
@@ -292,8 +293,8 @@ public class ErrorTests
         using var withoutContext = CliRun.Start();
         withContext.Time = TestData.Clock;
         withoutContext.Time = TestData.Clock;
-        withoutContext.Environment.Remove("ENCLAVE_TOKEN");
-        withoutContext.Environment.Remove("ENCLAVE_ORG_ID");
+        withoutContext.Environment.Remove("ENCLAVE_CLI_PAT");
+        withoutContext.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var withResult = await withContext.RunAsync(args);
         var withoutResult = await withoutContext.RunAsync(args);
@@ -309,8 +310,8 @@ public class ErrorTests
     public async Task A_missing_token_is_reported_before_the_organisation_is_chosen()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var result = await run.RunAsync("system", "list");
 
@@ -322,7 +323,7 @@ public class ErrorTests
     public async Task A_missing_token_is_reported_before_the_partner_is_chosen()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
 
         var result = await run.RunAsync("partner", "customer", "list");
 
@@ -344,7 +345,7 @@ public class ErrorTests
     public async Task An_organisation_that_was_not_chosen_is_reported_before_the_call()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
         BothOrgs.Stub(run);
         run.StubPages(SystemsPath, 200, ApiJson.System("ABCDE"));
 

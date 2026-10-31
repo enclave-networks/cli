@@ -6,7 +6,7 @@ internal static class TrustCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("trust", "trusts", "Trust requirements: a sign-in, or a public IP check, that systems must meet.");
+        var noun = new CliNoun("trust", "trusts", "Trust requirements.");
 
         noun.Add(TrustListCommand.Create());
         noun.Add(TrustShowCommand.Create());

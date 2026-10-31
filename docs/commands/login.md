@@ -1,24 +1,18 @@
 # `enclave-cli login`
 
-The token comes from standard input with `--token-stdin`, or from `ENCLAVE_TOKEN`. The command checks it before saving `~/.enclave/credentials.json`. If the token sees exactly 1 organisation, that organisation becomes the default.
+Run it in a terminal. It asks for a personal access token, checks it, then asks you to choose a default organisation, and saves both in `~/.enclave/credentials.json`. Press Enter at the token question to keep the token already saved. Programs set `ENCLAVE_CLI_PAT` and don't run `login`.
 
 ## Synopsis
 
 ```text
-enclave-cli login [options]
+enclave-cli login
 ```
 
 ## Example
 
 ```sh
-enclave-cli login --token-stdin < ~/.secrets/enclave-token
+enclave-cli login
 ```
-
-## Options
-
-| Option | Use |
-| --- | --- |
-| `--token-stdin` | Read the token from standard input. |
 
 ## Output
 

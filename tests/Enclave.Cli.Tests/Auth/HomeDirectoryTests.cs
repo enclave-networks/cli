@@ -8,7 +8,7 @@ namespace Enclave.Cli.Tests.Auth;
 
 // A profile path that is empty or not fully qualified names no home directory: resolved against
 // the current directory, it would have the CLI read a credentials.json from wherever it is run and
-// send the token to that file's baseUrl.
+// send the token to that file's apiBaseUrl.
 public class HomeDirectoryTests
 {
     private const string FileToken = "file-token-8b31e6";
@@ -46,9 +46,9 @@ public class HomeDirectoryTests
     }
 
     // The file lies where a CLI that resolved ~/.enclave against the current directory would find
-    // it, and its baseUrl is a second fake API's.
+    // it, and its apiBaseUrl is a second fake API's.
     [TestCaseSource(nameof(Homes))]
-    public async Task With_no_home_directory_a_command_sends_ENCLAVE_TOKEN_to_the_default_api_and_reads_no_credentials_json(string home)
+    public async Task With_no_home_directory_a_command_sends_ENCLAVE_CLI_PAT_to_the_default_api_and_reads_no_credentials_json(string home)
     {
         using var run = CliRun.Start();
         var (other, otherUrl) = LoopbackApi.Start();
@@ -75,14 +75,14 @@ public class HomeDirectoryTests
     // The error says why the file was not read. A CLI that read the credentials.json in the current
     // directory would send its token to the second fake API.
     [TestCaseSource(nameof(Homes))]
-    public async Task With_no_home_directory_and_no_ENCLAVE_TOKEN_a_command_exits_3_with_token_missing(string home)
+    public async Task With_no_home_directory_and_no_ENCLAVE_CLI_PAT_a_command_exits_3_with_token_missing(string home)
     {
         using var run = CliRun.Start();
         var (other, otherUrl) = LoopbackApi.Start();
         using var otherApi = other;
         LoopbackApi.Stub(otherApi, "GET", OrgSystems, 200, ApiJson.Page());
         run.Home = home;
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.SaveCredentials(FileToken, otherUrl);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
@@ -99,15 +99,15 @@ public class HomeDirectoryTests
         });
     }
 
-    // The cli.json, where a CLI that resolved ~/.enclave against the current directory would find
-    // it, names Globex and a partner; the token sees Acme only.
+    // The credentials.json, where a CLI that resolved ~/.enclave against the current directory would
+    // find it, saves Globex as the default; the token sees Acme only.
     [TestCaseSource(nameof(Homes))]
-    public async Task With_no_home_directory_status_reads_no_cli_json(string home)
+    public async Task With_no_home_directory_status_reads_no_saved_default(string home)
     {
         using var run = CliRun.Start();
         run.Home = home;
-        run.Environment.Remove("ENCLAVE_ORG_ID");
-        SaveDefaults(run);
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
+        run.SaveCredentials(FileToken, defaultOrgId: TestData.OtherOrgId.ToString());
         run.Stub("GET", "/account/orgs", json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
 
         var result = await run.RunAsync("status");
@@ -120,22 +120,21 @@ public class HomeDirectoryTests
             Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
             Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
             Assert.That(JsonAssert.Property(org, "source").GetString(), Is.EqualTo("only-organisation"));
-            Assert.That(JsonAssert.Property(output, "partner").ValueKind, Is.EqualTo(JsonValueKind.Null));
-            Assert.That(run.Files.WasRead(run.CliConfigPath), Is.False);
+            Assert.That(run.Files.WasRead(run.CredentialsPath), Is.False);
         });
     }
 
-    // The error says why. A credentials.json and a cli.json lie where a CLI that resolved ~/.enclave
-    // against the current directory would change them.
+    // The error says why. A credentials.json lies where a CLI that resolved ~/.enclave against the
+    // current directory would change it. login asks nothing.
     [TestCaseSource(nameof(SavingRuns))]
     public async Task With_no_home_directory_a_command_that_saves_or_deletes_a_file_exits_2_and_writes_nothing(string home, string[] args)
     {
         using var run = CliRun.Start();
         run.Home = home;
-        run.StdinText = TestData.Token + "\n";
-        run.SaveCredentials(FileToken);
-        SaveDefaults(run);
-        var before = Snapshot(run);
+        run.AtTerminal();
+        run.AnswerLogin(TestData.Token);
+        run.SaveCredentials(FileToken, defaultOrgId: TestData.OtherOrgId.ToString());
+        var before = run.Files.ReadText(run.CredentialsPath);
         BothOrgs.Stub(run);
 
         var result = await run.RunAsync(args);
@@ -143,7 +142,9 @@ public class HomeDirectoryTests
         CliAssert.Rejected(run, result);
         Assert.Multiple(() =>
         {
-            Assert.That(Snapshot(run), Is.EqualTo(before));
+            Assert.That(run.Files.ReadText(run.CredentialsPath), Is.EqualTo(before));
+            Assert.That(run.Files.Paths, Has.Count.EqualTo(1));
+            Assert.That(run.Terminal.Output, Is.Empty);
             Assert.That(JsonAssert.Property(result.Error, "detail").GetString(), Does.Contain("home directory"));
         });
     }
@@ -153,11 +154,9 @@ public class HomeDirectoryTests
         string[][] commands =
         [
             ["login"],
-            ["login", "--token-stdin"],
             ["logout"],
             ["org", "use", TestData.OrgName],
             ["org", "use", "--id", TestData.OrgId.ToString()],
-            ["partner", "use", "--id", TestData.PartnerId.ToString()],
         ];
 
         foreach (var home in Homes)
@@ -168,11 +167,4 @@ public class HomeDirectoryTests
             }
         }
     }
-
-    // Globex and a partner, as org use and partner use save them.
-    private static void SaveDefaults(CliRun run) =>
-        run.SaveDefaults(TestData.OtherOrgId.ToString(), TestData.OtherOrgName, TestData.PartnerId.ToString());
-
-    private static Dictionary<string, string?> Snapshot(CliRun run) =>
-        run.Files.Paths.ToDictionary(path => path, path => run.Files.ReadText(path), StringComparer.Ordinal);
 }

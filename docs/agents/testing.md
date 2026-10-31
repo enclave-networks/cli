@@ -1,6 +1,9 @@
 # Testing
 
-- Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin, in-memory files (`run.Files`), a fake API and a fake partner API on separate addresses, and records exit code, stdout, stderr and every request.
+- Run the CLI in-process through `CliRun` (`tests/Enclave.Cli.Tests/Support/`): `using var run = CliRun.Start(); var result = await run.RunAsync("system", "list");`. It gives the CLI its own environment, home directory, stdin, terminal, in-memory files (`run.Files`), a fake API and a fake partner API on separate addresses as production's, and records exit code, stdout, stderr and every request.
+- `ENCLAVE_CLI_PAT` is set by default, so the CLI reads nothing under `~/.enclave`; `run.SaveLogin()` unsets it and saves the token in `credentials.json`, as a login does.
+- `login` asks through `run.Terminal` (Spectre.Console.Testing's `TestConsole`) once `run.AtTerminal()` makes stdin and stderr terminals; push the answers first (`run.AnswerLogin(token)`, `run.Type(text)`). A question with no answer left fails the run.
+- Staging's addresses name no listener unless a test gives them fakes (`StagingFakes.Start(run)`).
 - Tests never write to the disk: set up and check files through `run.Files`. A run that writes to the disk fails. Only `Storage/DiskFileStoreTests.cs` touches the disk, in its own temp directory, to prove `DiskFileStore` itself.
 - A run that reads stdin while `StdinIsTerminal` is set fails.
 - Fake the Enclave API with WireMock.Net through `CliRun` or `LoopbackApi`, which listen on 127.0.0.1 only. A listener on every interface raises a Windows Firewall prompt and accepts connections from other machines. enclave.sdk.api's own tests use WireMock.Net the same way.

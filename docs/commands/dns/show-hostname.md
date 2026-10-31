@@ -1,6 +1,6 @@
 # `enclave-cli dns show-hostname`
 
-Show a hostname.
+Shows a hostname.
 
 ## Synopsis
 

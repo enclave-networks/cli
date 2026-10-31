@@ -10,7 +10,7 @@ internal static class SystemUpdateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("update", "Change a system's description, notes, tags or gateway routes, or with --pending a waiting system's description, notes or tags, and print the system.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("update", "Updates a system.", CommandScope.Organisation, changes: true);
         var systemId = verb.Add(CliArguments.Id("systemId", "The system's ID.", IdFormats.System));
         // The API takes an empty description and notes, enrolled or waiting (portal
         // SystemPatchModelValidator, UnapprovedSystemPatchModelValidator), so "" clears them.

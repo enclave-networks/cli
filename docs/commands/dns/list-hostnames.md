@@ -1,6 +1,6 @@
 # `enclave-cli dns list-hostnames`
 
-List the hostnames, reading every page.
+Lists hostnames.
 
 ## Synopsis
 

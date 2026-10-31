@@ -98,7 +98,7 @@ public class NamingTests
 
         foreach (var run in new[] { singularRun, pluralRun })
         {
-            run.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+            run.Environment["ENCLAVE_CLI_PARTNER_ID"] = TestData.PartnerId.ToString();
             run.Stub("GET", path, json: customers);
         }
 
@@ -113,30 +113,6 @@ public class NamingTests
             Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
             Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
             Assert.That(pluralRun.Comparable(pluralResult.Stderr), Is.EqualTo(singularRun.Comparable(singularResult.Stderr)));
-        });
-    }
-
-    // partner use makes no call, so the alias shows in the output and the file it writes ("Login,
-    // logout and status").
-    [Test]
-    public async Task Partners_use_runs_the_same_command_as_partner_use()
-    {
-        using var singularRun = CliRun.Start();
-        using var pluralRun = CliRun.Start();
-        var partnerId = TestData.PartnerId.ToString();
-
-        var singularResult = await singularRun.RunAsync("partner", "use", "--id", partnerId);
-        var pluralResult = await pluralRun.RunAsync("partners", "use", "--id", partnerId);
-
-        CliAssert.Succeeded(singularResult);
-        Assert.Multiple(() =>
-        {
-            Assert.That(singularRun.Requests, Is.Empty);
-            Assert.That(pluralRun.Requests, Is.Empty);
-            Assert.That(singularRun.Files.ReadText(singularRun.CliConfigPath), Is.Not.Null);
-            Assert.That(pluralResult.ExitCode, Is.EqualTo(singularResult.ExitCode));
-            Assert.That(pluralRun.Comparable(pluralResult.Stdout), Is.EqualTo(singularRun.Comparable(singularResult.Stdout)));
-            Assert.That(pluralRun.Files.ReadText(pluralRun.CliConfigPath), Is.EqualTo(singularRun.Files.ReadText(singularRun.CliConfigPath)));
         });
     }
 
@@ -239,7 +215,7 @@ public class NamingTests
     public async Task Partner_customer_takes_hyphenated_verbs()
     {
         using var run = CliRun.Start();
-        run.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+        run.Environment["ENCLAVE_CLI_PARTNER_ID"] = TestData.PartnerId.ToString();
         var path = TestData.CustomerPath(TestData.OtherOrgId.ToString(), "admins");
         run.Stub("GET", path, json: ApiJson.CustomerAdmins(ApiJson.CustomerAdmin(TestData.CustomerAdminAccountId, TestData.CustomerAdminEmail)));
 

@@ -39,9 +39,9 @@ internal sealed class DiskFileStore : IFileStore
         var fullPath = Path.GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath)!;
 
-        // A new directory gets 0700 whichever file it is for: `org use` before `login` creates
-        // ~/.enclave for cli.json, and credentials.json goes there later. An existing directory keeps
-        // its mode, since ~/.enclave is shared with other Enclave tools.
+        // A new directory gets 0700 whichever file it is for, since ~/.enclave holds
+        // credentials.json. An existing directory keeps its mode, since ~/.enclave is shared with
+        // other Enclave tools.
         if (OperatingSystem.IsWindows())
         {
             Directory.CreateDirectory(directory);
@@ -95,7 +95,7 @@ internal sealed class DiskFileStore : IFileStore
     }
 
     // A path that is not fully qualified resolves against the current directory: the CLI would read
-    // whatever credentials.json is there and send the token to its baseUrl, or write the token
+    // whatever credentials.json is there and send the token to its apiBaseUrl, or write the token
     // there. EnclaveDirectory.HomeFrom refuses such a home directory; this refuses such a path
     // whatever the caller.
     private static void RequireFullyQualified(string path)

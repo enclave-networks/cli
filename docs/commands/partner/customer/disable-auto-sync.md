@@ -1,6 +1,6 @@
 # `enclave-cli partner customer disable-auto-sync`
 
-Turn off auto-sync for the customer.
+Turns off auto-sync for a customer.
 
 ## Synopsis
 

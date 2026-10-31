@@ -1,6 +1,6 @@
 # `enclave-cli policy show`
 
-Show a policy.
+Shows a policy.
 
 ## Synopsis
 

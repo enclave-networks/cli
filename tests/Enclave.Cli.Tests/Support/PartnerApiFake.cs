@@ -8,7 +8,7 @@ namespace Enclave.Cli.Tests.Support;
 // partner API answers.
 internal static class PartnerApiFake
 {
-    private const string PartnerIdVariable = "ENCLAVE_PARTNER_ID";
+    private const string PartnerIdVariable = "ENCLAVE_CLI_PARTNER_ID";
 
     // The bodies StubPartnerApi serves for the test customer's admins and invites.
     public static string AdminBody => ApiJson.CustomerAdmin(TestData.CustomerAdminAccountId, TestData.CustomerAdminEmail);

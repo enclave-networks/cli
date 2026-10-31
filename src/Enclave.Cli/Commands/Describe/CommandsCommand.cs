@@ -30,7 +30,7 @@ internal static class CommandsCommand
         // --search-keys reads from the organisation in use, so the verb takes --org and --org-id.
         var verb = new CliVerb(
             "commands",
-            "Describe every command, its arguments and options, the values each option allows, and the error codes with their exit codes, as JSON. Given a command's words, describe that command, or every command under a noun. Needs no token and makes no call, except with --search-keys.",
+            "Describes the commands as JSON.",
             CommandScope.Organisation);
 
         var words = verb.Add(CliArguments.Many("words", "The words of a command or noun, such as: system list."));

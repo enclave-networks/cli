@@ -1,6 +1,6 @@
 # `enclave-cli partner customer enable-auto-sync`
 
-Turn on auto-sync for the customer, which keeps the partner's staff as its admins.
+Turns on auto-sync for a customer.
 
 ## Synopsis
 

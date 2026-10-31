@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>enclave-cli</AssemblyName>
     <RootNamespace>Enclave.Cli</RootNamespace>
+    <ApplicationIcon>enclave.ico</ApplicationIcon>
 
     <PublishDocumentationFile>false</PublishDocumentationFile>
 
@@ -28,6 +29,7 @@
 
   <ItemGroup>
     <PackageReference Include="Enclave.Sdk.Api" />
+    <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 

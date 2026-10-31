@@ -6,7 +6,7 @@ internal static class SystemShowCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("show", "Show a system, or with --pending a system waiting for approval.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows a system.", CommandScope.Organisation);
         var systemId = verb.Add(CliArguments.Id("systemId", "The system's ID.", IdFormats.System));
         var pending = verb.Add(CliOptions.Flag("--pending", "Show a system waiting for approval."));
 

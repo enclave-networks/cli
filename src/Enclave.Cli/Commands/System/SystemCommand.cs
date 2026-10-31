@@ -8,7 +8,7 @@ internal static class SystemCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("system", "systems", "Enrolled systems, and with --pending the systems waiting for approval.");
+        var noun = new CliNoun("system", "systems", "Systems.");
 
         noun.Add(SystemListCommand.Create());
         noun.Add(SystemShowCommand.Create());
@@ -16,11 +16,11 @@ internal static class SystemCommand
 
         // approve and decline act on waiting systems, so they read the list `system list --pending`
         // prints ("Several IDs").
-        noun.Add(SystemBulkCommand.Create("approve", "Approve systems waiting for approval.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.ApproveSystemsAsync(batch)));
-        noun.Add(SystemBulkCommand.Create("decline", "Decline systems waiting for approval, removing them.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.DeclineSystems(batch)));
+        noun.Add(SystemBulkCommand.Create("approve", "Approves systems waiting for approval.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.ApproveSystemsAsync(batch)));
+        noun.Add(SystemBulkCommand.Create("decline", "Declines systems waiting for approval.", ListKind.PendingSystem, (client, batch) => client.UnapprovedSystems.DeclineSystems(batch)));
         noun.Add(SystemEnableCommand.Create());
-        noun.Add(SystemBulkCommand.Create("disable", "Disable systems.", ListKind.System, (client, batch) => client.EnrolledSystems.BulkDisableAsync(batch)));
-        noun.Add(SystemBulkCommand.Create("revoke", "Revoke systems, removing them from the organisation.", ListKind.System, (client, batch) => client.EnrolledSystems.RevokeSystemsAsync(batch)));
+        noun.Add(SystemBulkCommand.Create("disable", "Disables systems.", ListKind.System, (client, batch) => client.EnrolledSystems.BulkDisableAsync(batch)));
+        noun.Add(SystemBulkCommand.Create("revoke", "Revokes systems.", ListKind.System, (client, batch) => client.EnrolledSystems.RevokeSystemsAsync(batch)));
 
         return noun;
     }

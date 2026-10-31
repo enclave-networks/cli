@@ -19,15 +19,15 @@ internal sealed class CliVerb : Command
 
         if (scope.HasFlag(CommandScope.Organisation))
         {
-            OrgOption = Common(CliOptions.Text("--org", "The organisation to act in, by name. Overrides ENCLAVE_ORG, ENCLAVE_ORG_ID and the default `org use` saved.", "name"));
-            OrgIdOption = Common(CliOptions.Id("--org-id", "The organisation to act in, by ID. Overrides ENCLAVE_ORG, ENCLAVE_ORG_ID and the default `org use` saved.", IdFormats.Guid));
+            OrgOption = Common(CliOptions.Text("--org", "The organisation to act in, by name. Overrides ENCLAVE_CLI_ORG, ENCLAVE_CLI_ORG_ID and the saved default.", "name"));
+            OrgIdOption = Common(CliOptions.Id("--org-id", "The organisation to act in, by ID. Overrides ENCLAVE_CLI_ORG, ENCLAVE_CLI_ORG_ID and the saved default.", IdFormats.Guid));
             Exclusive(OrgOption, OrgIdOption);
             RefuseBlank(OrgOption, "an organisation name");
         }
 
         if (scope.HasFlag(CommandScope.Partner))
         {
-            PartnerIdOption = Common(CliOptions.Id("--partner-id", "The partner to act for, by ID. Overrides ENCLAVE_PARTNER_ID and the default `partner use` saved.", IdFormats.Guid));
+            PartnerIdOption = Common(CliOptions.Id("--partner-id", "The partner to act for, by ID. Overrides ENCLAVE_CLI_PARTNER_ID.", IdFormats.Guid));
         }
 
         if (changes)

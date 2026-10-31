@@ -312,7 +312,7 @@ public class SystemCommandTests
     {
         using var run = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("GET", SystemsPath, json: ApiJson.Page());
         string[] contradicting = ["system", "list", "--state", "connected", "--not-seen-for", "1d"];
 

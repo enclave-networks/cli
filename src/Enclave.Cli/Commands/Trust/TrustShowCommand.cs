@@ -7,7 +7,7 @@ internal static class TrustShowCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("show", "Show a trust requirement.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows a trust requirement.", CommandScope.Organisation);
         var description = verb.Add(CliArguments.OptionalName("trust", "The trust requirement's description, matched whole and ignoring case.", "a trust requirement's description"));
         var id = verb.Add(CliOptions.Id("--id", "The trust requirement's ID.", IdFormats.Int32));
 

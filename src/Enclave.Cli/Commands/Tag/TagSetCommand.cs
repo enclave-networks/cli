@@ -10,7 +10,7 @@ internal static class TagSetCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("set", "Update a tag, creating it when it does not exist, which makes it permanent; print the tag.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("set", "Creates or updates a tag.", CommandScope.Organisation, changes: true);
         var tag = verb.Add(CliArguments.Id("tag", "The tag's name.", IdFormats.Tag));
         var name = verb.Add(CliOptions.IdText("--name", "Rename the tag; it must exist.", IdFormats.Tag, "new"));
         // The API takes a colour as a hex code with "#", or none, so it refuses a blank one (portal

@@ -1,6 +1,6 @@
 # `enclave-cli dns delete-zone`
 
-Delete a zone and print it. Takes one zone; the API has no bulk zone delete.
+Deletes a DNS zone.
 
 ## Synopsis
 

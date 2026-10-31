@@ -12,7 +12,7 @@ internal static class PolicyCreateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("create", "Create a policy, sending every setting, and print it.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("create", "Creates a policy.", CommandScope.Organisation, changes: true);
         var description = verb.Add(CliArguments.Name("description", "The policy's description.", "a policy's description"));
         var senders = verb.Add(CliOptions.TagList("--senders", "The tags of the systems that send.", needsEntries: true));
         var receivers = verb.Add(CliOptions.TagList("--receivers", "The tags of the systems that receive.", needsEntries: true));

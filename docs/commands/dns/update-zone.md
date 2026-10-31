@@ -1,6 +1,6 @@
 # `enclave-cli dns update-zone`
 
-Change a zone and print it.
+Updates a DNS zone.
 
 ## Synopsis
 

@@ -1,6 +1,6 @@
 # `enclave-cli policy list`
 
-List the policies, reading every page.
+Lists policies.
 
 ## Synopsis
 

@@ -9,7 +9,7 @@ internal static class KeyBulkCommands
 {
     public static CliVerb Enable()
     {
-        var (verb, keys, ids) = Several("enable", "Enable keys; with --for or --until, enable one key until then.");
+        var (verb, keys, ids) = Several("enable", "Enables enrolment keys.");
         var timing = Timing.AddTo(verb, "Make the change", "key");
 
         verb.SetHandler(async context =>
@@ -39,7 +39,7 @@ internal static class KeyBulkCommands
 
     public static CliVerb Disable()
     {
-        var (verb, keys, ids) = Several("disable", "Disable keys, so no system can enrol with them.");
+        var (verb, keys, ids) = Several("disable", "Disables enrolment keys.");
 
         verb.SetHandler(async context =>
         {
@@ -54,7 +54,7 @@ internal static class KeyBulkCommands
     // are given ("Several IDs"), and the single DeleteAsync goes unused.
     public static CliVerb Delete()
     {
-        var (verb, keys, ids) = Several("delete", "Delete keys.");
+        var (verb, keys, ids) = Several("delete", "Deletes enrolment keys.");
 
         verb.SetHandler(async context =>
         {
@@ -67,7 +67,7 @@ internal static class KeyBulkCommands
 
     private static (CliVerb Verb, Argument<IReadOnlyList<string>> Keys, Option<IReadOnlyList<int>?> Ids) Several(string name, string description)
     {
-        var verb = new CliVerb(name, $"{description} Takes key descriptions, IDs after --id, or \"-\" to read a list from stdin, and prints {{ requested, affected }}.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb(name, description, CommandScope.Organisation, changes: true);
         var keys = verb.Add(CliArguments.Names("key", "A key's description, matched whole and ignoring case.", "a key's description"));
         var ids = verb.Add(CliOptions.IdList("--id", "Key IDs, separated by commas.", IdFormats.Int32));
 

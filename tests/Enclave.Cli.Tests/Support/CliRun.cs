@@ -4,13 +4,14 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Enclave.Cli.Core;
 using NUnit.Framework;
+using Spectre.Console.Testing;
 using WireMock.Matchers;
 using WireMock.Server;
 
 namespace Enclave.Cli.Tests.Support;
 
 // One test's sandbox for running the CLI in-process: fake main and partner APIs on loopback,
-// files in memory, and the only environment, stdin and API URLs the CLI sees.
+// files in memory, and the only environment, stdin, terminal and API URLs the CLI sees.
 // Each fake answers the other API's routes (spec/cli-surface.md "Partner API") with 421, which the
 // CLI reports as api_error, so a call sent to the wrong address fails whatever a test expects.
 internal sealed class CliRun : IDisposable
@@ -23,6 +24,8 @@ internal sealed class CliRun : IDisposable
 
     // One reader for the whole run, so a read in any of its commands is known when RunAsync checks.
     private readonly TerminalStdin _terminalStdin = new();
+
+    private readonly HashSet<string> _variablesRead = new(StringComparer.Ordinal);
 
     private CliRun(WireMockServer api, string apiUrl, WireMockServer partnerApi, string partnerApiUrl, string root)
     {
@@ -56,6 +59,12 @@ internal sealed class CliRun : IDisposable
     // the live partner API.
     public Uri? DefaultPartnerApiUrl { get; set; }
 
+    // Staging's addresses as the CLI receives them. Port 0 names no listener, so a request sent there
+    // fails at once and reaches no live API; a test of staging points them at a LoopbackApi.
+    public Uri StagingApiUrl { get; set; } = new("http://127.0.0.1:0");
+
+    public Uri StagingPartnerApiUrl { get; set; } = new("http://127.0.0.1:0");
+
     // Replaces the network beneath the CLI's own handler (CliHost.CreateNetworkHandler), such as
     // with FailingNetwork.CreateHandler.
     public Func<HttpMessageHandler>? NetworkHandler { get; set; }
@@ -72,22 +81,41 @@ internal sealed class CliRun : IDisposable
 
     public string CredentialsPath => Path.Combine(Home, ".enclave", "credentials.json");
 
-    public string CliConfigPath => Path.Combine(Home, ".enclave", "cli.json");
-
     // The only environment the CLI sees. A missing key or a null value is an unset variable.
-    // ENCLAVE_ORG_ID needs no lookup call (spec/cli-surface.md "Context"), so a test's requests are
-    // the command's own.
+    // ENCLAVE_CLI_ORG_ID needs no lookup call (spec/cli-surface.md "Context"), so a test's requests
+    // are the command's own. While ENCLAVE_CLI_PAT is set the CLI reads nothing under ~/.enclave, so
+    // a test of the saved login calls SaveLogin.
     public IDictionary<string, string?> Environment { get; } = new Dictionary<string, string?>(StringComparer.Ordinal)
     {
-        ["ENCLAVE_TOKEN"] = TestData.Token,
-        ["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString(),
+        ["ENCLAVE_CLI_PAT"] = TestData.Token,
+        ["ENCLAVE_CLI_ORG_ID"] = TestData.OrgId.ToString(),
     };
+
+    // The name of every environment variable the CLI asked for in this run's commands, sorted.
+    public IReadOnlyList<string> VariablesRead
+    {
+        get
+        {
+            lock (_variablesRead)
+            {
+                return _variablesRead.Order(StringComparer.Ordinal).ToArray();
+            }
+        }
+    }
 
     // What the CLI reads from stdin while StdinIsTerminal is not set.
     public string StdinText { get; set; } = string.Empty;
 
     // While set, any read of stdin fails the run.
     public bool StdinIsTerminal { get; set; }
+
+    public bool StderrIsTerminal { get; set; }
+
+    // The console login asks its questions through: a test pushes the answers to Terminal.Input and
+    // reads the questions from Terminal.Output. A question with no answer left fails the run.
+    // SelectionPrompt refuses a console that is not interactive or has no ANSI support (Spectre.Console
+    // 0.57.2, ListPrompt.Show), as a terminal has both.
+    public TestConsole Terminal { get; } = new TestConsole().Interactive().SupportsAnsi(true);
 
     // A test whose result depends on the time sets a FixedTimeProvider here.
     public TimeProvider Time { get; set; } = TimeProvider.System;
@@ -131,12 +159,24 @@ internal sealed class CliRun : IDisposable
 
         return new()
         {
-            GetEnvironmentVariable = name => Environment.TryGetValue(name, out var value) ? value : null,
+            GetEnvironmentVariable = name =>
+            {
+                lock (_variablesRead)
+                {
+                    _variablesRead.Add(name);
+                }
+
+                return Environment.TryGetValue(name, out var value) ? value : null;
+            },
             HomeDirectory = Home,
             Stdin = StdinIsTerminal ? _terminalStdin : new StringReader(StdinText),
             StdinIsTerminal = StdinIsTerminal,
+            StderrIsTerminal = StderrIsTerminal,
+            CreatePromptConsole = () => Terminal,
             DefaultApiUrl = ApiUrl,
             DefaultPartnerApiUrl = DefaultPartnerApiUrl,
+            StagingApiUrl = StagingApiUrl,
+            StagingPartnerApiUrl = StagingPartnerApiUrl,
             Files = Files,
             Time = Time,
             CreateNetworkHandler = NetworkHandler,
@@ -303,15 +343,16 @@ internal sealed class CliRun : IDisposable
         return path;
     }
 
-    // Puts ~/.enclave/credentials.json in Files as login writes it, in the format Enclave.Sdk.Api
-    // reads (EnclaveClient.ReadCredentialsFile). The base URL defaults to the fake API's;
-    // partnerApiBaseUrl is written only when given.
-    public void SaveCredentials(string token, string? baseUrl = null, string? partnerApiBaseUrl = null)
+    // Puts ~/.enclave/credentials.json in Files as login writes it (spec/cli-surface.md "Login,
+    // logout and status"). apiBaseUrl defaults to the fake API's; partnerApiBaseUrl and defaultOrgID
+    // are written only when given. defaultOrgId is text, so a test can save one that is malformed,
+    // as only a hand edit could.
+    public void SaveCredentials(string token, string? apiBaseUrl = null, string? partnerApiBaseUrl = null, string? defaultOrgId = null)
     {
         var credentials = new JsonObject
         {
             ["personalAccessToken"] = token,
-            ["baseUrl"] = baseUrl ?? ApiBaseUrl,
+            ["apiBaseUrl"] = apiBaseUrl ?? ApiBaseUrl,
         };
 
         if (partnerApiBaseUrl is not null)
@@ -319,27 +360,52 @@ internal sealed class CliRun : IDisposable
             credentials["partnerApiBaseUrl"] = partnerApiBaseUrl;
         }
 
+        if (defaultOrgId is not null)
+        {
+            credentials["defaultOrgID"] = defaultOrgId;
+        }
+
         Files.WriteText(CredentialsPath, credentials.ToJsonString(IndentedJson), privateToUser: true);
     }
 
-    // Puts ~/.enclave/cli.json in Files with the defaults given, in the form org use and partner use
-    // save them (spec/cli-surface.md "Login, logout and status"). The IDs are text, so a test can
-    // save one that is malformed, as only a hand edit could.
-    public void SaveDefaults(string? orgId = null, string? orgName = null, string? partnerId = null)
+    // As a person at a terminal who has set no ENCLAVE_CLI_PAT, where login asks its questions
+    // (spec/cli-surface.md "Login, logout and status").
+    public void AtTerminal()
     {
-        var settings = new JsonObject();
+        Environment.Remove("ENCLAVE_CLI_PAT");
+        StdinIsTerminal = true;
+        StderrIsTerminal = true;
+    }
 
-        if (orgId is not null)
+    // Answers login's questions: token, then Enter at the organisation picker, which picks the
+    // choice listed first.
+    public void AnswerLogin(string token)
+    {
+        Type(token);
+        Terminal.Input.PushKey(ConsoleKey.Enter);
+    }
+
+    // Types text at Terminal, then Enter. TestConsoleInput.PushText takes characters up to U+00FF
+    // only, since it makes each a ConsoleKey (Spectre.Console.Testing 0.57.2,
+    // TestConsoleInput.PushCharacter), so each character is pushed as a key press of its own.
+    public void Type(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        foreach (var character in text)
         {
-            settings["org"] = new JsonObject { ["id"] = orgId, ["name"] = orgName };
+            Terminal.Input.PushKey(new ConsoleKeyInfo(character, default, shift: false, alt: false, control: false));
         }
 
-        if (partnerId is not null)
-        {
-            settings["partner"] = new JsonObject { ["id"] = partnerId };
-        }
+        Terminal.Input.PushKey(ConsoleKey.Enter);
+    }
 
-        Files.WriteText(CliConfigPath, settings.ToJsonString(IndentedJson), privateToUser: false);
+    // As a login leaves the run: ENCLAVE_CLI_PAT unset, and the token and any default organisation
+    // in credentials.json, at the fake API's address.
+    public void SaveLogin(string token = TestData.Token, string? defaultOrgId = null)
+    {
+        Environment.Remove("ENCLAVE_CLI_PAT");
+        SaveCredentials(token, defaultOrgId: defaultOrgId);
     }
 
     public void Dispose()
@@ -349,6 +415,7 @@ internal sealed class CliRun : IDisposable
         PartnerApi.Stop();
         PartnerApi.Dispose();
         _terminalStdin.Dispose();
+        Terminal.Dispose();
 
         // RunAsync reports a directory here as a failure; it is removed so the failure leaves
         // nothing behind.

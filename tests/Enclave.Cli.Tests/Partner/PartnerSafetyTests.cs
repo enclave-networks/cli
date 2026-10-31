@@ -55,15 +55,15 @@ public class PartnerSafetyTests
     [TestCase("../x")]
     [TestCase("not-a-guid")]
     [TestCase("Acme Partners")]
-    public async Task An_ENCLAVE_PARTNER_ID_that_is_not_a_guid_exits_2_before_the_partner_api(string value)
+    public async Task An_ENCLAVE_CLI_PARTNER_ID_that_is_not_a_guid_exits_2_before_the_partner_api(string value)
     {
         using var run = CliRun.Start();
         PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
 
-        run.Environment["ENCLAVE_PARTNER_ID"] = value;
+        run.Environment["ENCLAVE_CLI_PARTNER_ID"] = value;
         CliAssert.Rejected(run, await run.RunAsync("partner", "customer", "list"));
 
-        run.Environment["ENCLAVE_PARTNER_ID"] = TestData.PartnerId.ToString();
+        run.Environment["ENCLAVE_CLI_PARTNER_ID"] = TestData.PartnerId.ToString();
         PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
@@ -144,31 +144,11 @@ public class PartnerSafetyTests
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_TOKEN"), result.ToString());
+            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });
         AssertReportedChange(result, withheldChange);
-    }
-
-    // partner use has no dry run. The partner command afterwards shows the default was saved.
-    [Test]
-    public async Task The_token_appears_in_neither_stdout_nor_stderr_of_partner_use()
-    {
-        using var run = CliRun.Start();
-        PartnerApiFake.StubCustomerList(run, TestData.PartnerId);
-
-        var result = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
-
-        TokenAssert.Absent(result);
-        CliAssert.Succeeded(result);
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.StringList(JsonAssert.Property(result.StdoutTrace, "saved")), Is.EqualTo(run.CliConfigPath), result.ToString());
-            Assert.That(run.Requests, Is.Empty);
-        });
-
-        PartnerApiFake.AssertSentToThePartnerApi(run, await run.RunAsync("partner", "customer", "list"));
     }
 
     // The value of an unknown option could be a token passed by mistake ("Errors and exit codes").

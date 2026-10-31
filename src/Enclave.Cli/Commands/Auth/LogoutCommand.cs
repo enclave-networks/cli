@@ -15,7 +15,6 @@ internal static class LogoutCommand
 
         EnclaveDirectory.RequireHome(verb);
 
-        // cli.json is left: it holds settings and says nothing about who is signed in.
         verb.SetHandler(async context =>
         {
             var path = CredentialsFile.PathFor(context.Host) ?? throw EnclaveDirectory.NoHome();

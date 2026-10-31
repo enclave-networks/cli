@@ -1,6 +1,6 @@
 # `enclave-cli org list`
 
-List the organisations the token sees, with the token's role in each.
+Lists the organisations the token sees.
 
 ## Synopsis
 

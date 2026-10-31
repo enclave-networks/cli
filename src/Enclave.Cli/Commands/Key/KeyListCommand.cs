@@ -9,7 +9,7 @@ internal static class KeyListCommand
 
     public static CliVerb Create()
     {
-        var verb = new CliVerb("list", "List the enrolment keys, with their secrets, reading every page.", CommandScope.Organisation);
+        var verb = new CliVerb("list", "Lists enrolment keys.", CommandScope.Organisation);
 
         var filter = verb.Add(CliOptions.Filter("--filter", "Search text, sent as typed; takes the API's search syntax as well as plain words."));
         var tags = verb.Add(CliOptions.TagFilter("--tag", "Keys with every tag given."));

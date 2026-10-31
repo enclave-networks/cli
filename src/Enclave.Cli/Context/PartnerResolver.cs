@@ -6,10 +6,10 @@ namespace Enclave.Cli.Context;
 // access tokens cannot carry (spec/cli-surface.md "Partner API").
 internal static class PartnerResolver
 {
-    public const string IdVariable = "ENCLAVE_PARTNER_ID";
+    public const string IdVariable = "ENCLAVE_CLI_PARTNER_ID";
 
-    // Null when no source chooses one. A lower source is read only when no higher one gives a
-    // value. An empty variable counts as unset, and a malformed source that is read exits 2.
+    // Null when neither source chooses one. The variable is read only without the option. An empty
+    // variable counts as unset, and a malformed one that is read exits 2.
     public static PartnerChoice? Choose(CliContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -19,18 +19,14 @@ internal static class PartnerResolver
             return new PartnerChoice(id, option.Name);
         }
 
-        var host = context.Host;
-
-        if (host.GetEnvironmentVariable(IdVariable) is { Length: > 0 } text)
+        if (context.Host.GetEnvironmentVariable(IdVariable) is not { Length: > 0 } text)
         {
-            return IdFormats.Guid.TryParse(text, out var guid)
-                ? new PartnerChoice(guid, IdVariable)
-                : throw CliErrors.InvalidArgument(IdVariable, $"{IdVariable} takes a partner ID: {IdFormats.Guid.Describe}.");
+            return null;
         }
 
-        return SettingsFile.ReadDefault(host, "partner", "partner", "enclave-cli partner use --id <partnerId>") is { } saved
-            ? new PartnerChoice(saved.Id, saved.Path)
-            : null;
+        return IdFormats.Guid.TryParse(text, out var guid)
+            ? new PartnerChoice(guid, IdVariable)
+            : throw CliErrors.InvalidArgument(IdVariable, $"{IdVariable} takes a partner ID: {IdFormats.Guid.Describe}.");
     }
 
     // Exits 2 with no_partner when none is chosen.
@@ -38,5 +34,5 @@ internal static class PartnerResolver
         Choose(context)
         ?? throw new CliException(
             ErrorCode.NoPartner,
-            $"No partner is chosen. Give --partner-id <partnerId>, set {IdVariable}, or save a default with `enclave-cli partner use --id <partnerId>`. The partner portal shows the partner's ID.");
+            $"No partner is chosen. Give --partner-id <partnerId>, or set {IdVariable}. The partner portal shows the partner's ID.");
 }

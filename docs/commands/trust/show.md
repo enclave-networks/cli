@@ -1,6 +1,6 @@
 # `enclave-cli trust show`
 
-Show a trust requirement.
+Shows a trust requirement.
 
 ## Synopsis
 

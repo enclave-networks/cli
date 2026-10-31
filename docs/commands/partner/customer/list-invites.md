@@ -1,6 +1,6 @@
 # `enclave-cli partner customer list-invites`
 
-List the customer's pending admin invites.
+Lists a customer's pending admin invites.
 
 ## Synopsis
 

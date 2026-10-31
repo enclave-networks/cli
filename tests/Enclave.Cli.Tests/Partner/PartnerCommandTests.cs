@@ -5,7 +5,7 @@ using NUnit.Framework;
 
 namespace Enclave.Cli.Tests.Partner;
 
-// Every test chooses a valid partner through ENCLAVE_PARTNER_ID, so a bad argument is the only
+// Every test chooses a valid partner through ENCLAVE_CLI_PARTNER_ID, so a bad argument is the only
 // error a case can have. An argument case runs the corrected command after the rejected one,
 // since an unknown command is rejected the same way (CliAssert.RejectedThenAcceptedAsync).
 //
@@ -76,12 +76,12 @@ public class PartnerCommandTests
         });
     }
 
-    // ENCLAVE_TOKEN keeps the file's partnerApiBaseUrl as it keeps baseUrl ("Partner API"). The
-    // run's own fakes serve the partner API too, so a CLI that ignored the file would succeed and
-    // show only in their requests.
+    // A token goes only to the environment it came with ("Options on every command"): the file's
+    // token to the partnerApiBaseUrl saved beside it, ENCLAVE_CLI_PAT to production's, which is the
+    // run's own fake. Each fake serves the customers, so the requests show which address was used.
     [TestCase(false)]
     [TestCase(true)]
-    public async Task A_partner_customer_command_calls_the_partner_api_address_in_credentials_json_whichever_source_supplies_the_token(bool tokenFromEnvironment)
+    public async Task A_partner_customer_command_sends_the_token_to_the_partner_api_address_it_came_with(bool tokenFromEnvironment)
     {
         using var run = PartnerApiFake.StartWithPartner();
         var (other, otherUrl) = LoopbackApi.Start();
@@ -92,16 +92,17 @@ public class PartnerCommandTests
 
         if (!tokenFromEnvironment)
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
         }
 
         var result = await run.RunAsync("partner", "customer", "list");
 
-        var received = LoopbackApi.Received(otherApi);
+        var received = tokenFromEnvironment ? run.PartnerApiRequests : LoopbackApi.Received(otherApi);
+        var passedOver = tokenFromEnvironment ? LoopbackApi.Received(otherApi) : run.Requests;
         CliAssert.List(result, "customer");
         Assert.Multiple(() =>
         {
-            Assert.That(run.Calls(), Is.Empty, "The call went to a default address.");
+            Assert.That(passedOver, Is.Empty);
             Assert.That(received.Select(request => request.Call), Is.EqualTo(new[] { $"GET {customers}" }));
             Assert.That(received.Select(request => request.Authorization), Is.EqualTo(new[] { $"Bearer {(tokenFromEnvironment ? TestData.Token : FileToken)}" }));
         });
@@ -716,7 +717,7 @@ public class PartnerCommandTests
     public async Task A_blank_email_address_exits_2_invalid_argument_before_the_token_and_any_call(string verb, string option, string value)
     {
         using var run = PartnerApiFake.StartWithPartner();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
 
         var result = await run.RunAsync(ForCustomer(verb, option, value));
 
@@ -737,7 +738,7 @@ public class PartnerCommandTests
     public async Task A_blank_customer_name_exits_2_invalid_argument_before_the_token_and_any_call(string key, string verb, params string[] rest)
     {
         using var run = PartnerApiFake.StartWithPartner();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
 
         var result = await run.RunAsync(Line(verb, rest));
 
@@ -759,7 +760,7 @@ public class PartnerCommandTests
     {
         using var withToken = PartnerApiFake.StartWithPartner();
         using var withoutToken = PartnerApiFake.StartWithPartner();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         var args = Line("create", TestData.NewCustomerName, option, value);
 
         var first = await withToken.RunAsync(args);
@@ -774,7 +775,7 @@ public class PartnerCommandTests
         });
     }
 
-    // CliRun sets ENCLAVE_ORG_ID, which must not stand in for the customer ("Context").
+    // CliRun sets ENCLAVE_CLI_ORG_ID, which must not stand in for the customer ("Context").
     [TestCaseSource(nameof(CommandsWithoutTheCustomer))]
     public async Task A_customer_command_without_a_customer_exits_2_invalid_argument(string[] rejected, string[] corrected)
     {

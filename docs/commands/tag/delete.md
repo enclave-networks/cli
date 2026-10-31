@@ -1,6 +1,6 @@
 # `enclave-cli tag delete`
 
-Delete tags. Takes any number of tag names, or "-" to read a list from stdin, and prints { requested, affected }.
+Deletes tags.
 
 ## Synopsis
 

@@ -1,6 +1,6 @@
 # `enclave-cli key delete`
 
-Delete keys. Takes key descriptions, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Deletes enrolment keys.
 
 ## Synopsis
 

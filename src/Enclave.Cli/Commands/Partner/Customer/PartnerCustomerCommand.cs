@@ -17,7 +17,7 @@ internal static class PartnerCustomerCommand
 
     public static CliNoun Create()
     {
-        var noun = new CliNoun("customer", "customers", "The partner's customers, their admins, invites and auto-sync.");
+        var noun = new CliNoun("customer", "customers", "Customers.");
 
         noun.Add(List());
         noun.Add(Show());
@@ -30,15 +30,15 @@ internal static class PartnerCustomerCommand
         noun.Add(ListInvites());
         noun.Add(Invite());
         noun.Add(CancelInvite());
-        noun.Add(AutoSync("enable-auto-sync", "Turn on auto-sync for the customer, which keeps the partner's staff as its admins.", (customers, id) => customers.EnableAutoSyncAsync(id)));
-        noun.Add(AutoSync("disable-auto-sync", "Turn off auto-sync for the customer.", (customers, id) => customers.DisableAutoSyncAsync(id)));
+        noun.Add(AutoSync("enable-auto-sync", "Turns on auto-sync for a customer.", (customers, id) => customers.EnableAutoSyncAsync(id)));
+        noun.Add(AutoSync("disable-auto-sync", "Turns off auto-sync for a customer.", (customers, id) => customers.DisableAutoSyncAsync(id)));
 
         return noun;
     }
 
     private static CliVerb List()
     {
-        var verb = new CliVerb("list", "List the partner's customers.", CommandScope.Partner);
+        var verb = new CliVerb("list", "Lists the partner's customers.", CommandScope.Partner);
 
         verb.SetHandler(async context =>
         {
@@ -53,7 +53,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb Show()
     {
-        var (verb, customer) = ForCustomer("show", "Show a customer.", changes: false);
+        var (verb, customer) = ForCustomer("show", "Shows a customer.", changes: false);
 
         SetHandler(verb, customer, (context, customers, id) => PrintAsync(context, () => customers.GetAsync(id)));
         return verb;
@@ -61,7 +61,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb CreateCustomer()
     {
-        var verb = new CliVerb("create", "Create a customer, sending every field of the API's customer model, with the partner portal's values for the flags left out.", CommandScope.Partner, changes: true);
+        var verb = new CliVerb("create", "Creates a customer.", CommandScope.Partner, changes: true);
         var name = verb.Add(CliArguments.Text("name", "The customer's name."));
         var owner = EmailOption(verb, "--owner", "The email address of the user who will own the customer's organisation.");
         var domain = CreateTextOption(verb, "--domain", "The customer's domain.", "domain", "a domain name");
@@ -103,7 +103,7 @@ internal static class PartnerCustomerCommand
     // disable-auto-sync (spec/cli-surface.md "Command options").
     private static CliVerb Update()
     {
-        var (verb, customer) = ForCustomer("update", "Change a customer's name, contact, licensed systems and gateways, discount request and hard limit.", changes: true);
+        var (verb, customer) = ForCustomer("update", "Updates a customer.", changes: true);
         var name = verb.Add(CliOptions.Text("--name", "The customer's new name.", "name"));
         var contact = verb.Add(CliOptions.Text("--contact", "The customer's contact name.", "name"));
         var systems = verb.Add(CliOptions.Number("--systems", "The number of systems to license, at least 2.", minimum: 2));
@@ -162,7 +162,7 @@ internal static class PartnerCustomerCommand
     // API's default is 1 month (portal ConvertCustomerModel.BillingPeriodMonths).
     private static CliVerb Convert()
     {
-        var (verb, customer) = ForCustomer("convert", "Convert a customer from trial to paid, with the billing period it commits to.", changes: true);
+        var (verb, customer) = ForCustomer("convert", "Converts a customer from trial to paid.", changes: true);
         var billingMonths = verb.Add(CliOptions.Choice("--billing-months", "The billing period in months.", ("1", 1), ("12", 12), ("24", 24), ("36", 36)));
         verb.ExactlyOne(billingMonths);
 
@@ -172,7 +172,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb ListAdmins()
     {
-        var (verb, customer) = ForCustomer("list-admins", "List the customer's admins.", changes: false);
+        var (verb, customer) = ForCustomer("list-admins", "Lists a customer's admins.", changes: false);
 
         SetHandler(verb, customer, async (context, customers, id) =>
         {
@@ -190,7 +190,7 @@ internal static class PartnerCustomerCommand
     // email address cannot be looked up (spec/cli-surface.md "Names and IDs").
     private static CliVerb AddAdmin()
     {
-        var (verb, customer) = ForCustomer("add-admin", "Make one of the partner's users an admin of the customer, given by account ID, which the partner portal shows.", changes: true);
+        var (verb, customer) = ForCustomer("add-admin", "Adds an admin to a customer.", changes: true);
         var userId = verb.Add(CliOptions.Id("--user-id", "The account ID of the partner's user.", IdFormats.Guid, "accountId"));
         verb.ExactlyOne(userId);
 
@@ -200,7 +200,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb RemoveAdmin()
     {
-        var (verb, customer) = ForCustomer("remove-admin", "Remove an admin from the customer, given by email address or account ID.", changes: true);
+        var (verb, customer) = ForCustomer("remove-admin", "Removes an admin from a customer.", changes: true);
         var user = EmailOption(verb, "--user", "The admin's email address.");
         var userId = verb.Add(CliOptions.Id("--user-id", "The admin's account ID.", IdFormats.Guid, "accountId"));
         verb.ExactlyOne(user, userId);
@@ -219,7 +219,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb ListInvites()
     {
-        var (verb, customer) = ForCustomer("list-invites", "List the customer's pending admin invites.", changes: false);
+        var (verb, customer) = ForCustomer("list-invites", "Lists a customer's pending admin invites.", changes: false);
 
         SetHandler(verb, customer, async (context, customers, id) =>
         {
@@ -235,7 +235,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb Invite()
     {
-        var (verb, customer, email) = ForInvite("invite", "Invite someone to be an admin of the customer.");
+        var (verb, customer, email) = ForInvite("invite", "Invites someone to be an admin of a customer.");
 
         SetHandler(verb, customer, (context, customers, id) => PrintAsync(context, () => customers.InviteAdminAsync(id, context.Get(email)!)));
         return verb;
@@ -243,7 +243,7 @@ internal static class PartnerCustomerCommand
 
     private static CliVerb CancelInvite()
     {
-        var (verb, customer, email) = ForInvite("cancel-invite", "Cancel a pending admin invite to the customer, given by its email address.");
+        var (verb, customer, email) = ForInvite("cancel-invite", "Cancels a pending admin invite to a customer.");
 
         SetHandler(verb, customer, async (context, customers, id) =>
         {
@@ -305,7 +305,7 @@ internal static class PartnerCustomerCommand
     }
 
     // A customer's only ID is its organisation ID (portal CustomersController), hence --org-id.
-    // ENCLAVE_ORG_ID and the saved organisation choose the organisation that organisation commands
+    // ENCLAVE_CLI_ORG_ID and the saved organisation choose the organisation that organisation commands
     // act within, so they never stand in for the customer (spec/cli-surface.md "Context").
     private static (CliVerb Verb, CustomerChoice Customer) ForCustomer(string name, string description, bool changes)
     {

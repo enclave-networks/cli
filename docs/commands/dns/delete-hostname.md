@@ -1,6 +1,6 @@
 # `enclave-cli dns delete-hostname`
 
-Delete hostnames. Takes full hostnames, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Deletes hostnames.
 
 ## Synopsis
 

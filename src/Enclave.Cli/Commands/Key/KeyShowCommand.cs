@@ -6,7 +6,7 @@ internal static class KeyShowCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("show", "Show a key, with its secret.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows an enrolment key.", CommandScope.Organisation);
         var key = verb.Add(CliArguments.OptionalName("key", "The key's description, matched whole and ignoring case.", "a key's description"));
         var id = verb.Add(CliOptions.Id("--id", "The key's ID.", IdFormats.Int32));
 

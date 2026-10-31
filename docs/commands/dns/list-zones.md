@@ -1,6 +1,6 @@
 # `enclave-cli dns list-zones`
 
-List the DNS zones, reading every page.
+Lists DNS zones.
 
 ## Synopsis
 

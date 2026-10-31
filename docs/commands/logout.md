@@ -1,6 +1,6 @@
 # `enclave-cli logout`
 
-This deletes the saved credentials file. The token remains valid until it is revoked in the portal. Other tools that use `Enclave.Sdk.Api` read the same file.
+This deletes the saved credentials file and the default organisation saved in it. The token remains valid until it is revoked in the portal. Other tools that use `Enclave.Sdk.Api` read the same file.
 
 ## Synopsis
 

@@ -7,7 +7,7 @@ internal static class OrgCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("org", "orgs", "The organisations the token sees, the default organisation, and the organisation's settings, users and invites.");
+        var noun = new CliNoun("org", "orgs", "Organisations.");
 
         noun.Add(OrgListCommand.Create());
         noun.Add(OrgUseCommand.Create());
@@ -24,7 +24,7 @@ internal static class OrgCommand
 
     private static CliVerb Show()
     {
-        var verb = new CliVerb("show", "Show the organisation's properties.", CommandScope.Organisation);
+        var verb = new CliVerb("show", "Shows the organisation.", CommandScope.Organisation);
 
         verb.SetHandler(async context =>
         {
@@ -39,7 +39,7 @@ internal static class OrgCommand
 
     private static CliVerb Update()
     {
-        var verb = new CliVerb("update", "Change the organisation's name, website or phone number, and print its properties.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("update", "Updates the organisation.", CommandScope.Organisation, changes: true);
         // The API stores a name of white space (portal OrganisationPatchModelValidator checks only
         // its length), which --org could not then choose, so a blank name exits 2 ("Details"). The
         // website and phone number are not validated, so "" clears them.
@@ -80,7 +80,7 @@ internal static class OrgCommand
 
     private static CliVerb ListUsers()
     {
-        var verb = new CliVerb("list-users", "List the organisation's users.", CommandScope.Organisation);
+        var verb = new CliVerb("list-users", "Lists the organisation's users.", CommandScope.Organisation);
 
         verb.SetHandler(async context =>
         {
@@ -98,7 +98,7 @@ internal static class OrgCommand
 
     private static CliVerb ListInvites()
     {
-        var verb = new CliVerb("list-invites", "List the organisation's pending invites.", CommandScope.Organisation);
+        var verb = new CliVerb("list-invites", "Lists the organisation's pending invites.", CommandScope.Organisation);
 
         verb.SetHandler(async context =>
         {
@@ -119,7 +119,7 @@ internal static class OrgCommand
     // problem details is reported like any other.
     private static CliVerb Invite()
     {
-        var verb = new CliVerb("invite", "Invite someone to the organisation by email address.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("invite", "Invites someone to the organisation.", CommandScope.Organisation, changes: true);
         var email = verb.Add(CliArguments.Text("email", "The email address to invite."));
 
         verb.RefuseBlank(email, context => context.Get(email), "an email address");
@@ -140,7 +140,7 @@ internal static class OrgCommand
 
     private static CliVerb CancelInvite()
     {
-        var verb = new CliVerb("cancel-invite", "Cancel the pending invite to an email address.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("cancel-invite", "Cancels a pending invite.", CommandScope.Organisation, changes: true);
         var email = verb.Add(CliArguments.Text("email", "The invited email address."));
 
         verb.RefuseBlank(email, context => context.Get(email), "an email address");

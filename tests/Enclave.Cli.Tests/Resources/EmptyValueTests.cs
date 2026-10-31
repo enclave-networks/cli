@@ -249,7 +249,7 @@ public class EmptyValueTests
     {
         using var withToken = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         StubEveryRead(withToken);
 
         var first = await withToken.RunAsync(arguments);

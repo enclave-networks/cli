@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace Enclave.Cli.Tests.Auth;
 
 // spec/cli-surface.md "Options on every command". Cleaning lets a token file saved with a byte
-// order mark, read with $(cat file), or a secret pasted with a newline work. A bad character is
+// order mark, read with $(cat file), or a secret pasted with a newline or spaces work. A bad character is
 // token_invalid: retrying cannot help, and an error reported as transient would have an agent
 // retry it.
 public class TokenCleaningTests
@@ -24,9 +24,15 @@ public class TokenCleaningTests
 
     private const string OrgLookup = "/account/orgs";
 
+    private const string Question = "login's question";
+
     private static readonly string OrgSystems = TestData.OrgPath("systems");
 
-    private static readonly string[] Sources = ["ENCLAVE_TOKEN", "credentials.json", "login with ENCLAVE_TOKEN", "login --token-stdin"];
+    private static readonly string[] Sources = ["ENCLAVE_CLI_PAT", "credentials.json", Question];
+
+    // login's question drops control characters as they are typed or pasted (Spectre.Console 0.57.2,
+    // AnsiConsoleExtensions.ReadLine), so they never reach the CLI from there.
+    private static readonly string[] ControlCharacters = ["tab", "newline", "delete"];
 
     // login saves the cleaned token too.
     [TestCaseSource(nameof(DecoratedTokens))]
@@ -70,14 +76,14 @@ public class TokenCleaningTests
         });
     }
 
-    // The file's token is sent, as for an empty ENCLAVE_TOKEN ("Login, logout and status").
+    // The file's token is sent, as for an empty ENCLAVE_CLI_PAT ("Options on every command").
     [TestCase(" ")]
     [TestCase("\n")]
     [TestCase("﻿")]
-    public async Task An_ENCLAVE_TOKEN_of_only_white_space_or_a_byte_order_mark_counts_as_unset(string value)
+    public async Task An_ENCLAVE_CLI_PAT_of_only_white_space_or_a_byte_order_mark_counts_as_unset(string value)
     {
         using var run = CliRun.Start();
-        run.Environment["ENCLAVE_TOKEN"] = value;
+        run.Environment["ENCLAVE_CLI_PAT"] = value;
         run.SaveCredentials(FileToken);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
@@ -86,14 +92,15 @@ public class TokenCleaningTests
         Assert.That(request.Authorization, Is.EqualTo($"Bearer {FileToken}"));
     }
 
-    // login takes its token from stdin or ENCLAVE_TOKEN only.
+    // An answer that holds no token is no answer, and nothing is saved for an empty one.
     [TestCase(" ")]
-    [TestCase("\n")]
     [TestCase("﻿")]
-    public async Task Login_with_an_ENCLAVE_TOKEN_of_only_white_space_or_a_byte_order_mark_exits_3_with_token_missing(string value)
+    [TestCase("﻿  ")]
+    public async Task Login_with_an_answer_of_only_white_space_or_a_byte_order_mark_exits_3_with_token_missing(string answer)
     {
         using var run = CliRun.Start();
-        run.Environment["ENCLAVE_TOKEN"] = value;
+        run.AtTerminal();
+        run.AnswerLogin(answer);
         run.Stub("GET", OrgLookup, json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
 
         var result = await run.RunAsync("login");
@@ -107,7 +114,7 @@ public class TokenCleaningTests
     public async Task A_credentials_json_token_of_only_white_space_or_a_byte_order_mark_is_no_token(string value)
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.SaveCredentials(value);
         run.Stub("GET", OrgSystems, json: ApiJson.Page());
 
@@ -151,36 +158,32 @@ public class TokenCleaningTests
 
         foreach (var source in Sources)
         {
-            foreach (var (name, character) in characters)
+            foreach (var (name, character) in characters.Where(pair => source != Question || !ControlCharacters.Contains(pair.Name)))
             {
                 yield return new TestCaseData(source, character).SetArgDisplayNames(source, name);
             }
         }
     }
 
-    // system list for the two sources every command reads, and login for the two only it reads.
+    // system list for the two sources every command reads, and login for the one only it reads.
     private static Command Arrange(CliRun run, string source, string token)
     {
         switch (source)
         {
-            case "ENCLAVE_TOKEN":
-                run.Environment["ENCLAVE_TOKEN"] = token;
+            case "ENCLAVE_CLI_PAT":
+                run.Environment["ENCLAVE_CLI_PAT"] = token;
                 run.Stub("GET", OrgSystems, json: ApiJson.Page());
                 return new Command(["system", "list"], OrgSystems, Saves: false);
             case "credentials.json":
-                run.Environment.Remove("ENCLAVE_TOKEN");
+                run.Environment.Remove("ENCLAVE_CLI_PAT");
                 run.SaveCredentials(token);
                 run.Stub("GET", OrgSystems, json: ApiJson.Page());
                 return new Command(["system", "list"], OrgSystems, Saves: false);
-            case "login with ENCLAVE_TOKEN":
-                run.Environment["ENCLAVE_TOKEN"] = token;
+            case Question:
+                run.AtTerminal();
+                run.AnswerLogin(token);
                 run.Stub("GET", OrgLookup, json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
                 return new Command(["login"], OrgLookup, Saves: true);
-            case "login --token-stdin":
-                run.Environment.Remove("ENCLAVE_TOKEN");
-                run.StdinText = token;
-                run.Stub("GET", OrgLookup, json: ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
-                return new Command(["login", "--token-stdin"], OrgLookup, Saves: true);
             default:
                 throw new ArgumentOutOfRangeException(nameof(source), source, "No arrangement for this source.");
         }
@@ -189,8 +192,8 @@ public class TokenCleaningTests
     private static string SourceName(CliRun run, string source) => source switch
     {
         "credentials.json" => run.CredentialsPath,
-        "login --token-stdin" => "stdin",
-        _ => "ENCLAVE_TOKEN",
+        Question => "prompt",
+        _ => "ENCLAVE_CLI_PAT",
     };
 
     private static IEnumerable<string> Pieces(string text) =>

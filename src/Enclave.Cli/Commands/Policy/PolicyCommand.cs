@@ -6,7 +6,7 @@ internal static class PolicyCommand
 {
     public static CliNoun Create()
     {
-        var noun = new CliNoun("policy", "policies", "Policies, which let tagged systems reach each other.");
+        var noun = new CliNoun("policy", "policies", "Policies.");
 
         noun.Add(PolicyListCommand.Create());
         noun.Add(PolicyShowCommand.Create());

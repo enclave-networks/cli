@@ -1,6 +1,6 @@
 # `enclave-cli trust delete`
 
-Delete trust requirements. Takes descriptions, IDs after --id, or "-" to read a list from stdin, and prints { requested, affected }.
+Deletes trust requirements.
 
 ## Synopsis
 

@@ -43,7 +43,7 @@ public class DiskFileStoreTests
         }
     }
 
-    // Commands work without credentials.json and cli.json, so a missing file is ordinary.
+    // Commands work without credentials.json, so a missing file is ordinary.
     [Test]
     public void ReadText_returns_null_when_the_file_does_not_exist()
     {
@@ -75,9 +75,8 @@ public class DiskFileStoreTests
         });
     }
 
-    // ~/.enclave holds credentials.json, so it is 0700 whichever write creates it: `org use` before
-    // `login` creates it for cli.json, which is not private (spec/cli-surface.md "Login, logout and
-    // status").
+    // ~/.enclave holds credentials.json, so it is 0700 whichever write creates it (spec/cli-surface.md
+    // "Login, logout and status").
     [Test]
     public void WriteText_creates_a_missing_directory_readable_by_the_user_only([Values] bool privateToUser)
     {
@@ -87,7 +86,7 @@ public class DiskFileStoreTests
             return;
         }
 
-        _store.WriteText(Path.Combine(EnclaveDirectory, "cli.json"), EmptyObject, privateToUser);
+        _store.WriteText(CredentialsPath, EmptyObject, privateToUser);
 
         Assert.That(File.GetUnixFileMode(EnclaveDirectory), Is.EqualTo(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute));
     }
@@ -199,7 +198,7 @@ public class DiskFileStoreTests
     }
 
     // A relative path resolves against the current directory, so the CLI would read a
-    // credentials.json from wherever it runs and send the token to its baseUrl. The path here leads
+    // credentials.json from wherever it runs and send the token to its apiBaseUrl. The path here leads
     // to this test's own file, so the checks on the disk show whether the store resolved it.
     [Test]
     public void Every_operation_refuses_a_path_that_is_not_fully_qualified()

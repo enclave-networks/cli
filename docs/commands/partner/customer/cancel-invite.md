@@ -1,6 +1,6 @@
 # `enclave-cli partner customer cancel-invite`
 
-Cancel a pending admin invite to the customer, given by its email address.
+Cancels a pending admin invite to a customer.
 
 ## Synopsis
 

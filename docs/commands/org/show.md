@@ -1,6 +1,6 @@
 # `enclave-cli org show`
 
-Show the organisation's properties.
+Shows the organisation.
 
 ## Synopsis
 

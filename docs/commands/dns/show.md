@@ -1,6 +1,6 @@
 # `enclave-cli dns show`
 
-Show the organisation's DNS summary.
+Shows the organisation's DNS summary.
 
 ## Synopsis
 

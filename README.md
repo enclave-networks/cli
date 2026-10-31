@@ -8,18 +8,10 @@
 
 1. Download `enclave-cli` for your platform from the [latest release](https://github.com/enclave-networks/cli/releases/latest).
 2. Create a personal access token for yourself or your AI agent in the [Enclave portal](https://portal.enclave.io/).
-3. Log in with your token, which saves it locally. You only need to do this once.
+3. Log in, then paste your token when asked and choose a default organisation. You only need to do this once.
 
-   **On Windows:**
-
-   ```cmd
-   echo <your token> | enclave-cli login --token-stdin
    ```
-
-   **On Linux and macOS:**
-
-   ```bash
-   echo '<your token>' | enclave-cli login --token-stdin
+   enclave-cli login
    ```
 
    Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json` on Windows or `~/.enclave/credentials.json` on Linux and macOS.
@@ -32,11 +24,10 @@
   enclave-cli org list
   ```
 
-- List your customers, after choosing your partner account once:
+- List your customers:
 
   ```
-  enclave-cli partner use --id <partnerId>
-  enclave-cli partner customer list
+  enclave-cli partner customer list --partner-id <partnerId>
   ```
 
 - Find a customer's disconnected systems:

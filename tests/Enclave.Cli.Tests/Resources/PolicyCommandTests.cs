@@ -286,7 +286,7 @@ public partial class PolicyCommandTests
         });
     }
 
-    // Example 18. CliRun sets ENCLAVE_ORG_ID to the test organisation, which --org overrides.
+    // Example 18. CliRun sets ENCLAVE_CLI_ORG_ID to the test organisation, which --org overrides.
     [Test]
     public async Task Policy_disable_with_org_acts_in_that_organisation()
     {

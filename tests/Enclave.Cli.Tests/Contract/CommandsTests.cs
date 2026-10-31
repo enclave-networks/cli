@@ -26,7 +26,6 @@ public class CommandsTests
         ["org list-invites"] = [],
         ["org invite"] = ["email"],
         ["org cancel-invite"] = ["email"],
-        ["partner use"] = [],
         ["partner customer list"] = [],
         ["partner customer show"] = ["customer"],
         ["partner customer create"] = ["name"],
@@ -101,11 +100,11 @@ public class CommandsTests
         "trust create", "trust update", "trust delete",
     ];
 
-    // Reads have nothing to preview, and login, logout, org use and partner use change only local
-    // files ("Dry run").
+    // Reads have nothing to preview, and login, logout and org use change only local files ("Dry
+    // run").
     private static readonly string[] CommandsWithoutDryRun =
     [
-        "login", "logout", "org use", "partner use",
+        "login", "logout", "org use",
         "status", "org list", "org show", "org list-users", "org list-invites",
         "partner customer list", "partner customer show", "partner customer list-admins", "partner customer list-invites",
         "system list", "system show", "key list", "key show", "policy list", "policy show", "tag list", "tag show",
@@ -185,7 +184,6 @@ public class CommandsTests
         yield return Options("org update", "--name --website --phone --dry-run --org --org-id", "--limit");
         yield return Options("org use", "--id", "--dry-run");
         yield return Options("org remove-user", "--id --dry-run", "--limit");
-        yield return Options("partner use", "--id", "--dry-run");
         yield return Options("partner customer create", "--owner --domain --contact --systems --gateways --industry-discount --hard-limit --auto-sync --partner-id --dry-run", "--limit");
         yield return Options("partner customer update", "--org-id --name --contact --systems --gateways --industry-discount --no-industry-discount --hard-limit --no-hard-limit --partner-id --dry-run", "--auto-sync");
         yield return Options("partner customer convert", "--org-id --billing-months --partner-id --dry-run", "--limit");
@@ -193,7 +191,7 @@ public class CommandsTests
         yield return Options("partner customer remove-admin", "--org-id --user --user-id --partner-id --dry-run", "--limit");
         yield return Options("partner customer invite", "--org-id --email --partner-id --dry-run", "--limit");
         yield return Options("log", "--limit --since --until --user --level --filter --org --org-id", "--dry-run");
-        yield return Options("login", "--token-stdin", "--dry-run --org --org-id --partner-id");
+        yield return Options("login", string.Empty, "--staging --token-stdin --dry-run --org --org-id --partner-id");
         yield return Options("logout", string.Empty, "--dry-run --org --org-id --partner-id");
         yield return Options("status", "--org --org-id --partner-id", "--dry-run");
         yield return Options("commands", "--search-keys --pending --org --org-id", "--dry-run --partner-id");
@@ -229,7 +227,7 @@ public class CommandsTests
         yield return Rejection($"system list --org {TestData.OrgName}", "--org", $"system list --org-id {TestData.OrgId} --search-keys", "systems/meta/search-keys");
     }
 
-    // ENCLAVE_ORG_ID names Acme and the options Globex, and the fake API serves both, so a CLI that
+    // ENCLAVE_CLI_ORG_ID names Acme and the options Globex, and the fake API serves both, so a CLI that
     // ignored the options would ask for Acme's keys ("Context").
     public static IEnumerable<TestCaseData> SearchKeyOrganisations()
     {
@@ -584,8 +582,8 @@ public class CommandsTests
     {
         ArgumentNullException.ThrowIfNull(command);
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var result = await run.RunAsync(command.Split(' '));
 
@@ -641,7 +639,7 @@ public class CommandsTests
     public async Task Commands_search_keys_without_a_token_exits_3_with_token_missing_and_makes_no_request()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("GET", TestData.OrgPath("policies/meta/search-keys"), json: ApiJson.PolicySearchKeys());
 
         var result = await run.RunAsync("commands", "policy", "list", "--search-keys");
@@ -655,7 +653,7 @@ public class CommandsTests
     public async Task Commands_search_keys_with_no_organisation_chosen_and_several_exits_2_with_no_org()
     {
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
         BothOrgs.Stub(run);
         run.Stub("GET", TestData.OrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
         run.Stub("GET", TestData.OtherOrgPath("tags/meta/search-keys"), json: ApiJson.TagSearchKeys());
@@ -689,16 +687,16 @@ public class CommandsTests
         ArgumentNullException.ThrowIfNull(corrected);
         ArgumentNullException.ThrowIfNull(route);
         using var run = CliRun.Start();
-        run.Environment.Remove("ENCLAVE_TOKEN");
-        run.Environment.Remove("ENCLAVE_ORG_ID");
+        run.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
 
         var result = await run.RunAsync(["commands", .. rejected.Split(' ')]);
 
         CliAssert.Rejected(run, result);
         CliAssert.Problems(result.Error, key);
 
-        run.Environment["ENCLAVE_TOKEN"] = TestData.Token;
-        run.Environment["ENCLAVE_ORG_ID"] = TestData.OrgId.ToString();
+        run.Environment["ENCLAVE_CLI_PAT"] = TestData.Token;
+        run.Environment["ENCLAVE_CLI_ORG_ID"] = TestData.OrgId.ToString();
         var path = TestData.OrgPath(route);
         run.Stub("GET", path, json: ApiJson.SystemSearchKeys());
 

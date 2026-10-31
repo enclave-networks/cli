@@ -7,7 +7,7 @@ internal static class OrgRemoveUserCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("remove-user", "Remove a user from the organisation, given by email address or by --id.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("remove-user", "Removes a user from the organisation.", CommandScope.Organisation, changes: true);
         var email = verb.Add(CliArguments.OptionalText("email", "The user's email address."));
         var id = verb.Add(CliOptions.Id("--id", "The user's account ID.", IdFormats.Guid, "accountId"));
 

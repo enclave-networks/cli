@@ -8,7 +8,7 @@ internal static class KeyUpdateCommand
 {
     public static CliVerb Create()
     {
-        var verb = new CliVerb("update", "Change a key's settings and print the key.", CommandScope.Organisation, changes: true);
+        var verb = new CliVerb("update", "Updates an enrolment key.", CommandScope.Organisation, changes: true);
         var key = verb.Add(CliArguments.OptionalName("key", "The key's description, matched whole and ignoring case.", "a key's description"));
         var id = verb.Add(CliOptions.Id("--id", "The key's ID.", IdFormats.Int32));
         // The API refuses a blank description and takes empty notes, which clear them (portal

@@ -1,6 +1,6 @@
 # `enclave-cli org list-users`
 
-List the organisation's users.
+Lists the organisation's users.
 
 ## Synopsis
 

@@ -11,7 +11,7 @@ internal static class StatusCommand
     {
         var verb = new CliVerb(
             "status",
-            "Show where the token comes from, the organisation and partner a command would use and what chose them, and the token's role in the organisation. Makes one call, which checks the token.",
+            "Shows the organisation and partner commands will use, and your role.",
             CommandScope.Organisation | CommandScope.Partner);
 
         verb.SetHandler(async context =>

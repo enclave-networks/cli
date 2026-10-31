@@ -189,7 +189,7 @@ public partial class TrustCommandTests
     {
         using var run = CliRun.Start();
         using var withoutToken = CliRun.Start();
-        withoutToken.Environment.Remove("ENCLAVE_TOKEN");
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
         run.Stub("POST", TrustsPath, json: ApiJson.Trust(7, "sso"));
         string[] rejected = ["trust", "create", "sso", "--authority", authority, .. SignInSettings(authority, option, blank)];
 

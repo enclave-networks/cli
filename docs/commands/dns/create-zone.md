@@ -1,6 +1,6 @@
 # `enclave-cli dns create-zone`
 
-Create a DNS zone and print it.
+Creates a DNS zone.
 
 ## Synopsis
 

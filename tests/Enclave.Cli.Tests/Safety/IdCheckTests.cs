@@ -125,83 +125,42 @@ public class IdCheckTests
     }
 
     // org use saves the organisation as the default for later commands, so an ID that is not a GUID
-    // is refused before anything is saved.
-    [Test]
-    public async Task Org_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
+    // is refused before anything is saved. The all-zero GUID names no organisation.
+    [TestCase("not-a-guid")]
+    [TestCase(AllZeroGuid)]
+    public async Task Org_use_exits_2_for_an_id_that_is_not_a_valid_guid_and_saves_nothing(string id)
     {
         using var run = CliRun.Start();
+        run.SaveLogin();
+        var before = run.Files.ReadText(run.CredentialsPath);
         BothOrgs.Stub(run);
 
-        var rejected = await run.RunAsync("org", "use", "--id", "not-a-guid");
+        var rejected = await run.RunAsync("org", "use", "--id", id);
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
+        Assert.That(run.Files.ReadText(run.CredentialsPath), Is.EqualTo(before));
 
         var accepted = await run.RunAsync("org", "use", "--id", TestData.OtherOrgId.ToString());
 
         CliAssert.Succeeded(accepted);
-        Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
+        var saved = JsonAssert.Property(JsonRead.Parse(run.Files.ReadText(run.CredentialsPath)!), "defaultOrgID");
+        Assert.That(Guid.Parse(saved.GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OtherOrgId));
     }
 
-    // partner use saves the default for later commands, and makes no call either way ("Login,
-    // logout and status").
-    [Test]
-    public async Task Partner_use_exits_2_for_an_id_that_is_not_a_guid_and_saves_nothing()
-    {
-        using var run = CliRun.Start();
-
-        var rejected = await run.RunAsync("partner", "use", "--id", "12");
-
-        CliAssert.Rejected(run, rejected);
-        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
-
-        var accepted = await run.RunAsync("partner", "use", "--id", TestData.PartnerId.ToString());
-
-        CliAssert.Succeeded(accepted);
-        Assert.Multiple(() =>
-        {
-            Assert.That(run.Files.Exists(run.CliConfigPath), Is.True);
-            Assert.That(run.Requests, Is.Empty);
-        });
-    }
-
-    // The all-zero GUID names no organisation or partner, and a saved default reaches every later
-    // command.
-    [TestCase("org")]
-    [TestCase("partner")]
-    public async Task Use_exits_2_for_the_all_zero_guid_and_saves_nothing(string noun)
-    {
-        using var run = CliRun.Start();
-        BothOrgs.Stub(run);
-        var valid = noun == "org" ? TestData.OtherOrgId : TestData.PartnerId;
-
-        var rejected = await run.RunAsync(noun, "use", "--id", AllZeroGuid);
-
-        CliAssert.Rejected(run, rejected);
-        Assert.That(run.Files.Exists(run.CliConfigPath), Is.False);
-
-        var accepted = await run.RunAsync(noun, "use", "--id", valid.ToString());
-
-        CliAssert.Succeeded(accepted);
-        var saved = JsonAssert.Property(JsonRead.Parse(run.Files.ReadText(run.CliConfigPath) ?? throw new AssertionException($"{noun} use saved no cli.json.")), noun);
-        Assert.That(Guid.Parse(JsonAssert.Property(saved, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(valid));
-    }
-
-    // IDs from the environment or cli.json are checked as the options' are ("ID checks"). The error
-    // for a saved default names its file, so the caller knows what to fix. The corrected run shows
-    // the source is read.
-    [TestCase("ENCLAVE_ORG_ID")]
-    [TestCase("ENCLAVE_PARTNER_ID")]
-    [TestCase("cli.json org")]
-    [TestCase("cli.json partner")]
+    // IDs from the environment or credentials.json are checked as the options' are ("ID checks").
+    // The error for a saved default names its file, so the caller knows what to fix. The corrected
+    // run shows the source is read.
+    [TestCase("ENCLAVE_CLI_ORG_ID")]
+    [TestCase("ENCLAVE_CLI_PARTNER_ID")]
+    [TestCase("credentials.json")]
     public async Task The_all_zero_guid_in_the_environment_or_a_saved_default_exits_2_before_any_call(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
         using var run = CliRun.Start();
         PartnerApiFake.StubPartnerApi(run);
         run.StubPages(TestData.OrgPath("systems"), 200, ApiJson.System("ABCDE"));
-        run.Environment.Remove("ENCLAVE_ORG_ID");
-        var partner = source is "ENCLAVE_PARTNER_ID" or "cli.json partner";
+        run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
+        var partner = source is "ENCLAVE_CLI_PARTNER_ID";
         string[] command = partner ? ["partner", "customer", "list"] : ["system", "list"];
         var call = partner ? $"GET {TestData.PartnerPath("customers")}" : $"GET {TestData.OrgPath("systems")}";
         var valid = partner ? TestData.PartnerId : TestData.OrgId;
@@ -211,9 +170,9 @@ public class IdCheckTests
 
         CliAssert.Rejected(run, rejected);
 
-        if (source.StartsWith("cli.json", StringComparison.Ordinal))
+        if (source == "credentials.json")
         {
-            Assert.That(rejected.Error.GetProperty("detail").GetString(), Does.Contain(run.CliConfigPath));
+            Assert.That(rejected.Error.GetProperty("detail").GetString(), Does.Contain(run.CredentialsPath));
         }
 
         Choose(run, source, valid.ToString());
@@ -396,22 +355,17 @@ public class IdCheckTests
     private static TestCaseData PartnerCase(string name, string[] rejectedArgs, string[] acceptedArgs, string call) =>
         new TestCaseData(rejectedArgs, acceptedArgs, call).SetArgDisplayNames(name);
 
-    // Puts the ID where the case names: in its environment variable, or as the default in cli.json
-    // in the form org use and partner use save ("Login, logout and status").
+    // Puts the ID where the case names: in its environment variable, or as the default saved with a
+    // login ("Login, logout and status").
     private static void Choose(CliRun run, string source, string id)
     {
-        switch (source)
+        if (source == "credentials.json")
         {
-            case "ENCLAVE_ORG_ID":
-            case "ENCLAVE_PARTNER_ID":
-                run.Environment[source] = id;
-                break;
-            case "cli.json org":
-                run.SaveDefaults(orgId: id, orgName: TestData.OrgName);
-                break;
-            default:
-                run.SaveDefaults(partnerId: id);
-                break;
+            run.SaveLogin(defaultOrgId: id);
+        }
+        else
+        {
+            run.Environment[source] = id;
         }
     }
 

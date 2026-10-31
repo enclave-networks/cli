@@ -12,7 +12,7 @@ public class DryRunTests
     private static readonly Dictionary<string, string> NoQuery = new(StringComparer.Ordinal);
 
     // The fake API answers the change, so a CLI that sent it would show it in the requests. The
-    // organisation comes from ENCLAVE_ORG_ID, so no lookup is made and its name is null.
+    // organisation comes from ENCLAVE_CLI_ORG_ID, so no lookup is made and its name is null.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Dry_run_prints_the_request_a_change_would_send_and_sends_no_change(ChangeCommand command)
     {
@@ -154,7 +154,7 @@ public class DryRunTests
         });
     }
 
-    // ENCLAVE_ORG_ID names the other organisation when the name comes from --org, so the output
+    // ENCLAVE_CLI_ORG_ID names the other organisation when the name comes from --org, so the output
     // shows the named one was used.
     [TestCase(false)]
     [TestCase(true)]
@@ -166,8 +166,8 @@ public class DryRunTests
 
         if (fromEnvironment)
         {
-            run.Environment.Remove("ENCLAVE_ORG_ID");
-            run.Environment["ENCLAVE_ORG"] = TestData.OtherOrgName;
+            run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
+            run.Environment["ENCLAVE_CLI_ORG"] = TestData.OtherOrgName;
             args = ["system", "disable", "ABCDE", "--dry-run"];
         }
 
@@ -214,7 +214,7 @@ public class DryRunTests
 
         if (tokenFromCredentialsFile)
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
+            run.Environment.Remove("ENCLAVE_CLI_PAT");
             run.SaveCredentials(TestData.Token);
         }
 
@@ -400,17 +400,17 @@ public class DryRunTests
     {
         using var run = CliRun.Start();
         command.Arrange(run);
-        var file = command.FilePath(run);
+        var before = LocalCommand.Saved(run);
 
         var rejected = await run.RunAsync([.. command.Args, "--dry-run"]);
 
         CliAssert.Rejected(run, rejected);
-        Assert.That(run.Files.Exists(file), Is.EqualTo(!command.FileExistsAfter));
+        Assert.That(LocalCommand.Saved(run), Is.EqualTo(before));
 
         var accepted = await run.RunAsync(command.Args);
 
         CliAssert.Succeeded(accepted);
-        Assert.That(run.Files.Exists(file), Is.EqualTo(command.FileExistsAfter));
+        Assert.That(LocalCommand.Saved(run), Is.Not.EqualTo(before));
     }
 
     private static IEnumerable<TestCaseData> ReadOnlyCases()

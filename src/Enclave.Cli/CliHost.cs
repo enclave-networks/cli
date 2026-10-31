@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Enclave.Cli.Storage;
+using Spectre.Console;
 
 namespace Enclave.Cli;
 
@@ -25,11 +26,24 @@ internal sealed class CliHost
 
     public required bool StdinIsTerminal { get; init; }
 
+    public required bool StderrIsTerminal { get; init; }
+
+    // Creates the console login asks its questions through, on stderr, so stdout holds only JSON.
+    // Called only while stdin and stderr are both terminals.
+    public required Func<IAnsiConsole> CreatePromptConsole { get; init; }
+
+    // Production's API address: ENCLAVE_CLI_PAT goes to it unless ENCLAVE_CLI_ENV names staging, and
+    // a credentials.json token when the file names no apiBaseUrl.
     public required Uri DefaultApiUrl { get; init; }
 
-    // Used when credentials.json names none; null leaves Enclave.Sdk.Api's default, production
-    // (EnclaveClientOptions.PartnerApiBaseUrl).
+    // Production's partner API address, used where DefaultApiUrl is; null leaves Enclave.Sdk.Api's
+    // default, production (EnclaveClientOptions.PartnerApiBaseUrl).
     public Uri? DefaultPartnerApiUrl { get; init; }
+
+    // Staging's addresses (spec/cli-surface.md "Environments").
+    public required Uri StagingApiUrl { get; init; }
+
+    public required Uri StagingPartnerApiUrl { get; init; }
 
     // Every file the CLI reads or writes goes through this store.
     public required IFileStore Files { get; init; }
@@ -78,7 +92,11 @@ internal sealed class CliHost
             HomeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile, Environment.SpecialFolderOption.DoNotVerify),
             Stdin = StdinReader(Console.OpenStandardInput()),
             StdinIsTerminal = !Console.IsInputRedirected,
+            StderrIsTerminal = !Console.IsErrorRedirected,
+            CreatePromptConsole = () => AnsiConsole.Create(new AnsiConsoleSettings { Out = new AnsiConsoleOutput(Console.Error) }),
             DefaultApiUrl = new Uri(ApiUrl),
+            StagingApiUrl = new Uri("https://staging-api.enclave.io"),
+            StagingPartnerApiUrl = new Uri("https://staging-partner-api.enclave.io"),
             Files = new DiskFileStore(),
             Time = TimeProvider.System,
         };

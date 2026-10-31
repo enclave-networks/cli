@@ -1,6 +1,6 @@
 # `enclave-cli org cancel-invite`
 
-Cancel the pending invite to an email address.
+Cancels a pending invite.
 
 ## Synopsis
 

@@ -1,6 +1,6 @@
 # `enclave-cli tag show`
 
-Show a tag.
+Shows a tag.
 
 ## Synopsis
 

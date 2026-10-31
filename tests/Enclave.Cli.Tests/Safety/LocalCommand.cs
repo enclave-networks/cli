@@ -4,48 +4,40 @@ namespace Enclave.Cli.Tests.Safety;
 
 // A value type, so the public test methods taking one need no null check (CA1062).
 
-// A command that changes local files only: a command line that runs it, and the file whose
-// presence afterwards shows it ran.
+// A command that changes only ~/.enclave/credentials.json, and a command line that runs it.
 // Name: The command words, with any option that selects a different source.
-// WritesCredentials: Whether the file is credentials.json; otherwise it is cli.json.
-// FileExistsAfter: Whether the file exists after the command runs.
-public readonly record struct LocalCommand(
-    string Name,
-    string[] Args,
-    bool WritesCredentials,
-    bool FileExistsAfter)
+public readonly record struct LocalCommand(string Name, string[] Args)
 {
     // spec/cli-surface.md "Login, logout and status".
     public static IReadOnlyList<LocalCommand> All { get; } =
     [
-        new("login", ["login"], true, true),
-        new("login --token-stdin", ["login", "--token-stdin"], true, true),
-        new("logout", ["logout"], true, false),
-        new("org use", ["org", "use", TestData.OrgName], false, true),
-        new("org use --id", ["org", "use", "--id", TestData.OrgId.ToString()], false, true),
-        new("partner use", ["partner", "use", "--id", TestData.PartnerId.ToString()], false, true),
+        new("login", ["login"]),
+        new("logout", ["logout"]),
+        new("org use", ["org", "use", TestData.OrgName]),
+        new("org use --id", ["org", "use", "--id", TestData.OrgId.ToString()]),
     ];
 
     // NUnit names each test case after its arguments' ToString.
     public override string ToString() => Name;
 
-    // Sets up what the command needs to succeed: the organisation lookup, the token on stdin for
-    // --token-stdin, and a saved token for logout to delete.
+    // Sets up what the command needs to succeed, with ENCLAVE_CLI_PAT unset: the organisation
+    // lookup, a person at a terminal answering login, and a saved login for logout to delete and
+    // org use to read its token from.
     internal void Arrange(CliRun run)
     {
         run.Stub("GET", "/account/orgs", 200, ApiJson.Orgs((TestData.OrgId, TestData.OrgName)));
 
-        if (Name == "login --token-stdin")
+        if (Name == "login")
         {
-            run.Environment.Remove("ENCLAVE_TOKEN");
-            run.StdinText = TestData.Token;
+            run.AtTerminal();
+            run.AnswerLogin(TestData.Token);
         }
-
-        if (Name == "logout")
+        else
         {
-            run.SaveCredentials(TestData.Token);
+            run.SaveLogin();
         }
     }
 
-    internal string FilePath(CliRun run) => WritesCredentials ? run.CredentialsPath : run.CliConfigPath;
+    // credentials.json as it stands, or null when there is none; a change shows the command ran.
+    internal static string? Saved(CliRun run) => run.Files.ReadText(run.CredentialsPath);
 }

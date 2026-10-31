@@ -97,7 +97,7 @@ public class OptionDecidesParsingTests
 
     // The value is the ID of an organisation the token sees and the name of none, so it matches
     // nothing ("Errors and exit codes"). Either organisation's change is answered, so a CLI that read
-    // it as an ID, or fell back to ENCLAVE_ORG_ID, would show a request.
+    // it as an ID, or fell back to ENCLAVE_CLI_ORG_ID, would show a request.
     [Test]
     public async Task Org_option_reads_its_value_as_a_name_even_when_it_is_a_guid()
     {

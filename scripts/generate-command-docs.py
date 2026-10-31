@@ -17,7 +17,7 @@ catalogue = json.loads(
 )["commands"]
 
 examples = {
-    "login": "enclave-cli login --token-stdin < ~/.secrets/enclave-token",
+    "login": "enclave-cli login",
     "logout": "enclave-cli logout",
     "status": "enclave-cli status --org 'Acme Ltd'",
     "org list": "enclave-cli org list",
@@ -29,7 +29,6 @@ examples = {
     "org list-invites": "enclave-cli org list-invites --org 'Acme Ltd'",
     "org invite": "enclave-cli org invite new@acme.example --org 'Acme Ltd'",
     "org cancel-invite": "enclave-cli org cancel-invite new@acme.example --org 'Acme Ltd'",
-    "partner use": "enclave-cli partner use --id 8d2e4f6a-1b3c-4d5e-9f70-a1b2c3d4e5f6",
     "partner customer list": "enclave-cli partner customer list",
     "partner customer show": "enclave-cli partner customer show Initech",
     "partner customer create": "enclave-cli partner customer create Initech --owner it@initech.example --domain initech.example --systems 20 --gateways 1",
@@ -90,11 +89,10 @@ examples = {
 }
 
 notes = {
-    "login": "The token comes from standard input with `--token-stdin`, or from `ENCLAVE_TOKEN`. The command checks it before saving `~/.enclave/credentials.json`. If the token sees exactly 1 organisation, that organisation becomes the default.",
-    "logout": "This deletes the saved credentials file. The token remains valid until it is revoked in the portal. Other tools that use `Enclave.Sdk.Api` read the same file.",
+    "login": "Run it in a terminal. It asks for a personal access token, checks it, then asks you to choose a default organisation, and saves both in `~/.enclave/credentials.json`. Press Enter at the token question to keep the token already saved. Programs set `ENCLAVE_CLI_PAT` and don't run `login`.",
+    "logout": "This deletes the saved credentials file and the default organisation saved in it. The token remains valid until it is revoked in the portal. Other tools that use `Enclave.Sdk.Api` read the same file.",
     "status": "The output names the token source and the selected organisation and partner. It also shows the token's role in the organisation. Use it to check context before a change.",
-    "org use": "The default is saved in `~/.enclave/cli.json`. Use `--id <orgId>` when a name is ambiguous. A command's `--org` or `--org-id` overrides the default.",
-    "partner use": "Get the partner ID from the partner portal. The default is saved in `~/.enclave/cli.json`; `--partner-id` overrides it for one command.",
+    "org use": "The default is saved in `~/.enclave/credentials.json`, beside the token. Use `--id <orgId>` when a name is ambiguous. A command's `--org` or `--org-id` overrides the default.",
     "partner customer create": "Set the owner and domain when creating the customer. `--systems` and `--gateways` set the licensed counts; `--auto-sync` keeps partner staff as customer admins.",
     "partner customer convert": "`--billing-months` is required. Accepted values are `1`, `12`, `24` and `36`.",
     "partner customer add-admin": "`--user-id` is the partner user's account ID, shown in the partner portal.",
@@ -135,7 +133,6 @@ option_meanings = {
     "--until": "Keep the change until this time.",
     "--then": "Choose what happens at expiry.",
     "--notes": "Set notes; use an empty string to clear them on update.",
-    "--token-stdin": "Read the token from standard input.",
     "--search-keys": "Fetch the list command's filter keys from the API.",
     "--billing-months": "Set the committed billing period in months.",
     "--user-id": "Select the account by ID.",
@@ -222,8 +219,6 @@ def output_description(command):
         return "JSON with the token source, organisation, partner and role."
     if command == "logout":
         return "JSON with the credentials path and a `deleted` boolean."
-    if command == "partner use":
-        return "JSON with the selected partner ID."
     if command.endswith(" use"):
         return "The selected organisation as JSON."
     if command.endswith(" list") or " list-" in command or command == "login":
@@ -258,8 +253,6 @@ def page_for(entry, path):
             use = option_description(option["name"])
             if option["name"] == "--org-id" and command.startswith("partner customer "):
                 use = "Select the customer by organisation ID."
-            if option["name"] == "--id" and command == "partner use":
-                use = "Set the default partner by ID."
             if option["name"] == "--gateway" and command == "system list":
                 use = "List gateway systems only."
             if option["name"] == "--systems" and command == "dns create-hostname":
@@ -288,7 +281,7 @@ for entry in catalogue:
     group = " ".join(parts[:-1]) or "General"
     groups.setdefault(group, []).append((command, path.relative_to(DOCS).as_posix(), entry["description"].split(". ")[0].rstrip(".")))
 
-index = ["# Command reference", "", "`enclave-cli` commands follow `enclave-cli <noun> <verb> [arguments] [options]`. Each page covers one command. Use `enclave-cli commands <command words>` for a machine-readable description of arguments, options and allowed values.", "", "## Shared rules", "", "- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands use [`partner use`](partner/use.md) or `--partner-id`.", "- Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.", "- Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.", "- Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.", "- `--set-` replaces a list; `--add-` and `--remove-` edit it. An empty string clears a setting only where the command accepts an empty value.", "- Every successful command prints JSON to standard output. Errors print JSON to standard error. The output includes a `trace` when the command took a step worth tracing.", "", "## Exit codes", "", "| Code | Meaning |", "| --- | --- |", "| 0 | Success |", "| 1 | API error or unimplemented command |", "| 2 | Invalid argument, missing organisation or missing partner |", "| 3 | Missing or invalid token |", "| 4 | Forbidden by the API |", "| 5 | Item not found |", "| 6 | Network error, timeout, rate limit or server error |", ""]
+index = ["# Command reference", "", "`enclave-cli` commands follow `enclave-cli <noun> <verb> [arguments] [options]`. Each page covers one command. Use `enclave-cli commands <command words>` for a machine-readable description of arguments, options and allowed values.", "", "## Shared rules", "", "- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.", "- Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.", "- Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.", "- Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.", "- `--set-` replaces a list; `--add-` and `--remove-` edit it. An empty string clears a setting only where the command accepts an empty value.", "- Every successful command prints JSON to standard output. Errors print JSON to standard error. The output includes a `trace` when the command took a step worth tracing.", "", "## Exit codes", "", "| Code | Meaning |", "| --- | --- |", "| 0 | Success |", "| 1 | API error or unimplemented command |", "| 2 | Invalid argument, missing organisation or missing partner |", "| 3 | Missing or invalid token |", "| 4 | Forbidden by the API |", "| 5 | Item not found |", "| 6 | Network error, timeout, rate limit or server error |", ""]
 for group, commands in groups.items():
     index += [f"## {group.capitalize()}", "", "| Command | Purpose |", "| --- | --- |"]
     for command, link, purpose in commands:
