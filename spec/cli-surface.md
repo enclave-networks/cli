@@ -486,7 +486,7 @@ The partner API is a separate service (portal `src/Enclave.Partner.Api`) with ev
 
 Known, and left as they are. The CLI passes the API's answers on as they come.
 
-- A partner command given an `--org-id` the partner does not have exits 0 with empty lists, 2 or 6, not 5: the partner API answers it with 200 and empty lists, or 500.
+- A partner command given an `--org-id` the partner does not have exits 0 with empty lists, or 6, not 5: the partner API answers it with 200 and empty lists, or 500. `remove-admin --user` and `cancel-invite --email` then exit 5, since the address matches nothing in the empty list.
 - `partner customer update --contact ""` saves an empty contact.
 - `key create --tags a,a` sends `a` twice, and the API keeps both.
 - An error marked `application/problem+json` whose body is not valid JSON exits 1, whatever its status: `Enclave.Sdk.Api` fails to read it before the CLI sees the status.

@@ -75,8 +75,8 @@ internal static class DnsHostnameCommands
             var (zone, recordName) = DnsLookup.Place(context.Get(hostname)!, zones, hostname);
 
             // ENCLAVE is the only record type the API has (portal DnsRecordTypeFormatConverter). The
-            // hostname does not exist yet, so a 404 here is about the zone or a system and exits 1
-            // as any API error does (portal DnsRecordCreateHandler.GetResponseAsync,
+            // hostname does not exist yet, so a 404 here is about the zone or a system, which exits 5
+            // (ApiErrors; portal DnsRecordCreateHandler.GetResponseAsync,
             // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync).
             var record = await org.Client.Dns.CreateRecordAsync(new DnsRecordCreateModel
             {
