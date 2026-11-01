@@ -20,11 +20,23 @@
   <!--
     A build for a specific runtime (dotnet publish -r <rid>) produces the release form: one
     self-contained executable that needs no .NET install on the target machine.
+
+    Trimming removes the unused parts of .NET, and compression shrinks what is left. Partial mode
+    trims only .NET's own assemblies, which are marked trimmable, and keeps Enclave.Sdk.Api and the
+    CLI whole: both read and write JSON by reflection, so the trimmer cannot see every member they
+    use. Reflection-based JSON is off by default in a trimmed app, so it is turned back on, and the
+    trim warnings about it are suppressed because those assemblies are kept whole.
   -->
   <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>embedded</DebugType>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <SuppressTrimAnalysisWarnings>true</SuppressTrimAnalysisWarnings>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
   </PropertyGroup>
 
   <ItemGroup>
