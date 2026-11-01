@@ -63,8 +63,8 @@ internal static class DnsLookup
     }
 
     // The record name is what the API takes in place of the full name (portal
-    // DnsRecordCreateModel, DnsRecordPatchModel). Exits 2 when the hostname is a zone's name or is
-    // in no zone.
+    // DnsRecordCreateModel, DnsRecordPatchModel). Exits 2 when the hostname has no dot or is a
+    // zone's name, and 5 when its zone does not exist.
     // hostname is the full name, such as db.eu.internal; errors name given, the option or argument
     // it came from.
     public static (DnsZoneSummaryModel Zone, string RecordName) Place(string hostname, IReadOnlyCollection<DnsZoneSummaryModel> zones, Symbol given)
@@ -89,8 +89,14 @@ internal static class DnsLookup
         var zone = zones
             .Where(candidate => hostname.Length > candidate.Name.Length + 1
                 && hostname.EndsWith("." + candidate.Name, StringComparison.OrdinalIgnoreCase))
-            .MaxBy(candidate => candidate.Name.Length)
-            ?? throw CliErrors.InvalidArgument(key, $"{source} takes a full hostname, which ends in its zone's name, such as db.internal in the zone internal, and the hostname given is in none of the organisation's zones.");
+            .MaxBy(candidate => candidate.Name.Length);
+
+        if (zone is null)
+        {
+            throw hostname.Contains('.', StringComparison.Ordinal)
+                ? CliErrors.NotFound(key, $"{source} names a hostname in a zone the organisation does not have.")
+                : CliErrors.InvalidArgument(key, $"{source} takes a full hostname, which ends in its zone's name, such as db.internal in the zone internal.");
+        }
 
         return (zone, hostname[..^(zone.Name.Length + 1)]);
     }

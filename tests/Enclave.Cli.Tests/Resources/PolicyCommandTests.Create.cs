@@ -236,6 +236,21 @@ public partial class PolicyCommandTests
         Assert.That(string.Join(",", request.BodyIds("senderTrustRequirements").Order(StringComparer.Ordinal)), Is.EqualTo("3,8"));
     }
 
+    // The API answers 422 trust-requirement-does-not-exist (portal
+    // TrustRequirementExceptionExtensions.TrustRequirementDoesNotExist), as a name that matches
+    // nothing exits 5 ("Errors and exit codes").
+    [Test]
+    public async Task Policy_create_with_a_trust_id_the_api_does_not_have_exits_5_not_found()
+    {
+        using var run = CliRun.Start();
+        run.StubRaw("POST", PoliciesPath, 422, LoopbackApi.ProblemContentType, ApiJson.ProblemOfType(422, "trust-requirement-does-not-exist", "Trust requirement does not exist", "One of more of the specified trust requirements do not exist (see details)"));
+
+        var result = await run.RunAsync("policy", "create", "office to build farm", "--senders", "office", "--receivers", "build", "--acl", "tcp:443", "--trust-id", "99");
+
+        var error = CliAssert.Failed(result, "not_found");
+        Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(422));
+    }
+
     [Test]
     public async Task Policy_create_rejects_a_trust_id_that_is_not_an_integer()
     {
@@ -266,7 +281,7 @@ public partial class PolicyCommandTests
     }
 
     [Test]
-    public async Task Policy_create_with_a_trust_requirement_no_requirement_has_exits_2_without_creating_the_policy()
+    public async Task Policy_create_with_a_trust_requirement_no_requirement_has_exits_5_without_creating_the_policy()
     {
         using var run = CliRun.Start();
         run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(2, "entra staff (old)")));
@@ -274,10 +289,10 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "create", "office to build farm", "--senders", "office", "--receivers", "build", "--acl", "tcp:443", "--trust", "entra staff");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.RequestsTo("POST", PoliciesPath), Is.Empty);
         });
     }

@@ -229,6 +229,32 @@ public class TagCommandTests
         });
     }
 
+    // The API answers 422 trust-requirement-does-not-exist for the patch and the create (portal
+    // TagModifyHandler, TagCreateHandler).
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task Tag_set_with_a_trust_id_the_api_does_not_have_exits_5_not_found(bool tagExists)
+    {
+        using var run = CliRun.Start();
+        var problem = ApiJson.ProblemOfType(422, "trust-requirement-does-not-exist", "Trust requirement does not exist", "One of more of the specified trust requirements do not exist (see details)");
+
+        if (tagExists)
+        {
+            StubExistingTag(run, "prod");
+            run.StubRaw("PATCH", TagPath("prod"), 422, LoopbackApi.ProblemContentType, problem);
+        }
+        else
+        {
+            run.StubProblem("GET", TagPath("prod"), 404, "Not Found");
+            run.StubRaw("POST", TagsPath, 422, LoopbackApi.ProblemContentType, problem);
+        }
+
+        var result = await run.RunAsync("tag", "set", "prod", "--trust-id", "99");
+
+        var error = CliAssert.Failed(result, "not_found");
+        Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(422));
+    }
+
     // The API refuses a trust requirement listed twice (portal TagCreateModelValidator and
     // TagPatchModelValidator, MustNotHaveDuplicates on TrustRequirements). Names match ignoring
     // case, so "UK Only" repeats "uk only" (spec/cli-surface.md "Names and IDs").
@@ -279,9 +305,9 @@ public class TagCommandTests
         });
     }
 
-    // The error's candidates are empty (spec/cli-surface.md "Errors and exit codes").
+    // The error carries no candidates (spec/cli-surface.md "Errors and exit codes").
     [Test]
-    public async Task Tag_set_with_a_trust_requirement_no_requirement_has_exits_2_without_a_change()
+    public async Task Tag_set_with_a_trust_requirement_no_requirement_has_exits_5_without_a_change()
     {
         using var run = CliRun.Start();
         run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(4, "uk only (old)")));
@@ -290,12 +316,10 @@ public class TagCommandTests
 
         var result = await run.RunAsync("tag", "set", "prod", "--trust", "uk only");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
-        var candidates = error.GetProperty("candidates");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(candidates.ValueKind, Is.EqualTo(JsonValueKind.Array));
-            Assert.That(candidates.EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Requests.Where(request => request.Method != "GET"), Is.Empty);
         });
     }

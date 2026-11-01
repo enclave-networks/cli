@@ -47,7 +47,7 @@ public class DnsCommandTests
     // Zone 4 exists, so a CLI that read the argument "4" as an ID would print it.
     [TestCase("nowhere")]
     [TestCase("4")]
-    public async Task Dns_show_zone_given_a_name_no_zone_has_exits_2_with_no_candidates(string name)
+    public async Task Dns_show_zone_given_a_name_no_zone_has_exits_5_with_no_candidates(string name)
     {
         using var run = CliRun.Start();
         StubZones(run);
@@ -55,10 +55,10 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "show-zone", name);
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Requests.Select(request => request.Path), Is.Not.Empty.And.All.EqualTo(Zones));
         });
     }
@@ -277,7 +277,7 @@ public class DnsCommandTests
     }
 
     [Test]
-    public async Task Dns_list_hostnames_in_a_zone_no_zone_has_exits_2_without_listing_hostnames()
+    public async Task Dns_list_hostnames_in_a_zone_no_zone_has_exits_5_without_listing_hostnames()
     {
         using var run = CliRun.Start();
         StubZones(run);
@@ -285,10 +285,10 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "list-hostnames", "--zone", "nowhere");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.RequestsTo("GET", Records), Is.Empty);
         });
     }
@@ -317,7 +317,7 @@ public class DnsCommandTests
     // "db" is the record name of db.internal and db.lab, and the full name of neither.
     [TestCase("nowhere.internal")]
     [TestCase("db")]
-    public async Task Dns_show_hostname_given_a_name_no_hostname_has_exits_2_with_no_candidates(string hostname)
+    public async Task Dns_show_hostname_given_a_name_no_hostname_has_exits_5_with_no_candidates(string hostname)
     {
         using var run = CliRun.Start();
         StubHostnames(run);
@@ -326,10 +326,10 @@ public class DnsCommandTests
 
         var result = await run.RunAsync("dns", "show-hostname", hostname);
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Requests.Select(request => request.Method), Is.Not.Empty.And.All.EqualTo("GET"));
             Assert.That(run.Requests.Select(request => request.Path), Has.None.EqualTo(RecordPath("7")).And.None.EqualTo(RecordPath("9")));
         });
@@ -401,13 +401,28 @@ public class DnsCommandTests
         Assert.That(JsonRead.StringList(JsonAssert.Property(posts[0].BodyJson, "tags")), Is.EqualTo("web,frontend"));
     }
 
-    // xinternal ends in "internal" but not at a label boundary, and eu.internal would be the record
-    // "eu" in internal if zones were not matched whole.
+    // xinternal ends in "internal" but not at a label boundary, so it names a zone that does not
+    // exist.
     [TestCase("db.nowhere")]
     [TestCase("db.xinternal")]
+    public async Task Dns_create_hostname_whose_zone_does_not_exist_exits_5_without_creating_it(string hostname)
+    {
+        using var run = CliRun.Start();
+        StubZones(run);
+        run.Stub("POST", Records, json: DbInternal());
+
+        var result = await run.RunAsync("dns", "create-hostname", hostname);
+
+        CliAssert.Failed(result, "not_found");
+        Assert.That(run.RequestsTo("POST", Records), Is.Empty);
+    }
+
+    // A name with no dot is not a full hostname. eu.internal would be the record "eu" in internal if
+    // zones were not matched whole.
+    [TestCase("db")]
     [TestCase("internal")]
     [TestCase("eu.internal")]
-    public async Task Dns_create_hostname_with_no_zone_or_equal_to_a_zone_name_exits_2_without_creating_it(string hostname)
+    public async Task Dns_create_hostname_that_is_not_a_full_hostname_or_is_a_zone_name_exits_2_without_creating_it(string hostname)
     {
         using var run = CliRun.Start();
         StubZones(run);
@@ -519,6 +534,26 @@ public class DnsCommandTests
     }
 
     [Test]
+    public async Task Dns_update_hostname_name_whose_zone_does_not_exist_exits_5_naming_only_the_option_without_a_change()
+    {
+        using var run = CliRun.Start();
+        StubZones(run);
+        StubHostnames(run);
+        run.Stub("GET", RecordPath("7"), json: DbInternal());
+        run.Stub("PATCH", RecordPath("7"), json: DbInternal());
+
+        var result = await run.RunAsync("dns", "update-hostname", "--id", "7", "--name", "db2.nowhere");
+
+        var error = CliAssert.Failed(result, "not_found");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.RequestsTo("PATCH", RecordPath("7")), Is.Empty);
+            CliAssert.Problems(error, "--name");
+            Assert.That(result.Stderr, Does.Not.Contain("nowhere"));
+        });
+    }
+
+    [Test]
     public async Task Dns_delete_hostname_looks_each_hostname_up_and_deletes_them_in_one_bulk_call()
     {
         using var run = CliRun.Start();
@@ -549,7 +584,7 @@ public class DnsCommandTests
         ArgumentNullException.ThrowIfNull(commandLine);
         ArgumentNullException.ThrowIfNull(suffix);
         using var run = CliRun.Start();
-        run.StubRaw(method, TestData.OrgPath(suffix), 404, LoopbackApi.ProblemContentType, Problem(404, problemType, "Not Found", "No such DNS item."));
+        run.StubRaw(method, TestData.OrgPath(suffix), 404, LoopbackApi.ProblemContentType, ApiJson.ProblemOfType(404, problemType, "Not Found", "No such DNS item."));
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
@@ -563,20 +598,20 @@ public class DnsCommandTests
     }
 
     // The API answers 404 no-such-system for a system it does not know (portal
-    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync), but the hostname exists, so
-    // exit 5 would be wrong.
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync), an item --set-systems names
+    // ("Errors and exit codes").
     [TestCase("dns update-hostname --id 7 --set-systems ABCDE,ZZZZZ")]
     [TestCase("dns update-hostname db.internal --set-systems ABCDE,ZZZZZ")]
-    public async Task Dns_update_hostname_with_a_system_the_api_does_not_know_exits_1_api_error(string commandLine)
+    public async Task Dns_update_hostname_with_a_system_the_api_does_not_know_exits_5_not_found(string commandLine)
     {
         ArgumentNullException.ThrowIfNull(commandLine);
         using var run = CliRun.Start();
         StubHostnames(run);
-        run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, Problem(404, "no-such-system", "System Not Found", UnknownSystemDetail));
+        run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, ApiJson.ProblemOfType(404, "no-such-system", "System Not Found", UnknownSystemDetail));
 
         var result = await run.RunAsync(commandLine.Split(' '));
 
-        var error = CliAssert.Failed(result, "api_error");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
@@ -600,7 +635,7 @@ public class DnsCommandTests
         }
         else
         {
-            run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, Problem(404, problemType, "Not Found", "No such DNS item."));
+            run.StubRaw("PATCH", RecordPath("7"), 404, LoopbackApi.ProblemContentType, ApiJson.ProblemOfType(404, problemType, "Not Found", "No such DNS item."));
         }
 
         var result = await run.RunAsync("dns", "update-hostname", "--id", "7", "--notes", "Reviewed");
@@ -613,20 +648,20 @@ public class DnsCommandTests
         });
     }
 
-    // The hostname does not exist yet, so no 404 means it was not found. The API answers 404 for an
-    // unknown system (portal DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync) and for
-    // a zone deleted since the CLI read it (portal DnsRecordCreateHandler.GetResponseAsync).
+    // The API answers 404 for an unknown system (portal
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync) and for a zone deleted since
+    // the CLI read it (portal DnsRecordCreateHandler.GetResponseAsync).
     [TestCase("no-such-system", "System Not Found", UnknownSystemDetail)]
     [TestCase("no-such-zone", "Zone does not exist", "Specified owning zone #4 does not exist.")]
-    public async Task Dns_create_hostname_answered_404_exits_1_api_error(string problemType, string title, string detail)
+    public async Task Dns_create_hostname_answered_that_a_system_or_zone_does_not_exist_exits_5_not_found(string problemType, string title, string detail)
     {
         using var run = CliRun.Start();
         StubZones(run);
-        run.StubRaw("POST", Records, 404, LoopbackApi.ProblemContentType, Problem(404, problemType, title, detail));
+        run.StubRaw("POST", Records, 404, LoopbackApi.ProblemContentType, ApiJson.ProblemOfType(404, problemType, title, detail));
 
         var result = await run.RunAsync("dns", "create-hostname", "db.internal", "--systems", "ABCDE,ZZZZZ");
 
-        var error = CliAssert.Failed(result, "api_error");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
             Assert.That(error.GetProperty("status").GetInt32(), Is.EqualTo(404));
@@ -754,14 +789,6 @@ public class DnsCommandTests
 
     // The problem type is a URL ending in the problem's name, as the API writes it (portal
     // ProblemResponseFactory.GetProblemTypeUrl; Enclave.Api WebStartup.Configure).
-    private static string Problem(int status, string type, string title, string detail) => new JsonObject
-    {
-        ["type"] = $"https://api.enclave.io/problems/type/{type}",
-        ["title"] = title,
-        ["status"] = status,
-        ["detail"] = detail,
-    }.ToJsonString();
-
     private static string ZonePath(string id) => $"{Zones}/{id}";
 
     private static string RecordPath(string id) => $"{Records}/{id}";

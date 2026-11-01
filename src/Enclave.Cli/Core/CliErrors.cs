@@ -11,8 +11,12 @@ internal static class CliErrors
     // Exit 2 for a problem no single option or argument owns.
     public static CliException InvalidArgument(string message) => new(ErrorCode.InvalidArgument, message);
 
-    // For a name that matched no item or several; candidates is empty for no match
+    // Exit 5 for a name that matched no item, or an organisation the token does not see
     // (spec/cli-surface.md "Errors and exit codes").
+    public static CliException NotFound(string key, string message) =>
+        new(ErrorCode.NotFound, message, errors: Field(key, message));
+
+    // For a name that matched several items, with them as candidates.
     public static CliException NameNotUnique(string key, string message, JsonArray candidates) =>
         new(ErrorCode.InvalidArgument, message, errors: Field(key, message)) { Candidates = candidates };
 

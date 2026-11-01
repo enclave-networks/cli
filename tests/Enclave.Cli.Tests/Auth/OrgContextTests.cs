@@ -368,12 +368,12 @@ public class OrgContextTests
         });
     }
 
-    // no_org is for an organisation not chosen at all, so a name that found nothing is
-    // invalid_argument ("Errors and exit codes").
+    // no_org is for an organisation not chosen at all, so a name that found nothing is not_found
+    // ("Errors and exit codes").
     [TestCase("--org")]
     [TestCase("ENCLAVE_CLI_ORG")]
     [TestCase("org use")]
-    public async Task An_organisation_name_matching_no_organisation_exits_2_with_an_empty_list_of_candidates(string source)
+    public async Task An_organisation_name_matching_no_organisation_exits_5_with_no_candidates(string source)
     {
         using var run = CliRun.Start();
         run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
@@ -381,10 +381,10 @@ public class OrgContextTests
 
         var result = await RunWithOrgNameAsync(run, source, "Initech");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(HasEmptyCandidates(error), Is.True, error.ToString());
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
             Assert.That(SavedDefault(run), Is.Null);
         });
@@ -612,7 +612,7 @@ public class OrgContextTests
     // org use --id makes one lookup ("Login, logout and status"). The ID is a valid GUID, so the
     // refusal comes from the lookup.
     [Test]
-    public async Task Org_use_id_exits_2_and_saves_nothing_for_an_organisation_the_token_does_not_see()
+    public async Task Org_use_id_exits_5_and_saves_nothing_for_an_organisation_the_token_does_not_see()
     {
         using var run = CliRun.Start();
         run.SaveLogin();
@@ -620,7 +620,7 @@ public class OrgContextTests
 
         var result = await run.RunAsync("org", "use", "--id", ThirdOrgId.ToString());
 
-        CliAssert.Failed(result, "invalid_argument");
+        CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
             Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
@@ -752,13 +752,6 @@ public class OrgContextTests
 
     private static string Candidate(JsonElement candidate) =>
         Pair(Guid.Parse(JsonAssert.Property(candidate, "id").GetString()!, CultureInfo.InvariantCulture), JsonAssert.Property(candidate, "name").GetString()!);
-
-    // A caller reads one shape whatever the match, so no property, or null, does not pass ("Errors
-    // and exit codes").
-    private static bool HasEmptyCandidates(JsonElement error) =>
-        error.TryGetProperty("candidates", out var candidates)
-        && candidates.ValueKind == JsonValueKind.Array
-        && candidates.GetArrayLength() == 0;
 
     private static string Pairs(params (Guid Id, string Name)[] orgs) =>
         string.Join(", ", orgs.Select(org => Pair(org.Id, org.Name)).Order(StringComparer.Ordinal));

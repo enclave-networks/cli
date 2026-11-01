@@ -131,7 +131,7 @@ public partial class TrustCommandTests
     }
 
     [Test]
-    public async Task Trust_delete_with_a_description_no_requirement_has_exits_2_without_deleting_anything()
+    public async Task Trust_delete_with_a_description_no_requirement_has_exits_5_without_deleting_anything()
     {
         using var run = CliRun.Start();
         run.Stub("GET", TrustsPath, json: ApiJson.Page(ApiJson.Trust(4, "uk only (old)")));
@@ -139,10 +139,10 @@ public partial class TrustCommandTests
 
         var result = await run.RunAsync("trust", "delete", "uk only");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.RequestsTo("DELETE", TrustsPath), Is.Empty);
         });
     }

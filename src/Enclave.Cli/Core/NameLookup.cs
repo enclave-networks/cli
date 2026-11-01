@@ -7,8 +7,8 @@ namespace Enclave.Cli.Core;
 // spec/cli-surface.md "Names and IDs"
 internal static class NameLookup
 {
-    // Names match whole, ignoring case. A name that matches no item or several exits 2 with the
-    // matches as candidates. Makes no call when names is empty. readPage must ask for disabled
+    // Names match whole, ignoring case. A name that matches no item exits 5, and one that matches
+    // several exits 2 with the matches as candidates. Makes no call when names is empty. readPage must ask for disabled
     // items too, since enable takes a disabled item by name (spec/cli-surface.md "Filters").
     public static async Task<IReadOnlyList<TItem>> FindAsync<TItem, TId>(
         IReadOnlyList<string> names,
@@ -56,8 +56,8 @@ internal static class NameLookup
             .ToArray();
     }
 
-    // The one item whose name matches, ignoring case. No match, or several, exits 2 with noMatch
-    // or several as the detail and the matches as candidates.
+    // The one item whose name matches, ignoring case. No match exits 5 with noMatch as the detail;
+    // several exit 2 with several as the detail and the matches as candidates.
     public static TItem One<TItem, TId>(
         string name,
         IReadOnlyCollection<TItem> items,
@@ -78,6 +78,11 @@ internal static class NameLookup
             return matches[0];
         }
 
+        if (matches.Length == 0)
+        {
+            throw CliErrors.NotFound(key, noMatch);
+        }
+
         var candidates = new JsonArray(matches
             .Select(item => (JsonNode?)new JsonObject
             {
@@ -86,6 +91,6 @@ internal static class NameLookup
             })
             .ToArray());
 
-        throw CliErrors.NameNotUnique(key, matches.Length == 0 ? noMatch : several, candidates);
+        throw CliErrors.NameNotUnique(key, several, candidates);
     }
 }

@@ -8,8 +8,19 @@ namespace Enclave.Cli.Core;
 
 internal static class ApiErrors
 {
+    // The API's problem types for an item an option names that does not exist (portal
+    // DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync, DnsRecordCreateHandler,
+    // TrustRequirementExceptionExtensions.TrustRequirementDoesNotExist).
+    private static readonly HashSet<string> MissingItemTypes = new(StringComparer.Ordinal)
+    {
+        "no-such-system",
+        "no-such-zone",
+        "trust-requirement-does-not-exist",
+    };
+
     // Returns a CliException unchanged. With notFoundIsUnknownItem, a 404 means the item the
-    // command named does not exist (exit 5); without it, a 404 is an API error (exit 1).
+    // command named does not exist (exit 5); without it, a 404 is an API error (exit 1). Either
+    // way, a problem type in MissingItemTypes exits 5.
     public static CliException ToCliException(Exception exception, bool notFoundIsUnknownItem = false)
     {
         ArgumentNullException.ThrowIfNull(exception);
@@ -29,8 +40,12 @@ internal static class ApiErrors
                     ? fieldErrors.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<string>)pair.Value, StringComparer.Ordinal)
                     : null;
 
+                var code = ProblemType(api) is { } type && MissingItemTypes.Contains(type)
+                    ? ErrorCode.NotFound
+                    : ForStatus(status, notFoundIsUnknownItem);
+
                 return new CliException(
-                    ForStatus(status, notFoundIsUnknownItem),
+                    code,
                     problem?.Detail ?? problem?.Title ?? api.Message,
                     status,
                     problem?.Title,
@@ -82,6 +97,12 @@ internal static class ApiErrors
                 return new CliException(ErrorCode.ApiError, $"{exception.GetType().Name}: {exception.Message}", innerException: exception);
         }
     }
+
+    // The API writes a problem type as a URL that ends in the type's name (portal
+    // ProblemResponseFactory.GetProblemTypeUrl; Enclave.Api/WebStartup.cs, Configure, the
+    // "problem-type" route). Null without problem details or a type.
+    public static string? ProblemType(Exception exception) =>
+        exception is EnclaveApiException { ProblemDetails.Type: { } type } ? type[(type.LastIndexOf('/') + 1)..] : null;
 
     // True when the API answered 404, with problem details or without.
     public static bool IsNotFound(Exception exception) => exception switch

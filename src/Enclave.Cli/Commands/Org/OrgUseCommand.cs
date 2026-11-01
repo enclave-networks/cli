@@ -24,7 +24,7 @@ internal static class OrgUseCommand
 
             var organisation = context.Get(id) is { } guid
                 ? organisations.FirstOrDefault(candidate => candidate.OrgId.Equals(OrganisationGuid.FromGuid(guid)))
-                    ?? throw CliErrors.NameNotUnique(id.Name, $"The token sees no organisation with ID {guid:D}.", OrganisationResolver.Candidates([]))
+                    ?? throw OrganisationResolver.Unseen(id.Name, OrganisationGuid.FromGuid(guid))
                 : OrganisationResolver.MatchName(context.Get(name)!, organisations, name.Name);
 
             context.Trace.Saved(CredentialsFile.SaveDefaultOrganisation(context.Host, organisation.OrgId));

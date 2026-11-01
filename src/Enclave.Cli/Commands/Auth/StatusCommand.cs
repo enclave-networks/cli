@@ -23,15 +23,16 @@ internal static class StatusCommand
             var choice = OrganisationResolver.Choose(context);
             var partnerChoice = PartnerResolver.Choose(context);
 
-            // The one call checks the token, and a name or the only organisation is resolved from
-            // its response.
+            // The one call checks the token and the organisation, and a name or the only
+            // organisation is resolved from its response.
             var organisations = await client.GetOrganisationsAsync();
             JsonObject? org = null;
 
             if (choice?.Id is { } id)
             {
-                var known = organisations.FirstOrDefault(organisation => organisation.OrgId.Equals(id));
-                org = Org(id.ToString(), known?.OrgName ?? choice.Name, known?.Role.ToString(), choice.Source);
+                var known = organisations.FirstOrDefault(organisation => organisation.OrgId.Equals(id))
+                    ?? throw OrganisationResolver.Unseen(choice.Source, id);
+                org = Org(id.ToString(), known.OrgName, known.Role.ToString(), choice.Source);
             }
             else if (choice?.Name is { } name)
             {

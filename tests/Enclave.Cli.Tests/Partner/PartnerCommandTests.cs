@@ -170,16 +170,16 @@ public class PartnerCommandTests
     [TestCase("Globex")]
     [TestCase("Globex Ltd.")]
     [TestCase("Umbrella Corp")]
-    public async Task A_customer_name_that_matches_no_customer_exits_2_with_no_candidates(string name)
+    public async Task A_customer_name_that_matches_no_customer_exits_5_with_no_candidates(string name)
     {
         using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "show", name);
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.PartnerPath("customers")}" }));
         });
     }
@@ -460,16 +460,16 @@ public class PartnerCommandTests
     }
 
     [Test]
-    public async Task Partner_customer_remove_admin_given_an_email_no_admin_has_exits_2_with_no_candidates()
+    public async Task Partner_customer_remove_admin_given_an_email_no_admin_has_exits_5_with_no_candidates()
     {
         using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "remove-admin", "--org-id", TestData.CustomerOrgId, "--user", "nobody@example.com");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.CustomerPath(TestData.CustomerOrgId, "admins")}" }));
         });
     }
@@ -536,16 +536,16 @@ public class PartnerCommandTests
     }
 
     [Test]
-    public async Task Partner_customer_cancel_invite_for_an_address_with_no_pending_invite_exits_2_with_no_candidates()
+    public async Task Partner_customer_cancel_invite_for_an_address_with_no_pending_invite_exits_5_with_no_candidates()
     {
         using var run = PartnerApiFake.StartWithPartner();
 
         var result = await run.RunAsync("partner", "customer", "cancel-invite", "--org-id", TestData.CustomerOrgId, "--email", "nobody@example.com");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {TestData.CustomerPath(TestData.CustomerOrgId, "invites")}" }));
         });
     }

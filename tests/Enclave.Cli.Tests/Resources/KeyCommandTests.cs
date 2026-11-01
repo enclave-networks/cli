@@ -224,7 +224,7 @@ public class KeyCommandTests
     // "ci runners 2026" starts with the name given, which is not a match (spec/cli-surface.md
     // "Names and IDs").
     [Test]
-    public async Task Key_show_with_a_description_that_matches_no_key_exits_2_after_the_lookup_alone()
+    public async Task Key_show_with_a_description_that_matches_no_key_exits_5_after_the_lookup_alone()
     {
         using var run = CliRun.Start();
         run.Stub("GET", KeysPath, json: ApiJson.Page(ApiJson.Key(12, "build agents"), ApiJson.Key(14, "ci runners 2026")));
@@ -233,7 +233,7 @@ public class KeyCommandTests
 
         var result = await run.RunAsync("key", "show", "ci runners");
 
-        CliAssert.Failed(result, "invalid_argument");
+        CliAssert.Failed(result, "not_found");
         Assert.That(run.Requests.Select(request => request.Path), Is.Not.Empty.And.All.EqualTo(KeysPath));
     }
 

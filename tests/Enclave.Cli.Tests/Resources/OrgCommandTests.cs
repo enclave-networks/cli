@@ -119,7 +119,7 @@ public class OrgCommandTests
     }
 
     [Test]
-    public async Task Org_remove_user_given_an_email_no_member_has_exits_2_with_no_candidates()
+    public async Task Org_remove_user_given_an_email_no_member_has_exits_5_with_no_candidates()
     {
         using var run = CliRun.Start();
         run.Stub("GET", TestData.OrgPath("users"), json: ApiJson.Users((SamId, SamEmail), (AlexId, AlexEmail)));
@@ -128,10 +128,10 @@ public class OrgCommandTests
 
         var result = await run.RunAsync("org", "remove-user", "nobody@example.com");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").EnumerateArray(), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Requests.Select(request => request.Method), Is.Not.Empty.And.All.EqualTo("GET"));
         });
     }

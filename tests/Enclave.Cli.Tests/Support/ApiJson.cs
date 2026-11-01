@@ -89,6 +89,16 @@ internal static partial class ApiJson
         ["detail"] = detail,
     }.ToJsonString();
 
+    // A problem details body with the API's problem type, a URL ending in the type's name (portal
+    // ProblemResponseFactory.GetProblemTypeUrl).
+    public static string ProblemOfType(int status, string type, string title, string detail) => new JsonObject
+    {
+        ["type"] = $"https://api.enclave.io/problems/type/{type}",
+        ["title"] = title,
+        ["status"] = status,
+        ["detail"] = detail,
+    }.ToJsonString();
+
     // A QueryAccountOrgsResponseModel, the GET /account/orgs body, of Org items.
     public static string Orgs(params (Guid Id, string Name)[] orgs) =>
         OrgsOf(orgs.Select(org => Org(org.Id, org.Name)).ToArray());

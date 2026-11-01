@@ -108,10 +108,10 @@ public class OptionDecidesParsingTests
 
         var result = await run.RunAsync("system", "disable", "ABCDE", "--org", TestData.OtherOrgId.ToString());
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").GetArrayLength(), Is.Zero);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(string.Join(",", run.Calls()), Is.EqualTo("GET /account/orgs"));
         });
     }
@@ -128,10 +128,10 @@ public class OptionDecidesParsingTests
 
         var rejected = await run.RunAsync("org", "remove-user", TestData.PartnerStaffAccountId);
 
-        var error = CliAssert.Failed(rejected, "invalid_argument");
+        var error = CliAssert.Failed(rejected, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(error, "candidates").GetArrayLength(), Is.Zero);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.Requests.Where(request => request.Method != "GET"), Is.Empty);
         });
 

@@ -196,7 +196,7 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "show", "../tags");
 
-        CliAssert.Failed(result, "invalid_argument");
+        CliAssert.Failed(result, "not_found");
         Assert.That(run.Calls(), Is.Not.Empty.And.All.EqualTo("GET " + PoliciesPath));
     }
 
@@ -253,7 +253,7 @@ public partial class PolicyCommandTests
 
     // "web to db (old)" contains the name and must not match.
     [Test]
-    public async Task Policy_disable_with_a_description_no_policy_has_exits_2_without_disabling_anything()
+    public async Task Policy_disable_with_a_description_no_policy_has_exits_5_without_disabling_anything()
     {
         using var run = CliRun.Start();
         run.Stub("GET", PoliciesPath, json: ApiJson.Page(ApiJson.Policy(40, "web to db (old)")));
@@ -261,10 +261,10 @@ public partial class PolicyCommandTests
 
         var result = await run.RunAsync("policy", "disable", "web to db");
 
-        var error = CliAssert.Failed(result, "invalid_argument");
+        var error = CliAssert.Failed(result, "not_found");
         Assert.Multiple(() =>
         {
-            Assert.That(NameLookup.CandidateIds(error), Is.Empty);
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
             Assert.That(run.RequestsTo("PUT", BulkPath("disable")), Is.Empty);
         });
     }

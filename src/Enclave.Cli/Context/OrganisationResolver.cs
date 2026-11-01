@@ -107,10 +107,14 @@ internal static class OrganisationResolver
         return matches.Length switch
         {
             1 => matches[0],
-            0 => throw CliErrors.NameNotUnique(key, $"The token sees no organisation named \"{name}\".", []),
+            0 => throw CliErrors.NotFound(key, $"The token sees no organisation named \"{name}\"."),
             _ => throw CliErrors.NameNotUnique(key, $"{matches.Length} organisations are named \"{name}\". Choose one by ID with --org-id.", Candidates(matches)),
         };
     }
+
+    // For an organisation given by ID that is not in the token's organisations; key is what gave it.
+    public static CliException Unseen(string key, OrganisationGuid id) =>
+        CliErrors.NotFound(key, $"The token sees no organisation with ID {id}.");
 
     public static JsonArray Candidates(IEnumerable<AccountOrganisationModel> organisations)
     {

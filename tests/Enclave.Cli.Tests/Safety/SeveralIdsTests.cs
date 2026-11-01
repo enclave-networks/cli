@@ -251,25 +251,37 @@ public class SeveralIdsTests
     // Deleting the others would leave the caller to work out which went. The candidates let the
     // caller pick one by ID without another call ("Names and IDs"). "old vpn" matches two policies
     // that differ only in case.
-    [TestCase("no such policy", "")]
-    [TestCase("old vpn", "17,18")]
-    public async Task Policy_delete_exits_2_with_the_candidates_and_deletes_nothing_when_a_name_matches_no_policy_or_several(string name, string candidateIds)
+    [Test]
+    public async Task Policy_delete_exits_2_with_the_candidates_and_deletes_nothing_when_a_name_matches_several_policies()
     {
         using var run = CliRun.Start();
-        var policies = TestData.OrgPath("policies");
-        run.Stub("GET", policies, 200, ApiJson.Page(ApiJson.Policy(42, "web to db"), ApiJson.Policy(17, "old vpn"), ApiJson.Policy(18, "Old VPN")));
-        run.StubBulk("DELETE", policies, "policiesDeleted", 1);
+        var policies = StubPoliciesToDelete(run);
 
-        var result = await run.RunAsync("policy", "delete", "web to db", name);
+        var result = await run.RunAsync("policy", "delete", "web to db", "old vpn");
 
         var error = CliAssert.Failed(result, "invalid_argument");
-        var candidates = JsonAssert.Property(error, "candidates");
         Assert.Multiple(() =>
         {
-            Assert.That(candidates.ValueKind, Is.EqualTo(JsonValueKind.Array), result.ToString());
+            Assert.That(NameLookup.CandidateIds(error), Is.EqualTo("17,18"), result.ToString());
             Assert.That(run.RequestsTo("DELETE", policies), Is.Empty);
         });
-        Assert.That(NameLookup.CandidateIds(error), Is.EqualTo(candidateIds));
+    }
+
+    // Deleting the others would leave the caller to work out which went.
+    [Test]
+    public async Task Policy_delete_exits_5_and_deletes_nothing_when_a_name_matches_no_policy()
+    {
+        using var run = CliRun.Start();
+        var policies = StubPoliciesToDelete(run);
+
+        var result = await run.RunAsync("policy", "delete", "web to db", "no such policy");
+
+        var error = CliAssert.Failed(result, "not_found");
+        Assert.Multiple(() =>
+        {
+            Assert.That(error.TryGetProperty("candidates", out _), Is.False, error.ToString());
+            Assert.That(run.RequestsTo("DELETE", policies), Is.Empty);
+        });
     }
 
     // Each item is acted on once and counted once in requested ("Several IDs").
@@ -396,6 +408,16 @@ public class SeveralIdsTests
         450 => [200, 150, 40],
         _ => throw new ArgumentOutOfRangeException(nameof(count), count, "No counts for this number of IDs."),
     };
+
+    // "old vpn" and "Old VPN" differ only in case, so the name "old vpn" matches both. Returns the
+    // policies path.
+    private static string StubPoliciesToDelete(CliRun run)
+    {
+        var policies = TestData.OrgPath("policies");
+        run.Stub("GET", policies, 200, ApiJson.Page(ApiJson.Policy(42, "web to db"), ApiJson.Policy(17, "old vpn"), ApiJson.Policy(18, "Old VPN")));
+        run.StubBulk("DELETE", policies, "policiesDeleted", 1);
+        return policies;
+    }
 
     // The bulk counts sit in the error object beside "code" ("Several IDs"). A count that is missing
     // or not a number reads as null, which no expected count equals.

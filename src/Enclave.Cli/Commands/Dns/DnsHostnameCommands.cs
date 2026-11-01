@@ -3,7 +3,6 @@ using Enclave.Api.Modules.SystemManagement.Dns.Models;
 using Enclave.Cli.Context;
 using Enclave.Cli.Core;
 using Enclave.Configuration.Data.Identifiers;
-using Enclave.Sdk.Api.Exceptions;
 
 namespace Enclave.Cli.Commands.Dns;
 
@@ -216,8 +215,8 @@ internal static class DnsHostnameCommands
 
     // The patch answers 404 for the hostname (dns-record-not-found, portal
     // DnsController.DnsRecordNotFoundResult) and for a --set-systems system it does not find
-    // (no-such-system, DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync). Only the
-    // first exits 5; any other 404 exits 1 with the API's detail.
+    // (no-such-system, DnsRecordHandlerBase.ValidateReferencedSystemsAreAllValidAsync). Both exit 5
+    // (ApiErrors); any other 404 exits 1 with the API's detail.
     private static async Task<T> PatchAsync<T>(Func<Task<T>> patch)
     {
         try
@@ -230,12 +229,8 @@ internal static class DnsHostnameCommands
         }
     }
 
-    // The API writes a problem type as a URL that ends in the type's name (portal
-    // ProblemResponseFactory.GetProblemTypeUrl; Enclave.Api/WebStartup.cs, Configure, the
-    // "problem-type" route).
     private static bool IsHostnameNotFound(Exception exception) =>
-        exception is EnclaveApiException { ProblemDetails.Type: { } type }
-        && string.Equals(type[(type.LastIndexOf('/') + 1)..], "dns-record-not-found", StringComparison.Ordinal);
+        string.Equals(ApiErrors.ProblemType(exception), "dns-record-not-found", StringComparison.Ordinal);
 
     private static (CliVerb Verb, Argument<string?> Hostname, Option<int?> Id) ForHostname(string name, string description, bool changes)
     {

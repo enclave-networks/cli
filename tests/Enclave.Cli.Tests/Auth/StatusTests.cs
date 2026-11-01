@@ -190,6 +190,38 @@ public class StatusTests
         });
     }
 
+    // A status that succeeded here would tell a caller checking access that the token can act in
+    // the organisation ("Login, logout and status").
+    [TestCase("--org-id")]
+    [TestCase("--org")]
+    [TestCase("ENCLAVE_CLI_ORG_ID")]
+    [TestCase("credentials.json")]
+    public async Task Status_exits_5_for_an_organisation_the_token_does_not_see(string chosenBy)
+    {
+        using var run = CliRun.Start();
+        run.Stub("GET", "/account/orgs", json: OnlyGlobexAsAdmin());
+        string[] args = ["status"];
+
+        switch (chosenBy)
+        {
+            case "--org-id":
+                args = [.. args, "--org-id", TestData.OrgId.ToString()];
+                break;
+            case "--org":
+                args = [.. args, "--org", TestData.OrgName];
+                break;
+            case "credentials.json":
+                run.Environment.Remove("ENCLAVE_CLI_ORG_ID");
+                run.SaveLogin(defaultOrgId: TestData.OrgId.ToString());
+                break;
+        }
+
+        var result = await run.RunAsync(args);
+
+        CliAssert.Failed(result, "not_found");
+        Assert.That(run.Calls(), Is.EqualTo(OrgLookupOnly));
+    }
+
     // Partners cannot be looked up with a personal access token, so status makes no call for one
     // ("Context"). With --partner-id, the variable names another partner.
     [TestCase("--partner-id")]
