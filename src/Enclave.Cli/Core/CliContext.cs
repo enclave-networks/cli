@@ -95,12 +95,6 @@ internal sealed class CliContext : IDisposable
     {
         var organisation = await OrganisationResolver.ResolveAsync(this, GetClient());
         Trace.Organisation = organisation;
-
-        if (DryRun is { } dryRun)
-        {
-            dryRun.Organisation = organisation;
-        }
-
         return organisation;
     }
 
@@ -111,15 +105,9 @@ internal sealed class CliContext : IDisposable
         var client = Client;
         var choice = PartnerResolver.Resolve(this);
 
-        var partner = new PartnerInUse(choice.Id, choice.Source, client.CreatePartnerClient(PartnerId.FromGuid(choice.Id)));
+        var partner = new PartnerInUse(choice.Id, client.CreatePartnerClient(PartnerId.FromGuid(choice.Id)));
         Trace.PartnerApi = Access.PartnerApiUrl;
         Trace.Partner = partner;
-
-        if (DryRun is { } dryRun)
-        {
-            dryRun.Partner = partner;
-        }
-
         return Task.FromResult(partner);
     }
 

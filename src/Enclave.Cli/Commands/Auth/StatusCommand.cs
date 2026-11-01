@@ -51,7 +51,7 @@ internal static class StatusCommand
             await context.Output.WriteAsync(
                 new JsonObject
                 {
-                    ["token"] = new JsonObject { ["source"] = context.Access.TokenSource },
+                    ["tokenSource"] = context.Access.TokenSource,
                     ["org"] = org,
                     ["partner"] = partner,
                 },

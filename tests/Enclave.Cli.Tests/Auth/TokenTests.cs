@@ -333,7 +333,7 @@ public class TokenTests
                 Assert.That(requests, Is.Not.Empty);
                 Assert.That(requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
                 var trace = result.ExitCode == 0 ? result.StdoutTrace : result.StderrTrace;
-                Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.Not.Empty, result.ToString());
+                Assert.That(JsonAssert.Property(trace, "tokenSource").GetString(), Is.Not.Empty, result.ToString());
             }
             else
             {

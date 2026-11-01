@@ -147,7 +147,7 @@ public class LoginTests
             Assert.That(run.Terminal.Output, Does.Contain($"{Question(run.ApiUrl)} [saved]"));
             Assert.That(run.SingleRequest().Authorization, Is.EqualTo($"Bearer {OldToken}"));
             Assert.That(SavedToken(run), Is.EqualTo(OldToken));
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo(run.CredentialsPath));
+            Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo(run.CredentialsPath));
         });
     }
 

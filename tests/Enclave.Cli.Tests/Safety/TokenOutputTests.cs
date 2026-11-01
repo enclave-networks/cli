@@ -21,7 +21,7 @@ public class TokenOutputTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -39,7 +39,7 @@ public class TokenOutputTests
         {
             Assert.That(JsonAssert.Property(result.StdoutJson, "dryRun").GetBoolean(), Is.True);
             Assert.That(command.ChangeRequests(run), Is.Empty);
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             TokenAssert.Absent(result);
         });
     }
@@ -58,7 +58,7 @@ public class TokenOutputTests
         Assert.Multiple(() =>
         {
             Assert.That(string.Join(",", command.ChangeRequests(run).Select(request => request.Authorization)), Is.EqualTo($"Bearer {TestData.Token}"));
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo(run.CredentialsPath), result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo(run.CredentialsPath), result.ToString());
             TokenAssert.Absent(result);
         });
     }

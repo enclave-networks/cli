@@ -19,8 +19,7 @@ public class PartnerSafetyTests
 
     private static readonly string[] AdminVerbs = ["add-admin", "remove-admin"];
 
-    // "partner" takes the place of "org" ("Dry run").
-    private static readonly string[] DryRunFields = ["dryRun", "partner", "requests"];
+    private static readonly string[] DryRunFields = ["dryRun", "requests"];
 
     [TestCaseSource(nameof(CustomerOrgIdsThatAreNotGuids))]
     public async Task A_customer_org_id_that_is_not_a_guid_exits_2_before_the_partner_api(string[] rejected, string[] corrected)
@@ -82,13 +81,11 @@ public class PartnerSafetyTests
         var requests = JsonAssert.Property(output, "requests");
         Assert.That(requests.GetArrayLength(), Is.EqualTo(1), result.ToString());
         var url = new Uri(JsonAssert.Property(requests[0], "url").GetString()!);
-        var partner = JsonAssert.Property(output, "partner");
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(DryRunFields), result.ToString());
             Assert.That(JsonAssert.Property(output, "dryRun").GetBoolean(), Is.True);
-            Assert.That(JsonRead.PropertyNameList(partner), Is.EqualTo("id"));
-            Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId));
+            Assert.That(JsonRead.GuidOf(JsonAssert.Property(result.StdoutTrace, "partnerId")), Is.EqualTo(TestData.PartnerId), result.ToString());
             Assert.That($"{JsonAssert.Property(requests[0], "method").GetString()} {url.AbsolutePath}", Is.EqualTo(change));
             Assert.That(url.GetLeftPart(UriPartial.Authority), Is.EqualTo(run.PartnerApiUrl.GetLeftPart(UriPartial.Authority)));
             Assert.That(run.Calls(), Is.EqualTo(reads));
@@ -144,7 +141,7 @@ public class PartnerSafetyTests
         CliAssert.Succeeded(result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(JsonAssert.Property(result.StdoutTrace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
+            Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             Assert.That(run.Calls(), Is.EqualTo(calls), result.ToString());
             Assert.That(run.Requests.Select(request => request.Authorization), Is.All.EqualTo($"Bearer {TestData.Token}"));
         });

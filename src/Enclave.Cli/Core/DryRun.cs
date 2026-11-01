@@ -3,7 +3,6 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Enclave.Cli.Context;
 
 namespace Enclave.Cli.Core;
 
@@ -13,10 +12,6 @@ internal sealed class DryRun
     private readonly List<JsonObject> _requests = [];
 
     private readonly Lock _lock = new();
-
-    public OrganisationInUse? Organisation { get; set; }
-
-    public PartnerInUse? Partner { get; set; }
 
     // The headers are left out, so the token in the Authorization header stays out of the report.
     public async Task CaptureAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -49,7 +44,6 @@ internal sealed class DryRun
         RequestMessage = request,
     };
 
-    // The organisation's name is null when it was given by ID.
     public JsonObject Report()
     {
         JsonArray requests;
@@ -59,19 +53,7 @@ internal sealed class DryRun
             requests = new JsonArray(_requests.Select(request => (JsonNode?)request.DeepClone()).ToArray());
         }
 
-        var report = new JsonObject { ["dryRun"] = true };
-
-        if (Organisation is null && Partner is { } partner)
-        {
-            report["partner"] = new JsonObject { ["id"] = partner.Id.ToString("D") };
-        }
-        else
-        {
-            report["org"] = Organisation is { } org ? new JsonObject { ["id"] = org.Id.ToString(), ["name"] = org.Name } : null;
-        }
-
-        report["requests"] = requests;
-        return report;
+        return new JsonObject { ["dryRun"] = true, ["requests"] = requests };
     }
 
     // Every body Enclave.Sdk.Api sends is JSON; any other is shown as text, so the report holds what

@@ -330,7 +330,7 @@ public class OrgCommandTests
 
         var result = await run.RunAsync("org", "remove-user", SamEmail, "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         var url = JsonAssert.Property(request, "url").GetString()!;
         Assert.Multiple(() =>
         {

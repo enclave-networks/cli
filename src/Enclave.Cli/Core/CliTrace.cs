@@ -48,7 +48,7 @@ internal sealed class CliTrace
 
         if (TokenSource is { } tokenSource)
         {
-            trace["token"] = new JsonObject { ["source"] = tokenSource };
+            trace["tokenSource"] = tokenSource;
         }
 
         if (Api is { } api)
@@ -63,12 +63,12 @@ internal sealed class CliTrace
 
         if (Organisation is { } org)
         {
-            trace["org"] = new JsonObject { ["id"] = org.Id.ToString(), ["name"] = org.Name, ["source"] = org.Source };
+            trace["orgId"] = org.Id.ToString();
         }
 
         if (Partner is { } partner)
         {
-            trace["partner"] = new JsonObject { ["id"] = partner.Id.ToString("D"), ["source"] = partner.Source };
+            trace["partnerId"] = partner.Id.ToString("D");
         }
 
         lock (_lock)

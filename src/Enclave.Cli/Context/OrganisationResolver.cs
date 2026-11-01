@@ -71,7 +71,7 @@ internal static class OrganisationResolver
 
         if (choice?.Id is { } id)
         {
-            return new OrganisationInUse(id, choice.Name, null, choice.Source, client.CreateOrganisationClient(id));
+            return new OrganisationInUse(id, client.CreateOrganisationClient(id));
         }
 
         var organisations = await client.GetOrganisationsAsync();
@@ -79,7 +79,7 @@ internal static class OrganisationResolver
         if (choice?.Name is { } name)
         {
             var match = MatchName(name, organisations, choice.Source);
-            return new OrganisationInUse(match.OrgId, match.OrgName, match.Role, choice.Source, client.CreateOrganisationClient(match));
+            return new OrganisationInUse(match.OrgId, client.CreateOrganisationClient(match));
         }
 
         if (organisations.Count != 1)
@@ -92,7 +92,7 @@ internal static class OrganisationResolver
         }
 
         var only = organisations[0];
-        return new OrganisationInUse(only.OrgId, only.OrgName, only.Role, OnlyOrganisation, client.CreateOrganisationClient(only));
+        return new OrganisationInUse(only.OrgId, client.CreateOrganisationClient(only));
     }
 
     // Matched whole and ignoring case. No match, or several, exits 2 with the matches as

@@ -315,16 +315,16 @@ No command asks for confirmation; `--dry-run` shows the request before it is sen
 
 ## Dry run
 
-`--dry-run` prints the requests `Enclave.Sdk.Api` builds for the change, with the organisation (the partner, for a partner customer command), and sends none of them. The Authorization header is left out.
+`--dry-run` prints the requests `Enclave.Sdk.Api` builds for the change and sends none of them. The Authorization header is left out. The trace names the organisation, or the partner for a partner customer command.
 
 ```
-{ "dryRun": true, "org": { "id": "…", "name": "…" }, "requests": [ { "method": "PUT", "url": "https://api.enclave.io/org/…/systems/disable", "body": { … } } ] }
+{ "dryRun": true, "requests": [ { "method": "PUT", "url": "https://api.enclave.io/org/…/systems/disable", "body": { … } } ], "trace": { … } }
 ```
 
 - `requests` is a list: a bulk command over 200 IDs shows each call, and an empty `-` list shows none.
 - The reads a change depends on still run: name lookups, the read that keeps tags, labels and conditions, and the read `tag set` makes to choose between update and create. Only the change is withheld.
-- `org.name` is null when the organisation was given by ID, the saved default included, since then no lookup is made. A request without a body shows `"body": null`.
-- Partner customer commands take `--dry-run` like any other command that changes something. They print `"partner": { "id" }` in place of `org`.
+- A request without a body shows `"body": null`.
+- Partner customer commands take `--dry-run` like any other command that changes something.
 - `login`, `logout` and `org use` change only local files and do not take `--dry-run`.
 
 The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` (`Enclave.Sdk.Api`). Printing the captured request keeps URL building in one place and shows exactly what would be sent. The CLI answers each captured change itself, with status 200 and the body `{}`, which every `Enclave.Sdk.Api` call accepts, so the command goes on to its next call; nothing read from that answer is printed.
@@ -374,10 +374,10 @@ The CLI captures the requests through `EnclaveClientOptions.HttpMessageHandler` 
 - JSON, using the `Enclave.Sdk.Api` models unchanged, with `trace` added at the end. There's one output format, which serves both the calling program and the person reading the call.
 - JSON on stdout and stderr is indented, so the person reading the call can follow it.
 - `trace` shows how the command ran: which API and organisation it used, and what it sent. It comes last in every document a command prints, on success and on failure:
-  - `token`: `{ "source" }`, where the token came from: `ENCLAVE_CLI_PAT`, the path of `credentials.json`, or `prompt` for `login`.
+  - `tokenSource`: where the token came from: `ENCLAVE_CLI_PAT`, the path of `credentials.json`, or `prompt` for `login`.
   - `api`, and `partnerApi` for `partner` commands: the addresses the command called.
-  - `org`: `{ "id", "name", "source" }`, with the sources `status` uses. `name` is null when the organisation was given by ID, the saved default included, since no lookup ran.
-  - `partner`: `{ "id", "source" }`, for `partner` commands.
+  - `orgId`: the organisation the command acted in. `status` shows what chose it.
+  - `partnerId`, for `partner` commands.
   - `requests`: each request sent, in order, as `"<METHOD> <URL>"`. Under `--dry-run` the changes aren't sent, so only the dry run's `requests` lists them.
   - `saved`: the file `login` or `org use` wrote.
   - `cause`: on failure, the .NET exception behind an error the API sent no problem details for, such as a network failure or a timeout.
@@ -425,7 +425,7 @@ Parse errors (unknown option, missing argument) follow the same rules: JSON on s
 - The CLI reads `credentials.json` itself and passes `EnclaveClientOptions` to `Enclave.Sdk.Api`. Tests can then point it at a temporary directory, and supply each environment's addresses through the host, so a run with `ENCLAVE_CLI_PAT` reaches the test server.
 - When the user profile path is empty or not fully qualified, as in a container whose `HOME` is relative, there is no home directory: the CLI doesn't read `credentials.json`, the environment variables still work, and `login`, `logout` and `org use` exit 2 `invalid_argument` and write nothing.
 - `logout` deletes `credentials.json`, the default organisation with it, and prints `{ "path": "…", "deleted": true|false }`; `deleted` is false when there was no file. The token stays valid until it is revoked in the portal. Other tools built on `Enclave.Sdk.Api` read the same file and lose the token too.
-- `status` makes one `GetOrganisationsAsync` call and prints `{ "token": { "source" }, "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_CLI_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
+- `status` makes one `GetOrganisationsAsync` call and prints `{ "tokenSource", "org": { "id", "name", "role", "source" }, "partner": { "id", "source" } }`. A source is the option or variable that chose it (`--org-id`, `ENCLAVE_CLI_ORG`, …), the path of the file it came from, or `only-organisation` when the token sees one organisation. `org` is null when none is chosen and the token sees several; `partner` is null when none is chosen. `status` takes `--org`, `--org-id` and `--partner-id`, to show what a command given them would use.
 - `org use` saves the organisation's ID as `defaultOrgID` in `credentials.json`, leaving the rest of the file as it is, and prints the organisation's model. It makes one lookup call, and an organisation the token does not see exits 2.
 - No command prints the token, including under `--dry-run`. A test runs every command that changes something with a known token and checks the token appears on neither stdout nor stderr.
 

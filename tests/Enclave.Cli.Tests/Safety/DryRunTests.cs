@@ -12,7 +12,7 @@ public class DryRunTests
     private static readonly Dictionary<string, string> NoQuery = new(StringComparer.Ordinal);
 
     // The fake API answers the change, so a CLI that sent it would show it in the requests. The
-    // organisation comes from ENCLAVE_CLI_ORG_ID, so no lookup is made and its name is null.
+    // organisation comes from ENCLAVE_CLI_ORG_ID, so no lookup is made.
     [TestCaseSource(typeof(ChangeCommand), nameof(ChangeCommand.All))]
     public async Task Dry_run_prints_the_request_a_change_would_send_and_sends_no_change(ChangeCommand command)
     {
@@ -21,12 +21,11 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args, "--dry-run"]);
 
-        var (org, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         var urls = command.Paths.Select(path => ExpectedUrl(run, path)).ToArray();
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(DryRunOutput.OrgId(result), Is.EqualTo(TestData.OrgId));
             Assert.That(Text(request, "method"), Is.EqualTo(command.Method));
             Assert.That(Url(request), Is.AnyOf(urls));
             Assert.That(Changes(run), Is.Empty);
@@ -43,7 +42,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args(ids), "--dry-run"]);
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo(command.Method));
@@ -63,7 +62,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.Args(ids), "--dry-run"]);
 
-        var (_, requests) = DryRunOutput.Read(result);
+        var requests = DryRunOutput.Read(result);
         var expectedUrl = ExpectedUrl(run, command.Path);
         Assert.That(requests, Has.Length.EqualTo(3), result.ToString());
         Assert.Multiple(() =>
@@ -85,7 +84,7 @@ public class DryRunTests
 
         var result = await run.RunAsync([.. command.StdinArgs(), "--dry-run"]);
 
-        var (_, requests) = DryRunOutput.Read(result);
+        var requests = DryRunOutput.Read(result);
         Assert.Multiple(() =>
         {
             Assert.That(requests, Is.Empty);
@@ -104,7 +103,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("system", "approve", "-", "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo("PUT"));
@@ -133,7 +132,7 @@ public class DryRunTests
 
         var preview = await run.RunAsync([.. args, "--dry-run"]);
 
-        var (_, printed) = DryRunOutput.ReadOne(preview);
+        var printed = DryRunOutput.ReadOne(preview);
         Assert.Multiple(() =>
         {
             Assert.That(run.RequestsTo("DELETE", path), Is.Empty);
@@ -158,7 +157,7 @@ public class DryRunTests
     // shows the named one was used.
     [TestCase(false)]
     [TestCase(true)]
-    public async Task Dry_run_prints_the_organisation_given_by_name_and_builds_the_url_from_its_id(bool fromEnvironment)
+    public async Task Dry_run_traces_the_id_of_the_organisation_given_by_name_and_builds_the_url_from_it(bool fromEnvironment)
     {
         using var run = CliRun.Start();
         BothOrgs.Stub(run);
@@ -173,11 +172,10 @@ public class DryRunTests
 
         var result = await run.RunAsync(args);
 
-        var (org, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
-            Assert.That(Text(org, "name"), Is.EqualTo(TestData.OtherOrgName));
+            Assert.That(DryRunOutput.OrgId(result), Is.EqualTo(TestData.OtherOrgId));
             Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, TestData.OtherOrgPath("systems/disable"))));
             Assert.That(string.Join(",", run.Calls()), Is.EqualTo("GET /account/orgs"));
         });
@@ -185,18 +183,17 @@ public class DryRunTests
 
     // An organisation given by ID needs no lookup ("Dry run").
     [Test]
-    public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id_and_prints_a_null_name()
+    public async Task Dry_run_builds_the_url_from_the_organisation_given_by_org_id()
     {
         using var run = CliRun.Start();
         BothOrgs.Stub(run);
 
         var result = await run.RunAsync("system", "disable", "ABCDE", "--org-id", TestData.OtherOrgId.ToString(), "--dry-run");
 
-        var (org, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.IdOf(org), Is.EqualTo(TestData.OtherOrgId));
-            Assert.That(JsonAssert.Property(org, "name").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(DryRunOutput.OrgId(result), Is.EqualTo(TestData.OtherOrgId));
             Assert.That(Url(request), Is.EqualTo(ExpectedUrl(run, TestData.OtherOrgPath("systems/disable"))));
             Assert.That(run.Requests, Is.Empty);
         });
@@ -242,7 +239,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("system", "update", "ABCDE", "--description", "web server", "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         var body = JsonAssert.Property(request, "body");
         Assert.Multiple(() =>
         {
@@ -264,7 +261,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("dns", "delete-zone", "--id", "4", "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo("DELETE"));
@@ -298,7 +295,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("tag", "set", "web", "--notes", "front end", "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(Text(request, "method"), Is.EqualTo(method));
@@ -336,7 +333,7 @@ public class DryRunTests
             "198.18.0.0/15=Office, ground floor",
             "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         var ranges = JsonAssert.Property(JsonAssert.Property(request, "body"), "ipConstraints");
         Assert.Multiple(() =>
         {
@@ -361,7 +358,7 @@ public class DryRunTests
 
         var result = await run.RunAsync("system", "enable", "K7P2Q", "--for", "24h", "--then", "revoke", "--dry-run");
 
-        var (_, request) = DryRunOutput.ReadOne(result);
+        var request = DryRunOutput.ReadOne(result);
         var body = JsonAssert.Property(request, "body");
         var expiry = JsonRead.ExpiryDateTime(body);
         Assert.Multiple(() =>

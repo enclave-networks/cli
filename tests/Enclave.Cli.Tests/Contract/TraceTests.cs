@@ -11,12 +11,6 @@ public class TraceTests
 
     private const string NetworkFailure = "No connection could be made in this test.";
 
-    private static readonly string[] SourceOnly = ["source"];
-
-    private static readonly string[] OrgFields = ["id", "name", "source"];
-
-    private static readonly string[] PartnerFields = ["id", "source"];
-
     private static readonly string[] ErrorThenTrace = ["error", "trace"];
 
     private static readonly string[] ErrorOnly = ["error"];
@@ -26,8 +20,8 @@ public class TraceTests
     {
         yield return Document("kind,items,total", "system", "list");
         yield return Document("requested,affected", "system", "disable", "ABCDE");
-        yield return Document("dryRun,org,requests", "system", "disable", "ABCDE", "--dry-run");
-        yield return Document("token,org,partner", "status");
+        yield return Document("dryRun,requests", "system", "disable", "ABCDE", "--dry-run");
+        yield return Document("tokenSource,org,partner", "status");
         yield return Document("orgId,orgName,role,partnerAccess", "org", "use", TestData.OrgName);
     }
 
@@ -125,12 +119,7 @@ public class TraceTests
         var result = await run.RunAsync(args);
 
         CliAssert.Succeeded(result);
-        var token = JsonAssert.Property(result.StdoutTrace, "token");
-        Assert.Multiple(() =>
-        {
-            Assert.That(JsonRead.PropertyNames(token), Is.EqualTo(SourceOnly), result.ToString());
-            Assert.That(JsonAssert.Property(token, "source").GetString(), Is.EqualTo(expected), result.ToString());
-        });
+        Assert.That(JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString(), Is.EqualTo(expected), result.ToString());
     }
 
     [Test]
@@ -147,24 +136,23 @@ public class TraceTests
         {
             Assert.That(JsonAssert.Property(trace, "api").GetString(), Is.EqualTo(run.ApiUrl.AbsoluteUri), result.ToString());
             Assert.That(trace.TryGetProperty("partnerApi", out _), Is.False, result.ToString());
-            Assert.That(trace.TryGetProperty("partner", out _), Is.False, result.ToString());
+            Assert.That(trace.TryGetProperty("partnerId", out _), Is.False, result.ToString());
         });
     }
 
-    // An ID has no name, the saved default's included, since no lookup ran ("Context").
     [TestCase("ENCLAVE_CLI_ORG_ID")]
     [TestCase("--org-id")]
     [TestCase("--org")]
     [TestCase("ENCLAVE_CLI_ORG")]
     [TestCase("credentials.json")]
     [TestCase("only-organisation")]
-    public async Task The_trace_names_the_organisation_and_what_chose_it(string source)
+    public async Task The_trace_gives_the_organisation_as_its_id_only(string source)
     {
         using var run = CliRun.Start();
         run.StubPages(TestData.OrgPath("systems"), 200);
         run.StubPages(TestData.OtherOrgPath("systems"), 200);
         string[] args = ["system", "list"];
-        (Guid Id, string? Name, string Source) expected = (TestData.OtherOrgId, TestData.OtherOrgName, source);
+        var expected = TestData.OtherOrgId;
 
         if (source == "only-organisation")
         {
@@ -183,11 +171,10 @@ public class TraceTests
         switch (source)
         {
             case "ENCLAVE_CLI_ORG_ID":
-                expected = (TestData.OrgId, null, source);
+                expected = TestData.OrgId;
                 break;
             case "--org-id":
                 args = [.. args, source, TestData.OtherOrgId.ToString()];
-                expected = (TestData.OtherOrgId, null, source);
                 break;
             case "--org":
                 args = [.. args, source, TestData.OtherOrgName];
@@ -197,23 +184,20 @@ public class TraceTests
                 break;
             case "credentials.json":
                 run.SaveLogin(defaultOrgId: TestData.OtherOrgId.ToString());
-                expected = (TestData.OtherOrgId, null, run.CredentialsPath);
                 break;
             default:
-                expected = (TestData.OrgId, TestData.OrgName, source);
+                expected = TestData.OrgId;
                 break;
         }
 
         var result = await run.RunAsync(args);
 
         CliAssert.Succeeded(result);
-        var org = JsonAssert.Property(result.StdoutTrace, "org");
+        var trace = result.StdoutTrace;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonRead.PropertyNames(org), Is.EqualTo(OrgFields), result.ToString());
-            Assert.That(JsonRead.IdOf(org), Is.EqualTo(expected.Id), result.ToString());
-            Assert.That(JsonAssert.Property(org, "name").GetString(), Is.EqualTo(expected.Name), result.ToString());
-            Assert.That(JsonAssert.Property(org, "source").GetString(), Is.EqualTo(expected.Source), result.ToString());
+            Assert.That(JsonRead.GuidOf(JsonAssert.Property(trace, "orgId")), Is.EqualTo(expected), result.ToString());
+            Assert.That(trace.TryGetProperty("org", out _), Is.False, result.ToString());
         });
     }
 
@@ -239,15 +223,13 @@ public class TraceTests
 
         PartnerApiFake.AssertSentToThePartnerApi(run, result);
         var trace = result.StdoutTrace;
-        var partner = JsonAssert.Property(trace, "partner");
         Assert.Multiple(() =>
         {
             Assert.That(JsonAssert.Property(trace, "partnerApi").GetString(), Is.EqualTo(run.PartnerApiUrl.AbsoluteUri), result.ToString());
             Assert.That(trace.TryGetProperty("api", out _), Is.False, result.ToString());
-            Assert.That(trace.TryGetProperty("org", out _), Is.False, result.ToString());
-            Assert.That(JsonRead.PropertyNames(partner), Is.EqualTo(PartnerFields), result.ToString());
-            Assert.That(JsonRead.IdOf(partner), Is.EqualTo(TestData.PartnerId), result.ToString());
-            Assert.That(JsonAssert.Property(partner, "source").GetString(), Is.EqualTo(source), result.ToString());
+            Assert.That(trace.TryGetProperty("orgId", out _), Is.False, result.ToString());
+            Assert.That(JsonRead.GuidOf(JsonAssert.Property(trace, "partnerId")), Is.EqualTo(TestData.PartnerId), result.ToString());
+            Assert.That(trace.TryGetProperty("partner", out _), Is.False, result.ToString());
         });
     }
 
@@ -303,7 +285,7 @@ public class TraceTests
 
         var result = await run.RunAsync("tag", "set", "web", "--notes", "front end", "--dry-run");
 
-        var (_, change) = DryRunOutput.ReadOne(result);
+        var change = DryRunOutput.ReadOne(result);
         Assert.Multiple(() =>
         {
             Assert.That(run.Calls(), Is.EqualTo(new[] { $"GET {path}" }));
@@ -376,9 +358,9 @@ public class TraceTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNames(result.StderrJson), Is.EqualTo(ErrorThenTrace), result.ToString());
-            Assert.That(JsonAssert.Property(JsonAssert.Property(trace, "token"), "source").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
+            Assert.That(JsonAssert.Property(trace, "tokenSource").GetString(), Is.EqualTo("ENCLAVE_CLI_PAT"), result.ToString());
             Assert.That(JsonAssert.Property(trace, "api").GetString(), Is.EqualTo(run.ApiUrl.AbsoluteUri), result.ToString());
-            Assert.That(JsonRead.IdOf(JsonAssert.Property(trace, "org")), Is.EqualTo(TestData.OrgId), result.ToString());
+            Assert.That(JsonRead.GuidOf(JsonAssert.Property(trace, "orgId")), Is.EqualTo(TestData.OrgId), result.ToString());
             Assert.That(JsonRead.StringList(JsonAssert.Property(trace, "requests")), Is.EqualTo($"GET {run.ApiBaseUrl}{path}"), result.ToString());
         });
     }
@@ -485,7 +467,7 @@ public class TraceTests
         var trace = result.ExitCode == 0 ? result.StdoutTrace : result.StderrTrace;
         Assert.Multiple(() =>
         {
-            Assert.That(JsonAssert.Property(trace, "token").GetRawText(), Does.Not.Contain(TestData.Token), result.ToString());
+            Assert.That(JsonAssert.Property(trace, "tokenSource").GetRawText(), Does.Not.Contain(TestData.Token), result.ToString());
             Assert.That(result.Stdout + result.Stderr, Does.Not.Contain("Authorization").IgnoreCase, result.ToString());
             Assert.That(result.Stdout + result.Stderr, Does.Not.Contain("Bearer").IgnoreCase, result.ToString());
             TokenAssert.Absent(result);

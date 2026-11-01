@@ -16,9 +16,7 @@ public class StatusTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    private static readonly string[] StatusFields = ["token", "org", "partner"];
-
-    private static readonly string[] TokenFields = ["source"];
+    private static readonly string[] StatusFields = ["tokenSource", "org", "partner"];
 
     private static readonly string[] OrgFields = ["id", "name", "role", "source"];
 
@@ -54,7 +52,6 @@ public class StatusTests
         Assert.Multiple(() =>
         {
             Assert.That(JsonRead.PropertyNamesBeforeTrace(output), Is.EquivalentTo(StatusFields));
-            Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "token")), Is.EquivalentTo(TokenFields));
             Assert.That(JsonRead.PropertyNames(org), Is.EquivalentTo(OrgFields));
             Assert.That(JsonRead.PropertyNames(JsonAssert.Property(output, "partner")), Is.EquivalentTo(PartnerFields));
             Assert.That(Guid.Parse(JsonAssert.Property(org, "id").GetString()!, CultureInfo.InvariantCulture), Is.EqualTo(TestData.OrgId));
@@ -292,7 +289,7 @@ public class StatusTests
     }
 
     private static string? TokenSource(CliResult result) =>
-        JsonAssert.Property(JsonAssert.Property(result.StdoutJson, "token"), "source").GetString();
+        JsonAssert.Property(result.StdoutJson, "tokenSource").GetString();
 
     private static string OrgsWithRoles() =>
         ApiJson.OrgsOf(ApiJson.Org(TestData.OrgId, TestData.OrgName), GlobexAsAdmin());
