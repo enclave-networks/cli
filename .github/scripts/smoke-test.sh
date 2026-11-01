@@ -104,6 +104,19 @@ grep -q '"command": "org list",' "$work/commands.json" || fail "enclave-cli comm
 grep -q '"code": "token_missing",' "$work/commands.json" || fail "enclave-cli commands does not list token_missing"
 echo "enclave-cli commands: exit 0, a JSON document on stdout"
 
+# The release binary is trimmed (Enclave.Cli.csproj), and a dry run writes the request model
+# Enclave.Sdk.Api builds, so this shows the SDK's JSON still works in it. The organisation is
+# given by ID, so no lookup is made, and a dry run sends nothing (spec/cli-surface.md "Dry run").
+# The token is not a real one.
+status=0
+ENCLAVE_CLI_PAT=smoke-test ENCLAVE_CLI_ORG_ID=00000000000000000000000000000001 \
+  "$exe" key create smoke-test --tags smoke --dry-run >"$work/stdout" 2>"$work/stderr" || status=$?
+[ "$status" -eq 0 ] || fail "enclave-cli key create --dry-run exited $status: $(cat "$work/stderr")"
+[ ! -s "$work/stderr" ] || fail "enclave-cli key create --dry-run wrote to stderr: $(cat "$work/stderr")"
+grep -q '"dryRun": true,' "$work/stdout" || fail "enclave-cli key create --dry-run printed no dry run: $(cat "$work/stdout")"
+grep -q '"description": "smoke-test",' "$work/stdout" || fail "enclave-cli key create --dry-run printed no request body: $(cat "$work/stdout")"
+echo "enclave-cli key create --dry-run: exit 0, the request on stdout"
+
 # With no token the CLI exits 3 before any call (spec/cli-surface.md "Errors and exit codes"). The
 # error names the credentials file, which shows the CLI looked in the home directory worked out
 # above. The error is indented over several lines, so the code and the path are each found on
