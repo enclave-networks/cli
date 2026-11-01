@@ -16,7 +16,7 @@ public class StatusTests
 
     private static readonly string[] OrgLookupOnly = [OrgLookup];
 
-    private static readonly string[] StatusFields = ["tokenSource", "org", "partner"];
+    private static readonly string[] StatusFields = ["org", "partner"];
 
     private static readonly string[] OrgFields = ["id", "name", "role", "source"];
 
@@ -38,7 +38,7 @@ public class StatusTests
     // With an organisation and a partner in use every part is present. CliRun sets ENCLAVE_CLI_ORG_ID to
     // Acme, whose role is Owner.
     [Test]
-    public async Task Status_prints_the_token_organisation_and_partner_with_exactly_their_fields()
+    public async Task Status_prints_the_organisation_and_partner_with_exactly_their_fields()
     {
         using var run = CliRun.Start();
         run.Environment["ENCLAVE_CLI_PARTNER_ID"] = TestData.PartnerId.ToString();
@@ -289,7 +289,7 @@ public class StatusTests
     }
 
     private static string? TokenSource(CliResult result) =>
-        JsonAssert.Property(result.StdoutJson, "tokenSource").GetString();
+        JsonAssert.Property(result.StdoutTrace, "tokenSource").GetString();
 
     private static string OrgsWithRoles() =>
         ApiJson.OrgsOf(ApiJson.Org(TestData.OrgId, TestData.OrgName), GlobexAsAdmin());

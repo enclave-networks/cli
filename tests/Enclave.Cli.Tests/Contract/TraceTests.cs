@@ -21,7 +21,7 @@ public class TraceTests
         yield return Document("kind,items,total", "system", "list");
         yield return Document("requested,affected", "system", "disable", "ABCDE");
         yield return Document("dryRun,requests", "system", "disable", "ABCDE", "--dry-run");
-        yield return Document("tokenSource,org,partner", "status");
+        yield return Document("org,partner", "status");
         yield return Document("orgId,orgName,role,partnerAccess", "org", "use", TestData.OrgName);
     }
 
