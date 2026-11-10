@@ -380,6 +380,238 @@ public class SystemCommandTests
         Assert.That(string.Join(",", revokes[0].BodyIds("systemIds")), Is.EqualTo("STALE1,STALE2"));
     }
 
+    // The API has no search key for this, so the CLI compares every page it reads
+    // (spec/cli-surface.md "Filters"). WEB2, the newest web-01, has its hostname in upper case, so a
+    // CLI that matches hostnames by case keeps WEB1. DB1 has never been seen and
+    // enrolled after DB2 was last seen, so a CLI that reads lastSeen alone keeps DB2. Systems
+    // without a hostname are no copies of each other, so a CLI that groups them lists OLDBLANK.
+    [Test]
+    public async Task System_list_duplicates_lists_the_copies_of_each_hostname_but_the_one_seen_last_and_counts_only_them_in_total()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.StubPages(
+            SystemsPath,
+            2,
+            Copy("WEB1", "web-01", "Disconnected", Now.AddDays(-10)),
+            Copy("SOLO", "solo", "Disconnected", Now.AddDays(-300)),
+            Copy("WEB2", "WEB-01", "Disconnected", Now.AddDays(-1)),
+            Copy("DB2", "db-01", "Disconnected", Now.AddDays(-20)),
+            ApiJson.Altered(SystemNeverSeen("DB1", Now.AddDays(-5)), ("hostname", "db-01")),
+            Copy("WEB3", "web-01", "Disconnected", Now.AddDays(-100)),
+            Copy("OLDBLANK", null, "Disconnected", Now.AddDays(-50)),
+            Copy("NEWBLANK", null, "Disconnected", Now.AddDays(-1)),
+            Copy("EMPTY1", string.Empty, "Disconnected", Now.AddDays(-60)),
+            Copy("EMPTY2", string.Empty, "Disconnected", Now.AddDays(-2)));
+
+        var result = await run.RunAsync("system", "list", "--duplicates");
+
+        var items = CliAssert.List(result, "system");
+        Assert.Multiple(() =>
+        {
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("WEB1,DB2,WEB3"));
+            Assert.That(run.PagesRequested(SystemsPath), Is.EqualTo("0,1,2,3,4"));
+            Assert.That(run.RequestsTo("GET", SystemsPath).Select(request => request.QueryValue("search")), Is.All.Null);
+        });
+    }
+
+    // A connected system counts as seen now, as lastSeen can lag far behind a system that stays
+    // connected (see the --not-seen-for tests above), so this list never feeds `system revoke` a
+    // system that is online (spec/cli-surface.md "Filters"). A CLI that reads lastSeen of a
+    // connected system keeps OFFLINE and lists LIVE1 and LIVE2; one that keeps a single connected
+    // copy lists the other.
+    [Test]
+    public async Task System_list_duplicates_never_lists_a_connected_system_and_keeps_every_connected_copy()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub(
+            "GET",
+            SystemsPath,
+            json: ApiJson.Page(
+                Copy("LIVE1", "web-01", "Connected", Now.AddDays(-200)),
+                Copy("OFFLINE", "web-01", "Disconnected", Now.AddDays(-1)),
+                Copy("LIVE2", "web-01", "Connected", Now.AddDays(-300))));
+
+        var result = await run.RunAsync("system", "list", "--duplicates");
+
+        var items = CliAssert.List(result, "system");
+        Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("OFFLINE"));
+    }
+
+    // Copies tied for most recently seen are all kept (spec/cli-surface.md "Filters"), so the
+    // choice between them never depends on the order the API lists them in.
+    [Test]
+    public async Task System_list_duplicates_keeps_every_copy_tied_for_most_recently_seen()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub(
+            "GET",
+            SystemsPath,
+            json: ApiJson.Page(
+                Copy("TIED1", "web-01", "Disconnected", Now.AddDays(-5)),
+                Copy("OLDER", "web-01", "Disconnected", Now.AddDays(-10)),
+                Copy("TIED2", "web-01", "Disconnected", Now.AddDays(-5))));
+
+        var result = await run.RunAsync("system", "list", "--duplicates");
+
+        var items = CliAssert.List(result, "system");
+        Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("OLDER"));
+    }
+
+    // The other options choose the systems compared (spec/cli-surface.md "Filters"): the search and
+    // include_disabled go to the API as without --duplicates, and a disabled copy, which the API
+    // reports as Disabled, is compared by when it was seen. A CLI that leaves disabled systems out
+    // of the comparison keeps ENABLED.
+    [Test]
+    public async Task System_list_duplicates_compares_the_systems_the_other_options_choose()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub(
+            "GET",
+            SystemsPath,
+            json: ApiJson.Page(
+                Copy("ENABLED", "web-01", "Disconnected", Now.AddDays(-10)),
+                ApiJson.Altered(Copy("DISABLED", "web-01", "Disabled", Now.AddDays(-1)), ("isEnabled", false))));
+
+        var result = await run.RunAsync("system", "list", "--tag", "web", "--include-disabled", "--duplicates");
+
+        var items = CliAssert.List(result, "system");
+        var request = run.SingleRequest();
+        Assert.Multiple(() =>
+        {
+            Assert.That(request.QueryValue("search"), Is.EqualTo("tags:web"));
+            Assert.That(request.QueryValue("include_disabled"), Is.EqualTo("True"));
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("ENABLED"));
+        });
+    }
+
+    // Copies match on the operating system as well as the hostname, ignoring case
+    // (spec/cli-surface.md "Filters"). WINDOWS and the two Linux systems are one machine that boots
+    // both. A CLI that matches hostnames alone lists LINUXOLD and LINUXNEW; one that matches
+    // platformType by case lists nothing.
+    [Test]
+    public async Task System_list_duplicates_compares_only_systems_on_the_same_operating_system()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub(
+            "GET",
+            SystemsPath,
+            json: ApiJson.Page(
+                ApiJson.Altered(Copy("WINDOWS", "dual-01", "Connected", Now.AddDays(-1)), ("platformType", "Windows")),
+                ApiJson.Altered(Copy("LINUXOLD", "dual-01", "Disconnected", Now.AddDays(-30)), ("platformType", "linux")),
+                ApiJson.Altered(Copy("LINUXNEW", "dual-01", "Disconnected", Now.AddDays(-2)), ("platformType", "Linux"))));
+
+        var result = await run.RunAsync("system", "list", "--duplicates");
+
+        var items = CliAssert.List(result, "system");
+        Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("LINUXOLD"));
+    }
+
+    // --not-seen-for applies after the comparison, so the copy online now still counts and the
+    // search carries no state:disconnected (spec/cli-surface.md "Filters"). A CLI that drops
+    // systems before comparing keeps OLD, the only stale web-01 left, and lists nothing. RECENT went
+    // offline 2 days ago, and SOLO is the only copy of its machine, so neither is listed.
+    [Test]
+    public async Task System_list_duplicates_with_not_seen_for_lists_the_copies_not_seen_for_that_long_after_comparing_every_copy()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        run.Stub(
+            "GET",
+            SystemsPath,
+            json: ApiJson.Page(
+                Copy("LIVE", "web-01", "Connected", Now.AddDays(-300)),
+                Copy("OLD", "web-01", "Disconnected", Now.AddDays(-10)),
+                Copy("RECENT", "web-01", "Disconnected", Now.AddDays(-2)),
+                Copy("SOLO", "laptop-01", "Disconnected", Now.AddDays(-100))));
+
+        var result = await run.RunAsync("system", "list", "--duplicates", "--not-seen-for", "7d");
+
+        var items = CliAssert.List(result, "system");
+        Assert.Multiple(() =>
+        {
+            Assert.That(run.SingleRequest().QueryValue("search"), Is.Null);
+            Assert.That(JsonRead.StringFieldList(items, "systemId"), Is.EqualTo("OLD"));
+        });
+    }
+
+    // --duplicates never lists a connected system, so with --state connected it lists nothing, and
+    // --state disconnected would leave the connected copy out of the comparison
+    // (spec/cli-surface.md "Filters"). A CLI that read the token first exits 3 in the run without
+    // one.
+    [TestCase("connected")]
+    [TestCase("disconnected")]
+    public async Task System_list_state_with_duplicates_exits_2_before_the_token_and_any_call(string value)
+    {
+        using var run = CliRun.Start();
+        using var withoutToken = CliRun.Start();
+        withoutToken.Environment.Remove("ENCLAVE_CLI_PAT");
+        run.Stub("GET", SystemsPath, json: ApiJson.Page());
+        string[] contradicting = ["system", "list", "--state", value, "--duplicates"];
+
+        var tokenless = await withoutToken.RunAsync(contradicting);
+
+        CliAssert.Rejected(withoutToken, tokenless);
+        CliAssert.Problems(tokenless.Error, "--state");
+        await CliAssert.RejectedThenAcceptedAsync(run, contradicting, ["system", "list", "--duplicates"], "GET", SystemsPath);
+    }
+
+    // Example 87, with both commands in one sandbox as a shell pipeline runs them.
+    [Test]
+    public async Task System_revoke_given_the_list_of_duplicates_revokes_every_copy_but_the_one_seen_last()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var systems = ApiJson.Page(
+            Copy("OLD1", "web-01", "Disconnected", Now.AddDays(-30)),
+            Copy("NEW", "web-01", "Disconnected", Now.AddDays(-1)),
+            Copy("OLD2", "web-01", "Disconnected", Now.AddDays(-60)),
+            Copy("SOLO", "db-01", "Disconnected", Now.AddDays(-90)));
+        run.Stub("GET", SystemsPath, json: systems);
+        run.StubBulk("DELETE", SystemsPath, "systemsRevoked", 2);
+
+        var listed = await run.RunAsync("system", "list", "--duplicates");
+        CliAssert.Succeeded(listed);
+        run.StdinText = listed.Stdout;
+        var result = await run.RunAsync("system", "revoke", "-");
+
+        CliAssert.Bulk(result, 2, 2);
+        var revokes = run.RequestsTo("DELETE", SystemsPath);
+        Assert.That(revokes, Has.Count.EqualTo(1));
+        Assert.That(string.Join(",", revokes[0].BodyIds("systemIds")), Is.EqualTo("OLD1,OLD2"));
+    }
+
+    // Example 88, with both commands in one sandbox as a shell pipeline runs them. AGENT2OLD went
+    // offline 3 days ago, so it waits for a later week.
+    [Test]
+    public async Task System_revoke_given_the_list_of_build_agent_duplicates_offline_for_7_days_revokes_those_copies()
+    {
+        using var run = CliRun.Start();
+        run.Time = new FixedTimeProvider(Now, TestData.LocalZone);
+        var systems = ApiJson.Page(
+            Copy("AGENT1", "agent-01", "Connected", Now.AddDays(-50)),
+            Copy("AGENT1OLD", "agent-01", "Disconnected", Now.AddDays(-30)),
+            Copy("AGENT2", "agent-02", "Connected", Now.AddDays(-50)),
+            Copy("AGENT2OLD", "agent-02", "Disconnected", Now.AddDays(-3)));
+        run.Stub("GET", SystemsPath, json: systems);
+        run.StubBulk("DELETE", SystemsPath, "systemsRevoked", 1);
+
+        var listed = await run.RunAsync("system", "list", "--duplicates", "--tag", "build", "--not-seen-for", "7d");
+        CliAssert.Succeeded(listed);
+        run.StdinText = listed.Stdout;
+        var result = await run.RunAsync("system", "revoke", "-");
+
+        CliAssert.Bulk(result, 1, 1);
+        Assert.That(run.RequestsTo("GET", SystemsPath).Single().QueryValue("search"), Is.EqualTo("tags:build"));
+        var revokes = run.RequestsTo("DELETE", SystemsPath);
+        Assert.That(revokes, Has.Count.EqualTo(1));
+        Assert.That(string.Join(",", revokes[0].BodyIds("systemIds")), Is.EqualTo("AGENT1OLD"));
+    }
+
     // Enclave.Sdk.Api keys a patch body by SystemPatchModel's property names (PatchClient.Set).
     // The API answers with another description, so the output shows it is the model returned.
     [Test]
@@ -869,6 +1101,9 @@ public class SystemCommandTests
             ApiJson.System(systemId),
             ("state", state),
             ("lastSeen", Utc(lastSeen)));
+
+    private static string Copy(string systemId, string? hostname, string state, DateTimeOffset lastSeen) =>
+        ApiJson.Altered(SystemSeen(systemId, state, lastSeen), ("hostname", hostname));
 
     private static string SystemNeverSeen(string systemId, DateTimeOffset enrolledAt) =>
         ApiJson.Altered(

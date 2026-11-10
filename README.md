@@ -75,6 +75,12 @@
   enclave-cli system list --org "Acme Ltd" --not-seen-for 90d | enclave-cli system revoke --org "Acme Ltd" -
   ```
 
+- Revoke the old copies of reinstalled machines once they have been offline for 7 days:
+
+  ```
+  enclave-cli system list --org "Acme Ltd" --duplicates --not-seen-for 7d | enclave-cli system revoke --org "Acme Ltd" -
+  ```
+
 ## Command conventions
 
 - Commands accept names or IDs. Use `--id` to target an object by ID instead of name. Systems are always identified by ID.

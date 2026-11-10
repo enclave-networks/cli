@@ -25,6 +25,7 @@ internal static class SystemListCommand
         var key = verb.Add(CliOptions.Filter("--key", "Systems enrolled with the key of this description.", "name"));
         var keyId = verb.Add(CliOptions.Id("--key-id", "Systems enrolled with the key of this ID.", IdFormats.Int32));
         var notSeenFor = verb.Add(CliOptions.Duration("--not-seen-for", "Systems not connected and not seen for at least this long; a system never seen counts from when it enrolled."));
+        var duplicates = verb.Add(CliOptions.Flag("--duplicates", "Systems that share a hostname and operating system with one seen more recently; a connected system is never listed."));
         var includeDisabled = verb.Add(CliOptions.Flag("--include-disabled", "Include disabled systems."));
         var sort = verb.Add(CliOptions.Enum(
             "--sort",
@@ -46,7 +47,7 @@ internal static class SystemListCommand
         // The spec gives these flags to enrolled systems only ("Command options", "Details").
         // --filter takes the same keys with --pending: the API parses both lists' searches the same
         // way (portal PaginatedUnapprovedSystemsHandler, SystemRepository.BuildFilterAsync).
-        Option[] enrolledOnly = [state, os, type, gateway, notSeenFor, includeDisabled];
+        Option[] enrolledOnly = [state, os, type, gateway, notSeenFor, duplicates, includeDisabled];
         verb.Check(context =>
         {
             if (!context.Get(pending))
@@ -70,6 +71,11 @@ internal static class SystemListCommand
             if (context.IsGiven(notSeenFor) && context.Get(state) == "connected")
             {
                 throw CliErrors.InvalidArgument(state.Name, "--not-seen-for lists disconnected systems only, so --state connected cannot be given with it.");
+            }
+
+            if (context.Get(duplicates) && context.IsGiven(state))
+            {
+                throw CliErrors.InvalidArgument(state.Name, "--duplicates compares connected and disconnected systems, so --state cannot be given with it.");
             }
         });
 
@@ -95,8 +101,9 @@ internal static class SystemListCommand
             // keeps out a disabled system that is online, which the API reports as Disabled (portal
             // SystemSearchKeyService, the "state" key; SystemExtensions). The API reads only the first
             // state: term (BaseSearchKeyService.AddOrUpdateQueryDetails), so this one goes ahead of the
-            // --filter text, where a later one cannot replace it.
-            if (unseenSince is not null)
+            // --filter text, where a later one cannot replace it. --duplicates needs the connected
+            // copies to compare, so it goes without.
+            if (unseenSince is not null && !context.Get(duplicates))
             {
                 search = search is null ? "state:disconnected" : $"state:disconnected {search}";
             }
@@ -131,6 +138,13 @@ internal static class SystemListCommand
                     perPage: perPage),
                 context.CancellationToken);
 
+            // --duplicates compares the systems before --not-seen-for drops any, so the copy online
+            // now still counts ("Filters").
+            if (context.Get(duplicates))
+            {
+                systems = Duplicates(systems);
+            }
+
             // --not-seen-for has no API search key either. A system never seen counts from when it
             // enrolled, so one that has just enrolled is not listed for removal. A connected system
             // can go long without a new lastSeen, and this list feeds `system revoke` in example 14,
@@ -148,6 +162,28 @@ internal static class SystemListCommand
 
         return verb;
     }
+
+    // --duplicates has no API search key either ("Filters"). Each hostname on each operating system
+    // keeps the copies seen most recently, and the rest are listed in the order read. A connected
+    // system counts as seen after any lastSeen, for the reason --not-seen-for never lists one: this
+    // list feeds `system revoke` in example 87.
+    private static List<SystemSummaryModel> Duplicates(IEnumerable<SystemSummaryModel> systems)
+    {
+        var copies = systems.Where(system => !string.IsNullOrWhiteSpace(system.Hostname)).ToList();
+        var seenLast = copies
+            .GroupBy(Machine)
+            .ToDictionary(group => group.Key, group => group.Max(Seen));
+
+        return copies.Where(system => Seen(system) < seenLast[Machine(system)]).ToList();
+    }
+
+    // The API sends hostname and platformType from the same agent record (portal SystemExtensions).
+    private static (string Hostname, string? Platform) Machine(SystemSummaryModel system) =>
+        (system.Hostname!.ToUpperInvariant(), system.PlatformType?.ToUpperInvariant());
+
+    // A system never seen counts from when it enrolled, as with --not-seen-for.
+    private static DateTimeOffset Seen(SystemSummaryModel system) =>
+        system.State == SystemState.Connected ? DateTimeOffset.MaxValue : system.LastSeen ?? system.EnrolledAt;
 
     // UnapprovedSystemQuerySortMode's members are a subset of SystemQuerySortMode's (portal
     // UnapprovedSystemQuerySortMode).

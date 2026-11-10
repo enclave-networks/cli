@@ -137,7 +137,7 @@ public class CommandsTests
     private static readonly string[] SystemListOptions =
     [
         "--filter", "--tag", "--state", "--os", "--type", "--gateway", "--key", "--key-id", "--not-seen-for",
-        "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id",
+        "--duplicates", "--include-disabled", "--sort", "--pending", "--waiting-for", "--org", "--org-id",
     ];
 
     // Portal SystemQuerySortMode in lower-case, hyphenated form. --sort with --pending takes

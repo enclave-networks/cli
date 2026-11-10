@@ -1,6 +1,6 @@
 # `enclave-cli system revoke`
 
-Revoking removes a system from the organisation. `system list --not-seen-for 90d` selects disconnected systems for a cleanup pipeline.
+Revoking removes a system from the organisation. `system list --not-seen-for 90d` selects disconnected systems for a cleanup pipeline, and `system list --duplicates` the old copies of machines that enrolled more than once.
 
 ## Synopsis
 

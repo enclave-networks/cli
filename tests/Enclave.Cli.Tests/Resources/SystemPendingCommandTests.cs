@@ -95,6 +95,7 @@ public class SystemPendingCommandTests
     [TestCase("--type general")]
     [TestCase("--gateway")]
     [TestCase("--not-seen-for 90d")]
+    [TestCase("--duplicates")]
     public async Task System_list_pending_with_an_option_only_enrolled_systems_have_exits_2_without_a_request(string flags)
     {
         ArgumentNullException.ThrowIfNull(flags);

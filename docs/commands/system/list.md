@@ -1,6 +1,6 @@
 # `enclave-cli system list`
 
-Use `--pending` to list systems waiting for approval. `--not-seen-for` selects disconnected systems whose last seen time, or enrolment time if never seen, is older than the duration. List output can feed bulk commands through `-`.
+Use `--pending` to list systems waiting for approval. `--not-seen-for` selects disconnected systems whose last seen time, or enrolment time if never seen, is older than the duration. `--duplicates` selects the older copies of systems that share a hostname and operating system; a connected system is never selected, and `--not-seen-for` with it applies after the copies are compared. List output can feed bulk commands through `-`.
 
 ## Synopsis
 
@@ -27,6 +27,7 @@ enclave-cli system list --state disconnected --not-seen-for 90d
 | `--key` | Filter by enrolment key description. |
 | `--key-id` | Filter by enrolment key ID. |
 | `--not-seen-for` | Select disconnected systems older than this duration. |
+| `--duplicates` | Select every copy of a hostname and operating system but those seen most recently. |
 | `--include-disabled` | Include disabled items. |
 | `--sort` | Sort the matching items. Values: `recently-enrolled`, `recently-connected`, `description`, `description-or-hostname`, `enrolment-key-used`, `last-connected`, `state`, `version`. |
 | `--pending` | Use systems waiting for approval. |
