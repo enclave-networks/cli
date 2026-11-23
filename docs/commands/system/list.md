@@ -11,7 +11,7 @@ enclave-cli system list [options]
 ## Example
 
 ```sh
-enclave-cli system list --state disconnected --not-seen-for 90d
+enclave-cli system list --not-seen-for 90d
 ```
 
 ## Options
@@ -28,7 +28,7 @@ enclave-cli system list --state disconnected --not-seen-for 90d
 | `--key-id` | Filter by enrolment key ID. |
 | `--not-seen-for` | Select disconnected systems older than this duration. |
 | `--duplicates` | Select every copy of a hostname and operating system but those seen most recently. |
-| `--include-disabled` | Include disabled items. |
+| `--include-disabled` | Include disabled items, which are left out by default. |
 | `--sort` | Sort the matching items. Values: `recently-enrolled`, `recently-connected`, `description`, `description-or-hostname`, `enrolment-key-used`, `last-connected`, `state`, `version`. |
 | `--pending` | Use systems waiting for approval. |
 | `--waiting-for` | Select pending systems older than this duration. |

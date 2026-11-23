@@ -7,7 +7,7 @@
 ## Quick start
 
 1. Download `enclave-cli` for your platform from the [latest release](https://github.com/enclave-networks/cli/releases/latest).
-2. Create a personal access token for yourself or your AI agent in the [Enclave portal](https://portal.enclave.io/).
+2. Create a personal access token for yourself or your AI agent in the [Enclave portal](https://portal.enclave.io/). The token can run every command that acts in an organisation your account belongs to.
 3. Log in, then paste your token when asked and choose a default organisation. You only need to do this once.
 
    ```
@@ -15,6 +15,8 @@
    ```
 
    Your personal access token is saved to `%USERPROFILE%\.enclave\credentials.json` on Windows or `~/.enclave/credentials.json` on Linux and macOS.
+
+   For an AI agent or a script, set `ENCLAVE_CLI_PAT` to the token instead of logging in, and `ENCLAVE_CLI_ORG` to the organisation's name, or give `--org` on each command. While `ENCLAVE_CLI_PAT` is set, the CLI ignores the saved token and organisation.
 
 ## Example usage
 
@@ -89,7 +91,9 @@
 
 - Use `-` to read targets from piped `enclave-cli` list output.
 
-- Changes take effect immediately without confirmation. Use `--dry-run` to preview API requests.
+- Changes take effect immediately without confirmation. Use `--dry-run` to preview API requests. A revoked system can't be restored.
+
+- List commands leave out disabled items. Add `--include-disabled` to include them.
 
 - Use `--for 8h` or `--until <time>` for temporary changes, with `--then` to specify what happens afterwards.
 

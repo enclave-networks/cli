@@ -4,7 +4,8 @@
 
 ## Shared rules
 
-- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.
+- The token comes from `ENCLAVE_CLI_PAT`, or from the file [`login`](login.md) saves. A token created in the portal can run every command that acts in an organisation your account belongs to.
+- Select an organisation with `--org <name>` or `--org-id <id>`, with `ENCLAVE_CLI_ORG` or `ENCLAVE_CLI_ORG_ID`, or save one with [`org use`](org/use.md). While `ENCLAVE_CLI_PAT` is set, the CLI ignores the saved organisation. Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.
 - Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.
 - Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.
 - Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.

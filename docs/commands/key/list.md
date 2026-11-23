@@ -22,7 +22,7 @@ enclave-cli key list --state disabled
 | `--tag` | Filter by tags; a comma list requires every tag. |
 | `--approval` | Filter by approval mode. Values: `automatic`, `manual`. |
 | `--state` | Filter by state. Values: `enabled`, `disabled`, `no-uses`. |
-| `--include-disabled` | Include disabled items. |
+| `--include-disabled` | Include disabled items, which are left out by default. |
 | `--sort` | Sort the matching items. Values: `description`, `last-used`, `approval-mode`, `uses-remaining`. |
 | `--org` | Use this organisation by name. |
 | `--org-id` | Use this organisation by ID. |

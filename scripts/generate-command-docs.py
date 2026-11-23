@@ -42,7 +42,7 @@ examples = {
     "partner customer cancel-invite": "enclave-cli partner customer cancel-invite Initech --email admin@initech.example",
     "partner customer enable-auto-sync": "enclave-cli partner customer enable-auto-sync Initech",
     "partner customer disable-auto-sync": "enclave-cli partner customer disable-auto-sync Initech",
-    "system list": "enclave-cli system list --state disconnected --not-seen-for 90d",
+    "system list": "enclave-cli system list --not-seen-for 90d",
     "system show": "enclave-cli system show ABCDE",
     "system update": "enclave-cli system update ABCDE --add-tags office",
     "system approve": "enclave-cli system list --pending | enclave-cli system approve -",
@@ -102,7 +102,7 @@ notes = {
     "system approve": "The input must come from `system list --pending` when using `-`. A bulk response reports `requested` and `affected`; a smaller affected count means some systems were unknown or already approved.",
     "system decline": "This removes waiting systems. Use `system list --pending` before passing its output as `-`.",
     "system enable": "`--for` or `--until` enables 1 system temporarily. `--then disable` is the default; `--then revoke` removes it when the time expires.",
-    "system revoke": "Revoking removes a system from the organisation. `system list --not-seen-for 90d` selects disconnected systems for a cleanup pipeline, and `system list --duplicates` the old copies of machines that enrolled more than once.",
+    "system revoke": "Revoking removes a system from the organisation, and from the policies that use it as a gateway and the DNS hostnames that name it. It can't be undone. `system list --not-seen-for 90d` selects disconnected systems for a cleanup pipeline, and `system list --duplicates` the old copies of machines that enrolled more than once.",
     "key list": "The output includes each key's secret. Handle it as a credential. `--state disabled` includes disabled keys without `--include-disabled`.",
     "key show": "The output includes the key's secret. Use `--id <id>` to avoid a name lookup.",
     "key create": "General-purpose keys require manual approval and have unlimited uses unless flags change those settings. `--ephemeral` creates a key with automatic approval, unlimited uses and a 30-minute disconnected-system retention. The output includes the key's secret.",
@@ -173,7 +173,7 @@ option_meanings = {
     "--not-seen-for": "Select disconnected systems older than this duration.",
     "--duplicates": "Select every copy of a hostname and operating system but those seen most recently.",
     "--waiting-for": "Select pending systems older than this duration.",
-    "--include-disabled": "Include disabled items.",
+    "--include-disabled": "Include disabled items, which are left out by default.",
     "--enable-gateway-for": "Replace user-entered gateway routes; repeat for more subnets.",
     "--disable-gateway": "Stop using the system as a gateway.",
     "--auto-approve": "Approve enrolment automatically.",
@@ -282,7 +282,7 @@ for entry in catalogue:
     group = " ".join(parts[:-1]) or "General"
     groups.setdefault(group, []).append((command, path.relative_to(DOCS).as_posix(), entry["description"].split(". ")[0].rstrip(".")))
 
-index = ["# Command reference", "", "`enclave-cli` commands follow `enclave-cli <noun> <verb> [arguments] [options]`. Each page covers one command. Use `enclave-cli commands <command words>` for a machine-readable description of arguments, options and allowed values.", "", "## Shared rules", "", "- Select an organisation with `--org <name>` or `--org-id <id>`, or save one with [`org use`](org/use.md). Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.", "- Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.", "- Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.", "- Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.", "- `--set-` replaces a list; `--add-` and `--remove-` edit it. An empty string clears a setting only where the command accepts an empty value.", "- Every successful command prints JSON to standard output. Errors print JSON to standard error. The output includes a `trace` when the command took a step worth tracing.", "", "## Exit codes", "", "| Code | Meaning |", "| --- | --- |", "| 0 | Success |", "| 1 | API error or unimplemented command |", "| 2 | Invalid argument, missing organisation or missing partner |", "| 3 | Missing or invalid token |", "| 4 | Forbidden by the API |", "| 5 | Item not found |", "| 6 | Network error, timeout, rate limit or server error |", ""]
+index = ["# Command reference", "", "`enclave-cli` commands follow `enclave-cli <noun> <verb> [arguments] [options]`. Each page covers one command. Use `enclave-cli commands <command words>` for a machine-readable description of arguments, options and allowed values.", "", "## Shared rules", "", "- The token comes from `ENCLAVE_CLI_PAT`, or from the file [`login`](login.md) saves. A token created in the portal can run every command that acts in an organisation your account belongs to.", "- Select an organisation with `--org <name>` or `--org-id <id>`, with `ENCLAVE_CLI_ORG` or `ENCLAVE_CLI_ORG_ID`, or save one with [`org use`](org/use.md). While `ENCLAVE_CLI_PAT` is set, the CLI ignores the saved organisation. Partner commands take the partner ID with `--partner-id` or `ENCLAVE_CLI_PARTNER_ID`.", "- Use `--id` to select a named item by ID. Systems use IDs as arguments. A bulk command also accepts `-` to read matching list output from standard input.", "- Changes take effect when given. Use `--dry-run` on API changes to inspect requests. Commands that change local files do not take it.", "- Durations use minutes, hours or days: `30m`, `8h`, `7d`. Times without a zone use the machine's local time zone.", "- `--set-` replaces a list; `--add-` and `--remove-` edit it. An empty string clears a setting only where the command accepts an empty value.", "- Every successful command prints JSON to standard output. Errors print JSON to standard error. The output includes a `trace` when the command took a step worth tracing.", "", "## Exit codes", "", "| Code | Meaning |", "| --- | --- |", "| 0 | Success |", "| 1 | API error or unimplemented command |", "| 2 | Invalid argument, missing organisation or missing partner |", "| 3 | Missing or invalid token |", "| 4 | Forbidden by the API |", "| 5 | Item not found |", "| 6 | Network error, timeout, rate limit or server error |", ""]
 for group, commands in groups.items():
     index += [f"## {group.capitalize()}", "", "| Command | Purpose |", "| --- | --- |"]
     for command, link, purpose in commands:

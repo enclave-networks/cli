@@ -1,5 +1,7 @@
 # AGENTS.md
 
+This file is for agents that change the CLI. To use the CLI, read `README.md` and `docs/commands/README.md`, or run `enclave-cli commands`.
+
 Working with this repo:
 
 - `spec/cli-surface.md`: commands, flags, defaults, examples. "Who it is for" governs all input and output.
